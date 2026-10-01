@@ -1,0 +1,53 @@
+# Android / Gradle
+.gradle/
+build/
+# ...but not source packages named build (io.github.kabrapratik28.thumbfree.build)
+!android/app/src/**/build/
+local.properties
+*.iml
+.idea/
+.cxx/
+captures/
+.externalNativeBuild/
+# Release signing: keys and their passwords never go in the repository
+*.jks
+*.keystore
+keystore.properties
+# iOS: Xcode and Swift package build output (build/ above also covers ios/build/)
+DerivedData/
+.build/
+.swiftpm/
+# iOS: xcodegen writes the Xcode project, the Info.plists and the entitlements from ios/project.yml
+*.xcodeproj/
+ios/App/Info.plist
+ios/Keyboard/Info.plist
+ios/Widgets/Info.plist
+*.entitlements
+# iOS: each developer's Apple team for phone builds (ios/Config/Signing.xcconfig includes it)
+ios/Config/Signing.local.xcconfig
+# Models and audio are never committed
+*.gguf
+*.onnx
+*.mlmodelc/
+*.part
+ios/Models/
+*.wav
+!android/app/src/test/resources/**/*.wav
+!android/app/src/androidTest/assets/**/*.wav
+!testdata/public-bench/*.wav
+!ios/testdata/public/*.wav
+.DS_Store
+__pycache__/
+# Private test audio and transcripts: never commit
+testdata/private/
+ios/testdata/private/
+# Benchmark outputs next to the public clips
+testdata/public-bench/results/
+# Local research notes and reference clones
+research/
+# Internal planning (AGENTS.md) and planning notes that some agent tools write by default
+.superpowers/
+docs/superpowers/
+ios/docs/superpowers/
+# Local agent settings
+.claude/

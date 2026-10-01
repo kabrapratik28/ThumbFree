@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ThumbFree key in one colour, for the notification: the key path of ic_launcher_monochrome.xml, framed to fill 24 dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="576"
+    android:viewportHeight="576">
+    <group android:translateX="-224" android:translateY="-152">
+        <group android:rotation="-9" android:pivotX="512" android:pivotY="440">
+            <path
+                android:fillColor="@color/brand_mark"
+                android:fillType="evenOdd"
+                android:pathData="M388,258H636A86,86 0 0 1 722,344V538A86,86 0 0 1 636,624H388A86,86 0 0 1 302,538V344A86,86 0 0 1 388,258ZM400,276H624A62,62 0 0 1 686,338V484A62,62 0 0 1 624,546H400A62,62 0 0 1 338,484V338A62,62 0 0 1 400,276ZM400,298H624A40,40 0 0 1 664,338V484A40,40 0 0 1 624,524H400A40,40 0 0 1 360,484V338A40,40 0 0 1 400,298ZM396,376H396A17,17 0 0 1 413,393V429A17,17 0 0 1 396,446H396A17,17 0 0 1 379,429V393A17,17 0 0 1 396,376ZM454,346H454A17,17 0 0 1 471,363V459A17,17 0 0 1 454,476H454A17,17 0 0 1 437,459V363A17,17 0 0 1 454,346ZM512,321H512A17,17 0 0 1 529,338V484A17,17 0 0 1 512,501H512A17,17 0 0 1 495,484V338A17,17 0 0 1 512,321ZM570,346H570A17,17 0 0 1 587,363V459A17,17 0 0 1 570,476H570A17,17 0 0 1 553,459V363A17,17 0 0 1 570,346ZM628,376H628A17,17 0 0 1 645,393V429A17,17 0 0 1 628,446H628A17,17 0 0 1 611,429V393A17,17 0 0 1 628,376Z" />
+        </group>
+    </group>
+</vector>

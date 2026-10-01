@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Live preview: the panel's colours, from ui.Theme's light scheme (warm paper, the key's ink, the sunflower accent).
+     Every text colour keeps 4.5:1 or more on the solid panel (PreviewPanelTest). -->
+<resources>
+    <color name="preview_surface">#FFFFFBF5</color>
+    <color name="preview_ink">#FF1F1B3A</color>
+    <color name="preview_tentative">#FF625C78</color>
+    <color name="preview_label">#FF735500</color>
+    <color name="preview_outline">#FFDDD3C1</color>
+</resources>

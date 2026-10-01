@@ -1,0 +1,272 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Fri, 25 Sep 2026 22:16:32 -0700
+Subject: [PATCH] mel: the no-BLAS filterbank skips zero groups and runs on the
+ STFT threads
+
+Without Accelerate or a system BLAS (Android), the mel filterbank product
+ran on one thread over all 257 bins of all 128 filters for every frame, in
+fp64: 36 million multiply-adds for 11 s of audio, about 70% of the front
+end's time. A triangular filter spans a few bins, so each row now skips its
+leading and trailing all-zero groups of 4 bins (bit-identical: a zero group
+adds exactly +0.0 to a sum that starts at +0.0), and each frame's product
+and log run on its STFT thread right after its FFT. The threads now take
+frames in chunks from a shared counter instead of a fixed stride, so a
+thread on a phone's little core no longer holds the others up. On a Mac
+armv8.6-like build the front end takes 1.00 ms instead of 9.4 ms for JFK
+and 2.4 ms instead of 24.5 ms for 29.4 s, with the mel bit-identical on the
+11 public clips. TRANSCRIBE_MEL_DENSE=1 runs the old path for A/B runs: a
+fixed stride over frames, then every group summed on one thread after the
+FFT.
+---
+ src/transcribe-mel.cpp | 173 ++++++++++++++++++++++++++++-------------
+ src/transcribe-mel.h   |   7 ++
+ 2 files changed, 128 insertions(+), 52 deletions(-)
+
+diff --git a/src/transcribe-mel.cpp b/src/transcribe-mel.cpp
+index 085197e0..12431c14 100644
+--- a/src/transcribe-mel.cpp
++++ b/src/transcribe-mel.cpp
+@@ -26,6 +26,7 @@
+ #include "transcribe-mel.h"
+
+ #include "transcribe-batch-util.h"
++#include "transcribe-env.h"
+
+ #ifdef __APPLE__
+ #    include <Accelerate/Accelerate.h>
+@@ -34,6 +35,7 @@
+ #endif
+
+ #include <algorithm>
++#include <atomic>
+ #include <cmath>
+ #include <cstddef>
+ #include <cstring>
+@@ -302,6 +304,30 @@ MelFrontend::MelFrontend(const MelConfig & cfg) : cfg_(cfg) {
+                                     static_cast<double>(cfg.f_max), mel_fb_);
+     }
+
++    // Non-zero group span of each filterbank row (see fb_group_lo_). The
++    // no-BLAS product sums bins in groups of 4 from bin 0, then the last
++    // n_freq % 4 bins one by one. A group of zero weights adds exactly
++    // +0.0 to a sum that starts at +0.0 and only grows, so skipping the
++    // leading and trailing zero groups leaves every sum bit-identical.
++    {
++        const int n_groups = n_freq_ / 4;
++        fb_group_lo_.assign(static_cast<size_t>(cfg.num_mels), 0);
++        fb_group_hi_.assign(static_cast<size_t>(cfg.num_mels), 0);
++        for (int m = 0; m < cfg.num_mels && static_cast<size_t>(m + 1) * n_freq_ <= mel_fb_.size(); ++m) {
++            const float * row = mel_fb_.data() + static_cast<size_t>(m) * n_freq_;
++            int           lo  = -1;
++            int           hi  = 0;
++            for (int g = 0; g < n_groups; ++g) {
++                if (row[4 * g] != 0.0f || row[4 * g + 1] != 0.0f || row[4 * g + 2] != 0.0f || row[4 * g + 3] != 0.0f) {
++                    lo = lo < 0 ? g : lo;
++                    hi = g + 1;
++                }
++            }
++            fb_group_lo_[static_cast<size_t>(m)] = std::max(lo, 0);
++            fb_group_hi_[static_cast<size_t>(m)] = hi;
++        }
++    }
++
+     // Sin/cos LUT for the mixed-radix FFT. Only the non-pow2 path
+     // consumes it; pow2 sizes go through fft_radix2 (Linux) or vDSP
+     // (Apple), both of which carry their own twiddle factors.
+@@ -507,6 +533,33 @@ transcribe_status MelFrontend::compute(const float *        pcm,
+         }
+     };
+
++    // TRANSCRIBE_MEL_DENSE=1 runs the path from before these changes: a
++    // fixed stride over frames, then every filterbank group of every frame
++    // summed on one thread after the FFT.
++    const bool dense = transcribe::env::flag("TRANSCRIBE_MEL_DENSE");
++
++    // fn(t) for every frame, on the STFT threads, which take frames in
++    // chunks from a shared counter. A fixed stride would give a thread on
++    // a phone's little core as many frames as the others, and they would
++    // all wait for it. (Unused with Accelerate, whose FFT runs apart.)
++    [[maybe_unused]] auto for_each_frame = [&](auto && fn) {
++        std::atomic<int> next{ 0 };
++        run_threaded([&](int tid) {
++            if (dense) {
++                for (int t = tid; t < n_frames; t += stft_threads) {
++                    fn(t);
++                }
++                return;
++            }
++            constexpr int kChunk = 16;
++            for (int t0 = next.fetch_add(kChunk); t0 < n_frames; t0 = next.fetch_add(kChunk)) {
++                for (int t = t0; t < std::min(n_frames, t0 + kChunk); ++t) {
++                    fn(t);
++                }
++            }
++        });
++    };
++
+     if (!n_fft_is_pow2) {
+         // Fused worker: window mul → mixed-radix FFT → power → mel
+         // matmul + log → log_mel, all fp32, all per-frame on this thread.
+@@ -556,11 +609,51 @@ transcribe_status MelFrontend::compute(const float *        pcm,
+         };
+         run_threaded(worker);
+     } else {
+-        // pow2 paths (Parakeet, Cohere): unchanged structure. FFT
+-        // worker writes shared power[]; post-pass does the matmul +
+-        // log.
++        // pow2 paths (Parakeet, Cohere): the FFT worker writes shared
++        // power[]; with a BLAS a post-pass does the matmul + log, without
++        // one each frame's product and log follow its FFT (mel_frame).
+         std::vector<float> power(static_cast<size_t>(n_frames) * static_cast<size_t>(n_freq));
+
++        // Without a BLAS, one frame's filterbank product and log: over each
++        // row's non-zero groups (fb_group_lo_), bit-identical to summing
++        // every group of every row. It runs on the STFT thread right after
++        // the frame's FFT, or with TRANSCRIBE_MEL_DENSE=1 for every frame
++        // on one thread after the FFT, summing every group, as before.
++        [[maybe_unused]] const auto mel_frame = [&](int t) {
++            const float * pwr = power.data() + static_cast<size_t>(t) * n_freq;
++            for (int m = 0; m < n_mels; ++m) {
++                const float * fb_row = mel_fb_.data() + static_cast<size_t>(m) * n_freq;
++                double        sum    = 0.0;
++                const int     k_lo   = dense ? 0 : 4 * fb_group_lo_[static_cast<size_t>(m)];
++                const int     k_hi   = dense ? 4 * (n_freq / 4) : 4 * fb_group_hi_[static_cast<size_t>(m)];
++                for (int k = k_lo; k < k_hi; k += 4) {
++                    sum += static_cast<double>(fb_row[k]) * static_cast<double>(pwr[k]) +
++                           static_cast<double>(fb_row[k + 1]) * static_cast<double>(pwr[k + 1]) +
++                           static_cast<double>(fb_row[k + 2]) * static_cast<double>(pwr[k + 2]) +
++                           static_cast<double>(fb_row[k + 3]) * static_cast<double>(pwr[k + 3]);
++                }
++                for (int k = 4 * (n_freq / 4); k < n_freq; ++k) {
++                    sum += static_cast<double>(fb_row[k]) * static_cast<double>(pwr[k]);
++                }
++                float result;
++                if (whisper_mode) {
++                    if (sum < 1.0e-10) {
++                        sum = 1.0e-10;
++                    }
++                    result = static_cast<float>(std::log10(sum));
++                } else if (cfg_.log_clamp_min > 0.0f) {
++                    const double clamp = static_cast<double>(cfg_.log_clamp_min);
++                    if (sum < clamp) {
++                        sum = clamp;
++                    }
++                    result = static_cast<float>(std::log(sum));
++                } else {
++                    result = static_cast<float>(std::log(sum + static_cast<double>(kLogEps)));
++                }
++                log_mel[static_cast<size_t>(m) * n_frames + t] = result;
++            }
++        };
++
+ #ifdef __APPLE__
+         // vDSP real-input FFT (fp64, vectorized via Accelerate SIMD).
+         int log2n = 0;
+@@ -606,24 +699,27 @@ transcribe_status MelFrontend::compute(const float *        pcm,
+         vDSP_destroy_fftsetupD(fft_setup);
+ #else
+         // Hand-rolled radix-2 Cooley-Tukey FFT fallback for non-Apple.
+-        auto worker = [&](int tid) {
+-            std::vector<double> frame(2 * static_cast<size_t>(n_fft));
+-            for (int t = tid; t < n_frames; t += stft_threads) {
+-                const size_t start = static_cast<size_t>(t) * static_cast<size_t>(hop);
+-                for (int k = 0; k < n_fft; ++k) {
+-                    frame[2 * static_cast<size_t>(k)]     = padded[start + static_cast<size_t>(k)] * window_[k];
+-                    frame[2 * static_cast<size_t>(k) + 1] = 0.0;
+-                }
+-                fft_radix2(frame.data(), n_fft);
+-                float * pwr_row = power.data() + static_cast<size_t>(t) * n_freq;
+-                for (int k = 0; k < n_freq; ++k) {
+-                    const double re = frame[2 * static_cast<size_t>(k)];
+-                    const double im = frame[2 * static_cast<size_t>(k) + 1];
+-                    pwr_row[k]      = static_cast<float>(re * re + im * im);
+-                }
++        for_each_frame([&](int t) {
++            thread_local std::vector<double> frame;
++            frame.resize(2 * static_cast<size_t>(n_fft));
++            const size_t start = static_cast<size_t>(t) * static_cast<size_t>(hop);
++            for (int k = 0; k < n_fft; ++k) {
++                frame[2 * static_cast<size_t>(k)]     = padded[start + static_cast<size_t>(k)] * window_[k];
++                frame[2 * static_cast<size_t>(k) + 1] = 0.0;
+             }
+-        };
+-        run_threaded(worker);
++            fft_radix2(frame.data(), n_fft);
++            float * pwr_row = power.data() + static_cast<size_t>(t) * n_freq;
++            for (int k = 0; k < n_freq; ++k) {
++                const double re = frame[2 * static_cast<size_t>(k)];
++                const double im = frame[2 * static_cast<size_t>(k) + 1];
++                pwr_row[k]      = static_cast<float>(re * re + im * im);
++            }
++#    if !TRANSCRIBE_HAS_BLAS
++            if (!dense) {
++                mel_frame(t);
++            }
++#    endif
++        });
+ #endif
+
+         // pow2 post-pass matmul + log → log_mel.
+@@ -661,38 +757,11 @@ transcribe_status MelFrontend::compute(const float *        pcm,
+             }
+         }
+ #else
+-        // Scalar fused matmul + log fallback (no BLAS available).
+-        for (int t = 0; t < n_frames; ++t) {
+-            const float * pwr = power.data() + static_cast<size_t>(t) * n_freq;
+-            for (int m = 0; m < n_mels; ++m) {
+-                const float * fb_row = mel_fb_.data() + static_cast<size_t>(m) * n_freq;
+-                double        sum    = 0.0;
+-                int           k      = 0;
+-                for (; k < n_freq - 3; k += 4) {
+-                    sum += static_cast<double>(fb_row[k]) * static_cast<double>(pwr[k]) +
+-                           static_cast<double>(fb_row[k + 1]) * static_cast<double>(pwr[k + 1]) +
+-                           static_cast<double>(fb_row[k + 2]) * static_cast<double>(pwr[k + 2]) +
+-                           static_cast<double>(fb_row[k + 3]) * static_cast<double>(pwr[k + 3]);
+-                }
+-                for (; k < n_freq; ++k) {
+-                    sum += static_cast<double>(fb_row[k]) * static_cast<double>(pwr[k]);
+-                }
+-                float result;
+-                if (whisper_mode) {
+-                    if (sum < 1.0e-10) {
+-                        sum = 1.0e-10;
+-                    }
+-                    result = static_cast<float>(std::log10(sum));
+-                } else if (cfg_.log_clamp_min > 0.0f) {
+-                    const double clamp = static_cast<double>(cfg_.log_clamp_min);
+-                    if (sum < clamp) {
+-                        sum = clamp;
+-                    }
+-                    result = static_cast<float>(std::log(sum));
+-                } else {
+-                    result = static_cast<float>(std::log(sum + static_cast<double>(kLogEps)));
+-                }
+-                log_mel[static_cast<size_t>(m) * n_frames + t] = result;
++        // Scalar matmul + log fallback (no BLAS available): mel_frame ran
++        // for every frame right after its FFT, unless TRANSCRIBE_MEL_DENSE.
++        if (dense) {
++            for (int t = 0; t < n_frames; ++t) {
++                mel_frame(t);
+             }
+         }
+ #endif
+diff --git a/src/transcribe-mel.h b/src/transcribe-mel.h
+index b547435e..84333093 100644
+--- a/src/transcribe-mel.h
++++ b/src/transcribe-mel.h
+@@ -183,6 +183,13 @@ class MelFrontend {
+     // vDSP, which carry their own twiddle factors). Empty when unused.
+     std::vector<float> cos_lut_;
+     std::vector<float> sin_lut_;
++
++    // Per mel row, the 4-bin groups [fb_group_lo_, fb_group_hi_) of the
++    // filterbank product that can hold a non-zero weight. A triangular
++    // filter spans a few of the 257 bins, so the no-BLAS product skips the
++    // all-zero groups at both ends of each row.
++    std::vector<int> fb_group_lo_;
++    std::vector<int> fb_group_hi_;
+ };
+
+ }  // namespace transcribe

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Brand colours: the ThumbFree key's ink (bubble text and spinner, the notification mark). The app name comes from
+     brand.properties; the art is the adaptive icon (mipmap-anydpi-v26, drawable/ic_launcher_*) and drawable/bubble_*. -->
+<resources>
+    <color name="brand_mark">#1F1B3A</color>
+</resources>

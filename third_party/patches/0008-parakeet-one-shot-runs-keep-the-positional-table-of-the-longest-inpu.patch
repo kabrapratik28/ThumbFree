@@ -1,0 +1,95 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Fri, 25 Sep 2026 22:25:07 -0700
+Subject: [PATCH] parakeet: one-shot runs keep the positional table of the
+ longest input
+
+The full-attention positional embedding holds rows for positions T-1 down
+to -(T-1), so every input's table is the middle of the table for a longer
+input. The session keeps the table of the longest input so far and a
+shorter input uses its middle rows, instead of computing pos_len * d_model
+sines and cosines on every run (282,000 for 11 s). Each row comes from the
+same float arithmetic, so the values are bit-identical: encoder output
+identical on the 11 public clips run longest first and longest last.
+---
+ src/arch/parakeet/model.cpp  | 48 +++++++++++++++++++++++-------------
+ src/arch/parakeet/parakeet.h |  5 ++++
+ 2 files changed, 36 insertions(+), 17 deletions(-)
+
+diff --git a/src/arch/parakeet/model.cpp b/src/arch/parakeet/model.cpp
+index 6ba031dd..89632c77 100644
+--- a/src/arch/parakeet/model.cpp
++++ b/src/arch/parakeet/model.cpp
+@@ -1386,26 +1386,40 @@ transcribe_status run_one_shot_inner(ParakeetSession *             pc,
+             (!is_chunked) && (pm->hparams.enc_att_context_left >= 0 && pm->hparams.enc_att_context_right >= 0);
+         const int zero_index = is_local_pe ? pm->hparams.enc_att_context_left : (pos_len - 1) / 2;
+
+-        pc->pos_buf.assign(static_cast<size_t>(pos_len) * d_model, 0.0f);
+-
+-        pc->pos_div_term.resize(static_cast<size_t>(d_model / 2));
+-        const float ln_10000 = std::log(10000.0f);
+-        for (int k = 0; k < d_model / 2; ++k) {
+-            pc->pos_div_term[static_cast<size_t>(k)] =
+-                std::exp(static_cast<float>(2 * k) * (-ln_10000 / static_cast<float>(d_model)));
+-        }
+-
+-        for (int i = 0; i < pos_len; ++i) {
+-            const float pos = static_cast<float>(zero_index - i);
+-            float *     row = pc->pos_buf.data() + static_cast<size_t>(i) * d_model;
++        // Full attention: the rows run from position (pos_len-1)/2 down to
++        // its negative, so every input's table is the middle of the table
++        // for the longest input so far. That one is kept and rebuilt only
++        // for a longer input, instead of 2 * pos_len * d_model/2 sin and cos
++        // on every run (282,000 for 11 s); each row's arithmetic is the
++        // same, so the values are bit-identical.
++        const int table_len = is_local_pe ? pos_len : std::max(pos_len, pc->pos_table_len);
++        if (is_local_pe || table_len > pc->pos_table_len) {
++            const int table_zero = is_local_pe ? zero_index : (table_len - 1) / 2;
++            pc->pos_div_term.resize(static_cast<size_t>(d_model / 2));
++            const float ln_10000 = std::log(10000.0f);
+             for (int k = 0; k < d_model / 2; ++k) {
+-                const float div = pc->pos_div_term[static_cast<size_t>(k)];
+-                row[2 * k]      = std::sin(pos * div);
+-                row[2 * k + 1]  = std::cos(pos * div);
++                pc->pos_div_term[static_cast<size_t>(k)] =
++                    std::exp(static_cast<float>(2 * k) * (-ln_10000 / static_cast<float>(d_model)));
+             }
+-        }
+
+-        ggml_backend_tensor_set(eb.pos_emb_in, pc->pos_buf.data(), 0, pc->pos_buf.size() * sizeof(float));
++            std::vector<float> & table = is_local_pe ? pc->pos_buf : pc->pos_table;
++            table.assign(static_cast<size_t>(table_len) * d_model, 0.0f);
++            for (int i = 0; i < table_len; ++i) {
++                const float pos = static_cast<float>(table_zero - i);
++                float *     row = table.data() + static_cast<size_t>(i) * d_model;
++                for (int k = 0; k < d_model / 2; ++k) {
++                    const float div = pc->pos_div_term[static_cast<size_t>(k)];
++                    row[2 * k]      = std::sin(pos * div);
++                    row[2 * k + 1]  = std::cos(pos * div);
++                }
++            }
++            if (!is_local_pe) {
++                pc->pos_table_len = table_len;
++            }
++        }
++        const float * rows = is_local_pe ? pc->pos_buf.data() :
++                                           pc->pos_table.data() + static_cast<size_t>((table_len - pos_len) / 2) * d_model;
++        ggml_backend_tensor_set(eb.pos_emb_in, rows, 0, static_cast<size_t>(pos_len) * d_model * sizeof(float));
+
+         transcribe::debug::dump_tensor("enc.pos_emb", eb.pos_emb_in, "encoder.pos_emb");
+     }
+diff --git a/src/arch/parakeet/parakeet.h b/src/arch/parakeet/parakeet.h
+index ef070583..14b47557 100644
+--- a/src/arch/parakeet/parakeet.h
++++ b/src/arch/parakeet/parakeet.h
+@@ -252,5 +252,10 @@ struct ParakeetSession final : public transcribe_session {
+     std::vector<float>    mel_buf;
+     std::vector<float>    pos_buf;
+     std::vector<float>    pos_div_term;
++    // One-shot full-attention positional table: the longest pos_len built
++    // so far, from position (pos_table_len-1)/2 down; a shorter input uses
++    // its middle rows.
++    std::vector<float>    pos_table;
++    int                   pos_table_len = 0;
+     std::vector<float>    enc_host;
+     std::vector<TdtToken> raw_tokens;

@@ -1,0 +1,167 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Sat, 26 Sep 2026 20:31:00 -0700
+Subject: [PATCH] parakeet: a buffered stream runs on the session's pool and
+ stops within a node
+
+A buffered stream (parakeet-unified) ran its encoder on a pool made for
+each graph, its mel on the default thread count and its decoder's step
+graphs without the session's pool: patch 0011 wired the caller's
+persistent pool into the one-shot path only. Each chunk now does what a
+one-shot run does: the encoder runs on the session's pool when the caller
+set one (transcribe_session_set_threads), the mel on the session's thread
+count, and the decoder (and the tentative tail's decode) on the pool.
+An abort stops the encoder at the next graph node (ggml's CPU abort
+callback), and both decodes too: before each, and at every step
+(decode_rnnt_greedy_streaming takes an optional abort hook; an aborted
+decode leaves its tokens and decoder state as they were). The chunk then
+returns 13, which ends the stream. Without a pool and without an abort
+nothing changes but the mel's thread count.
+---
+ src/arch/parakeet/decoder.cpp | 15 +++++++++++++--
+ src/arch/parakeet/decoder.h   |  8 +++++++-
+ src/arch/parakeet/model.cpp   | 30 ++++++++++++++++++++++++++----
+ 3 files changed, 46 insertions(+), 7 deletions(-)
+
+diff --git a/src/arch/parakeet/decoder.cpp b/src/arch/parakeet/decoder.cpp
+index 79d781d7..031b1b52 100644
+--- a/src/arch/parakeet/decoder.cpp
++++ b/src/arch/parakeet/decoder.cpp
+@@ -1530,7 +1530,9 @@ transcribe_status decode_rnnt_greedy_streaming(const HostDecoderWeights & w,
+                                                int                        frame_offset,
+                                                int                        n_threads,
+                                                std::vector<TdtToken> &    out_tokens,
+-                                               ggml_threadpool_t          shared_pool) {
++                                               ggml_threadpool_t          shared_pool,
++                                               bool (*abort)(void *),
++                                               void * abort_data) {
+     if (enc_out == nullptr || T_enc_new <= 0 || d_enc <= 0) {
+         return TRANSCRIBE_ERR_INVALID_ARG;
+     }
+@@ -1589,6 +1591,9 @@ transcribe_status decode_rnnt_greedy_streaming(const HostDecoderWeights & w,
+     // Precompute encoder projections for this chunk only.
+     const int          joint_h = w.joint.joint_h;
+     std::vector<float> enc_proj_all;
++    if (abort != nullptr && abort(abort_data)) {
++        return TRANSCRIBE_ERR_ABORTED;
++    }
+     const bool enc_proj_ok =
+         precompute_enc_proj_session(w.joint, pg, shared_pool, nt, nt_loop, enc_out, T_enc_new, d_enc, enc_proj_all);
+     if (!enc_proj_ok) {
+@@ -1615,11 +1620,17 @@ transcribe_status decode_rnnt_greedy_streaming(const HostDecoderWeights & w,
+     const int max_iters = 16 * T_enc_new + 1024;
+     int       iter      = 0;
+
+-    bool predictor_dirty = true;
++    bool         predictor_dirty = true;
++    const size_t n_out_at_entry  = out_tokens.size();
+
+     while (step < T_enc_new && iter < max_iters) {
+         ++iter;
+
++        if (abort != nullptr && abort(abort_data)) {
++            out_tokens.resize(n_out_at_entry);
++            return TRANSCRIBE_ERR_ABORTED;
++        }
++
+         if (predictor_dirty) {
+             if (predictor_step_ggml(w.predictor, pg, last_token, state, next_state, scratch_x, pred_proj) == nullptr) {
+                 return TRANSCRIBE_ERR_BACKEND;
+diff --git a/src/arch/parakeet/decoder.h b/src/arch/parakeet/decoder.h
+index a994e216..07915963 100644
+--- a/src/arch/parakeet/decoder.h
++++ b/src/arch/parakeet/decoder.h
+@@ -251,6 +251,10 @@ transcribe_status decode_rnnt_greedy(const HostDecoderWeights & w,
+ // index of this chunk's first frame (so step_at_emit lands in
+ // stream-wide coordinates). state_io must have been reset to a fresh
+ // start-of-sequence state at stream_begin (last_token_io = -1).
++// abort, when set, is polled with abort_data before the encoder
++// projection and at every step: a true return stops the decode with
++// TRANSCRIBE_ERR_ABORTED, out_tokens back to its size at entry and
++// state_io / last_token_io untouched.
+ transcribe_status decode_rnnt_greedy_streaming(const HostDecoderWeights & w,
+                                                const float *              enc_out,
+                                                int                        T_enc_new,
+@@ -260,7 +264,9 @@ transcribe_status decode_rnnt_greedy_streaming(const HostDecoderWeights & w,
+                                                int                        frame_offset,
+                                                int                        n_threads,
+                                                std::vector<TdtToken> &    out_tokens,
+-                                               ggml_threadpool_t          shared_pool = nullptr);
++                                               ggml_threadpool_t          shared_pool = nullptr,
++                                               bool (*abort)(void *)      = nullptr,
++                                               void *                     abort_data  = nullptr);
+
+ // Run CTC greedy decode end-to-end. Per-frame: logits = W @ enc[t] + b,
+ // argmax; collapse rule "drop adjacent duplicates, then drop blanks"
+diff --git a/src/arch/parakeet/model.cpp b/src/arch/parakeet/model.cpp
+index aa270540..7961d873 100644
+--- a/src/arch/parakeet/model.cpp
++++ b/src/arch/parakeet/model.cpp
+@@ -2647,7 +2647,7 @@ transcribe_status emit_buffered_chunk(ParakeetSession * pc,
+     int           mel_n_mels   = 0;
+     int           mel_n_frames = 0;
+     if (const transcribe_status mst =
+-            pm->mel->compute(window_pcm.data(), window_pcm.size(), pc->mel_buf, mel_n_mels, mel_n_frames);
++            pm->mel->compute(window_pcm.data(), window_pcm.size(), pc->mel_buf, mel_n_mels, mel_n_frames, pc->n_threads);
+         mst != TRANSCRIBE_OK) {
+         log_msg(TRANSCRIBE_LOG_LEVEL_ERROR, "parakeet buffered: MelFrontend::compute failed (%s)",
+                 transcribe_status_string(mst));
+@@ -2764,8 +2764,22 @@ transcribe_status emit_buffered_chunk(ParakeetSession * pc,
+     transcribe::configure_sched_n_threads(pc->sched, pc->n_threads);
+
+     // ----- Compute -----
++    // As the one-shot path: on the session's persistent pool when the caller set one, and an abort stops the
++    // encoder within a graph node.
+     const int64_t t_enc_start = ggml_time_us();
+-    if (const ggml_status gs = ggml_backend_sched_graph_compute(pc->sched, eb.graph); gs != GGML_STATUS_SUCCESS) {
++    set_cpu_abort(pm->plan.scheduler_list, pc);
++    if (pc->cpu_threadpool != nullptr) {
++        set_cpu_threadpool(pm->plan.scheduler_list, pc->cpu_threadpool);
++    }
++    const ggml_status gs = ggml_backend_sched_graph_compute(pc->sched, eb.graph);
++    if (pc->cpu_threadpool != nullptr) {
++        set_cpu_threadpool(pm->plan.scheduler_list, nullptr);
++    }
++    set_cpu_abort(pm->plan.scheduler_list, nullptr);
++    if (gs == GGML_STATUS_ABORTED && pc->was_aborted) {
++        return TRANSCRIBE_ERR_ABORTED;
++    }
++    if (gs != GGML_STATUS_SUCCESS) {
+         log_msg(TRANSCRIBE_LOG_LEVEL_ERROR, "parakeet buffered: sched_graph_compute failed (%d)", static_cast<int>(gs));
+         return TRANSCRIBE_ERR_BACKEND;
+     }
+@@ -2870,11 +2884,16 @@ transcribe_status emit_buffered_chunk(ParakeetSession * pc,
+     }
+
+     // ----- Decode with carried RNN-T state -----
++    // An abort stops both decodes too (before each and between their steps), as it stops the encoder.
++    const auto abort = [](void * data) { return static_cast<ParakeetSession *>(data)->poll_abort(); };
++    if (pc->poll_abort()) {
++        return TRANSCRIBE_ERR_ABORTED;
++    }
+     const int64_t t_dec_start = ggml_time_us();
+     if (const transcribe_status st = decode_rnnt_greedy_streaming(
+             pm->host_decoder, enc_chunk, T_to_decode, d_enc, pc->stream_dec_state.lstm_state,
+             pc->stream_dec_state.prev_token_id, static_cast<int>(pc->stream_dec_state.frame_offset), pc->n_threads,
+-            pc->raw_tokens);
++            pc->raw_tokens, static_cast<ggml_threadpool_t>(pc->cpu_threadpool), abort, pc);
+         st != TRANSCRIBE_OK) {
+         return st;
+     }
+@@ -2887,12 +2906,15 @@ transcribe_status emit_buffered_chunk(ParakeetSession * pc,
+     pc->buf_tentative_tokens.clear();
+     const int T_right = std::min(T_chunk_avail, effective_T - ctx_left_frames) - T_to_decode;
+     if (!is_last_chunk && T_right > 0 && transcribe::env::flag("TRANSCRIBE_STREAM_TENTATIVE")) {
++        if (pc->poll_abort()) {
++            return TRANSCRIBE_ERR_ABORTED;
++        }
+         LstmState state = pc->stream_dec_state.lstm_state;
+         int       last  = pc->stream_dec_state.prev_token_id;
+         if (const transcribe_status st = decode_rnnt_greedy_streaming(
+                 pm->host_decoder, enc_chunk + static_cast<size_t>(T_to_decode) * static_cast<size_t>(d_enc), T_right,
+                 d_enc, state, last, static_cast<int>(pc->stream_dec_state.frame_offset), pc->n_threads,
+-                pc->buf_tentative_tokens);
++                pc->buf_tentative_tokens, static_cast<ggml_threadpool_t>(pc->cpu_threadpool), abort, pc);
+             st != TRANSCRIBE_OK) {
+             return st;
+         }

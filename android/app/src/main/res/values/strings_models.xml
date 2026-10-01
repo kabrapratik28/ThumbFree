@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The models screen (ui.ModelScreen) and its download worker's foreground notification (models.DownloadWorker). -->
+<resources>
+    <string name="ui_models">Models</string>
+    <string name="ui_models_download">Download</string>
+    <string name="ui_models_download_now">Download now</string>
+    <string name="ui_models_wait_for_wifi">Wait for Wi-Fi</string>
+    <string name="ui_models_waiting_for_wifi">Waiting for Wi-Fi</string>
+    <string name="ui_models_waiting_for_network">Waiting for a connection</string>
+    <string name="ui_models_verifying">Checking the file</string>
+    <string name="ui_models_cancel">Cancel</string>
+    <string name="ui_models_installed">Installed</string>
+    <string name="ui_models_try_again">Try again</string>
+    <string name="ui_models_in_use">A take is using this model. Try again when it ends.</string>
+    <string name="ui_models_failed_no_internet">No internet connection</string>
+    <string name="ui_models_failed_no_space">Not enough space</string>
+    <string name="ui_models_failed_interrupted">Download interrupted</string>
+    <string name="ui_models_failed_check">File check failed</string>
+
+    <string name="models_channel">Model downloads</string>
+    <string name="models_notification_title">Downloading model</string>
+    <string name="ui_models_delete_title">Delete this speech model?</string>
+    <string name="ui_models_delete_body">%1$s will be removed from this phone. Using it again means downloading %2$s again.</string>
+    <string name="ui_models_delete_confirm">Delete model</string>
+</resources>

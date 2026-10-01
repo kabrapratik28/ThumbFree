@@ -1,0 +1,148 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Sat, 26 Sep 2026 18:43:52 -0700
+Subject: [PATCH] parakeet: a buffered stream can show a tentative tail from
+ the right context
+
+LIVE spike, off unless TRANSCRIBE_STREAM_TENTATIVE=1. A buffered stream
+(parakeet-unified) commits each chunk's tokens once the chunk's right
+context has arrived, and publishes no tentative text, so words show up
+chunk + right context after they are spoken. The encoder already computes
+the right-context frames in every chunk's window: with the switch on, a
+greedy decode of the ones inside the real audio, on a copy of the decoder
+state, becomes the uncommitted tail of the result (tentative_text), and the
+next chunk replaces it. Committed tokens, and so committed_text, are the
+same as without the switch; finalize drops the tail and commits what it
+decodes.
+---
+ src/arch/parakeet/model.cpp  | 44 ++++++++++++++++++++++++++++--------
+ src/arch/parakeet/parakeet.h |  5 ++++
+ 2 files changed, 40 insertions(+), 9 deletions(-)
+
+diff --git a/src/arch/parakeet/model.cpp b/src/arch/parakeet/model.cpp
+index 24ec192c..aa270540 100644
+--- a/src/arch/parakeet/model.cpp
++++ b/src/arch/parakeet/model.cpp
+@@ -2499,8 +2499,12 @@ void rebuild_streaming_result_text(ParakeetSession * pc, const ParakeetModel * p
+     pc->words.clear();
+     pc->segments.clear();
+     pc->full_text.clear();
++    pc->buf_committed_public = 0;
+
+-    if (pc->raw_tokens.empty()) {
++    // The committed raw tokens, then the tentative tail (empty unless TRANSCRIBE_STREAM_TENTATIVE=1).
++    std::vector<TdtToken> all(pc->raw_tokens);
++    all.insert(all.end(), pc->buf_tentative_tokens.begin(), pc->buf_tentative_tokens.end());
++    if (all.empty()) {
+         pc->has_result  = false;
+         pc->result_kind = TRANSCRIBE_TIMESTAMPS_NONE;
+         return;
+@@ -2514,13 +2518,15 @@ void rebuild_streaming_result_text(ParakeetSession * pc, const ParakeetModel * p
+     const transcribe::Tokenizer & tok        = pm->tok;
+     const bool                    strip_tags = !pc->stream_run_params.keep_special_tags;
+
+-    pc->tokens.reserve(pc->raw_tokens.size());
++    pc->tokens.reserve(all.size());
+     std::vector<int32_t> all_ids;
+-    all_ids.reserve(pc->raw_tokens.size());
+-    for (const auto & tk : pc->raw_tokens) {
++    all_ids.reserve(all.size());
++    for (size_t i = 0; i < all.size(); ++i) {
++        const auto & tk = all[i];
+         if (strip_tags && is_strippable_special(tok, tk.id)) {
+             continue;
+         }
++        pc->buf_committed_public += i < pc->raw_tokens.size();
+         transcribe_session::TokenEntry te;
+         te.id    = tk.id;
+         te.p     = tk.p;
+@@ -2537,8 +2543,8 @@ void rebuild_streaming_result_text(ParakeetSession * pc, const ParakeetModel * p
+     normalize_transcript_whitespace(pc->full_text);
+     {
+         std::vector<int32_t> raw_ids;
+-        raw_ids.reserve(pc->raw_tokens.size());
+-        for (const auto & tk : pc->raw_tokens) {
++        raw_ids.reserve(all.size());
++        for (const auto & tk : all) {
+             raw_ids.push_back(tk.id);
+         }
+         pc->raw_text = tok.decode(raw_ids.data(), static_cast<int>(raw_ids.size()));
+@@ -2875,6 +2881,22 @@ transcribe_status emit_buffered_chunk(ParakeetSession * pc,
+     pc->t_decode_us += ggml_time_us() - t_dec_start;
+
+     pc->stream_dec_state.frame_offset += T_to_decode;
++
++    // The right-context frames inside the real audio (not the conv overhang), decoded on a copy of the decoder
++    // state: the tentative tail until the next chunk decodes them with their own right context.
++    pc->buf_tentative_tokens.clear();
++    const int T_right = std::min(T_chunk_avail, effective_T - ctx_left_frames) - T_to_decode;
++    if (!is_last_chunk && T_right > 0 && transcribe::env::flag("TRANSCRIBE_STREAM_TENTATIVE")) {
++        LstmState state = pc->stream_dec_state.lstm_state;
++        int       last  = pc->stream_dec_state.prev_token_id;
++        if (const transcribe_status st = decode_rnnt_greedy_streaming(
++                pm->host_decoder, enc_chunk + static_cast<size_t>(T_to_decode) * static_cast<size_t>(d_enc), T_right,
++                d_enc, state, last, static_cast<int>(pc->stream_dec_state.frame_offset), pc->n_threads,
++                pc->buf_tentative_tokens);
++            st != TRANSCRIBE_OK) {
++            return st;
++        }
++    }
+     advance_cursor();
+     return TRANSCRIBE_OK;
+ }
+@@ -3127,6 +3149,7 @@ transcribe_status stream_begin(transcribe_session *             session,
+
+         pc->stream_pcm_buffer.clear();
+         pc->raw_tokens.clear();
++        pc->buf_tentative_tokens.clear();
+         pc->stream_run_params = *run_params;
+         reset_streaming_decoder_state(pc, pm);
+         // frame_offset starts at 0, advanced per-chunk by T_to_decode.
+@@ -3258,10 +3281,11 @@ transcribe_status stream_feed(transcribe_session *       session,
+             }
+             emitted = true;
+         }
+-        const bool tokens_changed = static_cast<int>(pc->raw_tokens.size()) != prev_n_tokens;
++        const bool tokens_changed = static_cast<int>(pc->raw_tokens.size()) != prev_n_tokens ||
++                                    (emitted && transcribe::env::flag("TRANSCRIBE_STREAM_TENTATIVE"));
+         if (tokens_changed) {
+             rebuild_streaming_result_text(pc, pm);
+-            pc->n_committed_tokens   = static_cast<int>(pc->tokens.size());
++            pc->n_committed_tokens   = pc->buf_committed_public;
+             pc->n_committed_words    = 0;
+             pc->n_committed_segments = 0;
+             pc->stream_revision += 1;
+@@ -3452,6 +3476,8 @@ transcribe_status stream_finalize(transcribe_session * session, transcribe_strea
+     // EOS, then append R frames of silence so the final speech frames keep
+     // their trained lookahead. Synthetic samples are not counted as input.
+     if (pc->buf_active) {
++        const bool had_tentative = !pc->buf_tentative_tokens.empty();
++        pc->buf_tentative_tokens.clear();  // finalize commits every token it keeps
+         const int64_t total = static_cast<int64_t>(pc->stream_pcm_buffer.size());
+         // An exact C+R+k*C input leaves right context retained at EOS.
+         if (pc->buf_next_audio_read < total || pc->buf_ctx_right > 0) {
+@@ -3465,7 +3491,7 @@ transcribe_status stream_finalize(transcribe_session * session, transcribe_strea
+                 return st;
+             }
+         }
+-        const bool tokens_changed = static_cast<int>(pc->raw_tokens.size()) != prev_n_tokens;
++        const bool tokens_changed = static_cast<int>(pc->raw_tokens.size()) != prev_n_tokens || had_tentative;
+         if (tokens_changed || !pc->has_result) {
+             rebuild_streaming_result_text(pc, pm);
+         }
+diff --git a/src/arch/parakeet/parakeet.h b/src/arch/parakeet/parakeet.h
+index bcf14356..24b21513 100644
+--- a/src/arch/parakeet/parakeet.h
++++ b/src/arch/parakeet/parakeet.h
+@@ -317,6 +317,11 @@ struct ParakeetSession final : public transcribe_session {
+     // per-chunk dump file naming.
+     int32_t buf_chunk_step      = 0;
+     bool    buf_active          = false;
++    // With TRANSCRIBE_STREAM_TENTATIVE=1: the tokens a greedy decode of each chunk's right-context frames gives on a
++    // copy of the decoder state. They follow raw_tokens in the public result as the uncommitted tail and are
++    // replaced at every chunk; finalize drops them. buf_committed_public counts the public tokens from raw_tokens.
++    std::vector<TdtToken> buf_tentative_tokens;
++    int32_t               buf_committed_public = 0;
+
+     ParakeetSession() = default;
+     ~ParakeetSession() override;

@@ -1,0 +1,161 @@
+name: ThumbFree
+options:
+  bundleIdPrefix: io.github.kabrapratik28
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  # The folder AGENTS.md and CLAUDE.md files sit in target folders: listed in the project, never copied into a bundle.
+  fileTypes:
+    md:
+      buildPhase: none
+# DEVELOPMENT_TEAM comes from here: empty, or your team from the git-ignored Config/Signing.local.xcconfig it includes.
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # The store version: every target's CFBundleShortVersionString and CFBundleVersion come from these two (the
+    # extensions must match the app). Raise CURRENT_PROJECT_VERSION for each upload, MARKETING_VERSION for each release.
+    MARKETING_VERSION: "1.0.1"
+    CURRENT_PROJECT_VERSION: "4"
+  configs:
+    # TF_AUTO_RETURN turns on automatic return: the keyboard finds the app being typed in through a private UIKit
+    # interface, the keyboard arbiter (Keyboard/HostArbiter*), and the app then opens that app's own URL scheme. On in
+    # Debug and Release since 1.0.1. For a Release build without it, delete the `release:` lines: the private code then
+    # compiles to nothing (the Swift #if and the Objective-C constructor). tools/store-check.sh reads this block: with
+    # the flag in Release, it expects exactly automatic return's private names and fails on any other.
+    debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG TF_AUTO_RETURN
+      GCC_PREPROCESSOR_DEFINITIONS: "$(inherited) DEBUG=1 TF_AUTO_RETURN=1"
+    release:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: TF_AUTO_RETURN
+      GCC_PREPROCESSOR_DEFINITIONS: "$(inherited) TF_AUTO_RETURN=1"
+packages:
+  ThumbFreeKit:
+    path: ThumbFreeKit
+# Each shipping target's privacy manifest (App/, Keyboard/, Widgets/PrivacyInfo.xcprivacy) comes in with its source folder,
+# as a resource. ThumbFreeKit links statically, so the app's and the keyboard's manifests cover it too.
+targets:
+  ThumbFree:
+    type: application
+    platform: iOS
+    sources: [App, Shared, Intents]
+    dependencies:
+      - package: ThumbFreeKit
+        product: TFCore
+      - package: ThumbFreeKit
+        product: TFEngine
+      - target: ThumbFreeKeyboard
+      - target: ThumbFreeWidgets
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: ThumbFree
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false # HTTPS only (the model download)
+        UILaunchScreen: {}
+        UIBackgroundModes: [audio]
+        NSMicrophoneUsageDescription: "ThumbFree turns your speech into text on this iPhone. Audio never leaves it."
+        CFBundleURLTypes:
+          - CFBundleURLName: io.github.kabrapratik28.thumbfree
+            CFBundleURLSchemes: [thumbfree]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        TFBackgroundInference: false
+    entitlements:
+      path: App/ThumbFree.entitlements
+      properties:
+        com.apple.security.application-groups: [group.io.github.kabrapratik28.thumbfree]
+        # Self-service: more memory headroom for the ~450 MB model on older iPhones (iOS 27 counts Neural Engine memory
+        # against the app). Background Inference is not added until Apple grants it.
+        com.apple.developer.kernel.increased-memory-limit: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kabrapratik28.thumbfree
+        # iPhone only: xcodegen's iOS preset writes "1,2" into every target, over the project's "1".
+        TARGETED_DEVICE_FAMILY: "1"
+  ThumbFreeKeyboard:
+    type: app-extension
+    platform: iOS
+    sources: [Keyboard, Shared]
+    dependencies:
+      - package: ThumbFreeKit
+        product: TFCore
+    info:
+      path: Keyboard/Info.plist
+      properties:
+        CFBundleDisplayName: ThumbFree
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: true
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true
+    entitlements:
+      path: Keyboard/Keyboard.entitlements
+      properties:
+        com.apple.security.application-groups: [group.io.github.kabrapratik28.thumbfree]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kabrapratik28.thumbfree.keyboard
+        TARGETED_DEVICE_FAMILY: "1"
+        # HostArbiter.swift calls the Objective-C shim that reads the private arbiter; the header is empty without
+        # TF_AUTO_RETURN.
+        SWIFT_OBJC_BRIDGING_HEADER: Keyboard/HostArbiterShim.h
+  ThumbFreeWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [Widgets, Intents]
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: ThumbFree
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kabrapratik28.thumbfree.widgets
+        TARGETED_DEVICE_FAMILY: "1"
+  ThumbFreeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - AppTests
+      - path: testdata/public/jfk.wav
+        buildPhase: resources
+    dependencies:
+      - target: ThumbFree
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  ThumbFreeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+      - path: testdata/public/jfk.wav
+        buildPhase: resources
+    dependencies:
+      - target: ThumbFree
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: ThumbFree
+schemes:
+  ThumbFree:
+    build:
+      targets:
+        ThumbFree: all
+        ThumbFreeKeyboard: all
+    test:
+      targets: [ThumbFreeTests, ThumbFreeUITests]

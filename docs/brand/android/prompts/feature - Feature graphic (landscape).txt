@@ -1,0 +1,7 @@
+Create a wide illustration for an app store banner.
+
+Subject: on the right half, a person sitting casually and talking into a phone, with the yellow floating bubble button beside the phone and three small message bubbles floating up and away. Keep the whole subject inside the right half of the image and inside the middle half of the height. Leave the left half as plain cream background with nothing on it (the logo and headline go there).
+
+Style (keep exactly): hand-drawn illustration with thick navy outlines (#26264A) and flat fills in warm yellow (#FFC83D), soft orange and coral red accents. Plain cream background (#FFF8E7) edge to edge, with no frame, border or shadow box. Small playful motion marks (short strokes, sparkles) around the main objects. Friendly, simple, modern editorial doodle look. No gradients, no photo textures. Absolutely no text, letters, numbers, logos or brand marks: use squiggly lines where words would be. Any phone shown is a generic modern Android phone: thin even bezels, a small round front camera at the top center, no notch, no brand. The app's signature element is a round, glossy yellow floating button with a small dark rounded-square icon on it showing a sound wave (the "bubble").
+
+Landscape image, 1536 x 1024.

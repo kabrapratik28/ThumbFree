@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The recording foreground service notification (audio.RecordingService). -->
+<resources>
+    <string name="recording_channel">Recording</string>
+    <string name="recording_title">Recording</string>
+</resources>

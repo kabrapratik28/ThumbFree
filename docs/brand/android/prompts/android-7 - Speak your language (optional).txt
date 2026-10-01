@@ -1,0 +1,7 @@
+Create an illustration for an app store screenshot.
+
+Subject: A friendly round globe with a small microphone on top, surrounded by five or six speech bubbles of different shapes and colors (yellow, coral, soft orange, cream), each holding only squiggly lines, as if many people speak different languages. No flags.
+
+Style (keep exactly): hand-drawn illustration with thick navy outlines (#26264A) and flat fills in warm yellow (#FFC83D), soft orange and coral red accents. Plain cream background (#FFF8E7) edge to edge, with no frame, border or shadow box. Small playful motion marks (short strokes, sparkles) around the main objects. Friendly, simple, modern editorial doodle look. No gradients, no photo textures. Absolutely no text, letters, numbers, logos or brand marks: use squiggly lines where words would be. Any phone shown is a generic modern Android phone: thin even bezels, a small round front camera at the top center, no notch, no brand. The app's signature element is a round, glossy yellow floating button with a small dark rounded-square icon on it showing a sound wave (the "bubble").
+
+Portrait image, 1024 x 1536. Keep the subject in the top two thirds, with plain cream space around it.

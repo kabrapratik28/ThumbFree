@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A locked recording's stop mark, printed over the sound wave on the key: the canvas of bubble_recording.xml, so it
+     overlays it exactly. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="256" android:viewportHeight="256">
+<group android:translateX="28" android:translateY="28" android:scaleX="0.1953125" android:scaleY="0.1953125">
+<group android:translateY="-4">
+<group android:rotation="-9" android:pivotX="512" android:pivotY="440">
+<path android:pathData="M416,275H608A40,40 0 0 1 648,315V507A40,40 0 0 1 608,547H416A40,40 0 0 1 376,507V315A40,40 0 0 1 416,275Z" android:fillColor="#FFFFFF"/>
+</group>
+</group>
+</group>
+</vector>

@@ -1,0 +1,108 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Fri, 25 Sep 2026 23:56:26 -0700
+Subject: [PATCH] transcribe: a Parakeet session on a caller's persistent pool
+ can keep its scheduler between runs
+
+After every offline run the dispatcher frees the session's scheduler and
+compute context, and the next run builds them again (the header puts this
+at up to about 10 ms per run on CPU). A new keeps_scratch hook lets a
+family keep them; every family leaves it false, and a Parakeet session on
+a caller's persistent pool (transcribe_session_set_threads) returns true
+only with TRANSCRIBE_KEEP_SCRATCH=1, for A/B runs: the kept scheduler
+holds its high-water mark between runs, 127 MB after a 29.4 s clip on a
+Mac armv8.6-like build (121 MB more resident memory on an emulator), so
+it stays off until a phone shows the saved rebuild is worth it. Encoder
+output bit-identical to fresh runs without a pool for the 3.7 s, JFK and
+29.4 s clips in any order.
+---
+ src/arch/parakeet/model.cpp  |  7 +++++++
+ src/arch/parakeet/parakeet.h |  3 +++
+ src/transcribe-session.h     | 10 +++++++++-
+ src/transcribe.cpp           | 11 ++++++-----
+ 4 files changed, 25 insertions(+), 6 deletions(-)
+
+diff --git a/src/arch/parakeet/model.cpp b/src/arch/parakeet/model.cpp
+index 746b50ba..24ec192c 100644
+--- a/src/arch/parakeet/model.cpp
++++ b/src/arch/parakeet/model.cpp
+@@ -91,6 +91,13 @@ void ParakeetSession::on_scratch_released() noexcept {
+     encoder_out = nullptr;
+ }
+
++// Only with TRANSCRIBE_KEEP_SCRATCH=1, for A/B runs: the kept scheduler holds
++// its high-water mark between runs, which costs more memory than the rebuild
++// costs time until a phone shows otherwise.
++bool ParakeetSession::keeps_scratch() const noexcept {
++    return cpu_threadpool != nullptr && transcribe::env::flag("TRANSCRIBE_KEEP_SCRATCH");
++}
++
+ ParakeetModel::~ParakeetModel() {
+     // Teardown order: ctx_meta → backend_buffer → plan backends. The
+     // buffer must be freed before the backends (it holds a backend ref);
+diff --git a/src/arch/parakeet/parakeet.h b/src/arch/parakeet/parakeet.h
+index 14b47557..bcf14356 100644
+--- a/src/arch/parakeet/parakeet.h
++++ b/src/arch/parakeet/parakeet.h
+@@ -321,6 +321,9 @@ struct ParakeetSession final : public transcribe_session {
+     ParakeetSession() = default;
+     ~ParakeetSession() override;
+     void on_scratch_released() noexcept override;
++    // With a caller's persistent pool and TRANSCRIBE_KEEP_SCRATCH=1, the
++    // scheduler stays between runs.
++    bool keeps_scratch() const noexcept override;
+ };
+
+ // ---- Multitalker (bundle) internals ----------------------------------- //
+diff --git a/src/transcribe-session.h b/src/transcribe-session.h
+index fec6ba0b..2eb19ccc 100644
+--- a/src/transcribe-session.h
++++ b/src/transcribe-session.h
+@@ -320,9 +320,17 @@ struct transcribe_session {
+     // Parakeet and Voxtral Realtime use per-chunk bounded stream workspaces;
+     // Moonshine Streaming's decode graph cross-attends over the complete
+     // committed stream, so its workspace grows with total stream length.
+-    // Must not throw. Non-virtual: a family cannot opt out of the release.
++    // Must not throw. Non-virtual: a family opts out of the dispatcher's
++    // release only through keeps_scratch.
+     void release_scratch() noexcept;
+
++    // True when the dispatcher should keep the scratch after an offline run,
++    // so the next run does not rebuild it; its high-water mark then stays. A
++    // family may do this for a session on a caller's persistent pool (see
++    // transcribe_session_set_threads); Parakeet does with
++    // TRANSCRIBE_KEEP_SCRATCH=1.
++    virtual bool keeps_scratch() const noexcept { return false; }
++
+     transcribe_session() = default;
+     // Frees sched / compute_ctx after the derived destructor has run. The
+     // scheduler owns only its own allocator buffers and references
+diff --git a/src/transcribe.cpp b/src/transcribe.cpp
+index 5cc829aa..ecfd30c2 100644
+--- a/src/transcribe.cpp
++++ b/src/transcribe.cpp
+@@ -2075,10 +2075,11 @@ extern "C" transcribe_status transcribe_stream_get_text(const struct transcribe_
+ }
+
+ // Scope guard that calls transcribe_session::release_scratch on exit once
+-// armed. Both offline entry points use it so release also happens when a
+-// family hook throws and the api_guard unwinds the stack, including the path
+-// where memory pressure matters most. release_scratch is noexcept, so running
+-// it during unwinding is safe.
++// armed, unless the session keeps its scratch (keeps_scratch). Both offline
++// entry points use it so release also happens when a family hook throws and
++// the api_guard unwinds the stack, including the path where memory pressure
++// matters most. release_scratch is noexcept, so running it during unwinding
++// is safe.
+ namespace {
+
+ struct scratch_release_guard {
+@@ -2086,7 +2087,7 @@ struct scratch_release_guard {
+     bool                 armed   = false;
+
+     ~scratch_release_guard() {
+-        if (armed && session != nullptr) {
++        if (armed && session != nullptr && !session->keeps_scratch()) {
+             session->release_scratch();
+         }
+     }

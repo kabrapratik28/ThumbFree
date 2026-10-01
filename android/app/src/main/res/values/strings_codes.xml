@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One message per core.session.Code (a11y.CodeMessages). -->
+<resources>
+    <string name="code_mic_permission">Microphone is off. Open the app to allow it.</string>
+    <string name="code_mic_unavailable">Another app is using the microphone.</string>
+    <string name="code_mic_not_ready">Microphone was not ready. Try again.</string>
+    <string name="code_mic_silenced">Another app took the microphone.</string>
+    <string name="code_mic_silent">Microphone is silent. Is it blocked or turned off?</string>
+    <string name="code_format_unsupported">This microphone can\'t record at 16 kHz.</string>
+    <string name="code_device_lost">The microphone disconnected.</string>
+    <string name="code_capture_stalled">The microphone stopped sending audio.</string>
+    <string name="code_capture_overflow">Recording fell behind and stopped. Your audio so far is saved.</string>
+    <string name="code_storage_full">Phone storage is full. Your recording so far is saved.</string>
+    <string name="code_history_write_failed">Could not save to history.</string>
+    <string name="code_no_model">No speech model yet.</string>
+    <string name="code_load_failed">Could not load the model.</string>
+    <string name="code_no_memory">Not enough free memory. Close some apps and tap Retry.</string>
+    <string name="code_engine_crashed">Transcription stopped. Your audio is saved.</string>
+    <string name="code_truncated">The transcript may be incomplete.</string>
+    <string name="code_input_too_long">This recording is too long for the model.</string>
+    <string name="code_no_speech">No speech heard.</string>
+    <string name="code_no_target">No text box to type into.</string>
+    <string name="code_target_changed">You switched fields.</string>
+    <string name="code_password_target">Won\'t type into a password field.</string>
+    <string name="code_no_session">The text box stopped accepting input.</string>
+    <string name="code_may_not_have_landed">The text may not have arrived.</string>
+    <string name="code_foreground_denied">Recording could not start. Open the app and try again.</string>
+    <string name="code_foreground_stopped">Recording was stopped.</string>
+    <string name="code_take_limit">Stopped at 15 minutes.</string>
+    <string name="code_take_ends_soon">Recording stops in 1 minute.</string>
+    <string name="code_locked_silence">Stopped after 2 minutes without speech.</string>
+    <string name="code_call">Stopped for a call.</string>
+    <string name="code_audio_missing">The audio file is missing.</string>
+    <string name="code_cancelled">Cancelled.</string>
+    <string name="code_copied">Copied.</string>
+    <string name="code_copy_failed">Could not copy.</string>
+    <string name="code_held_back">Not typed in. Tap Insert here or Copy.</string>
+</resources>

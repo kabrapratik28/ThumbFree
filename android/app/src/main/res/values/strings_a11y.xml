@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_description">Shows a floating dictation button next to the text field you are typing in, and types your words into that field after you start a dictation.</string>
+</resources>

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Settings tab (ui.SettingsScreen) and its retention confirm (ui.MainActivity). The app name is a format
+     argument: brand text lives only in brand.xml and brand.properties (BrandTest). -->
+<resources>
+    <string name="ui_settings">Settings</string>
+    <string name="ui_welcome_again">Show the welcome screens</string>
+    <string name="ui_setup_note">What %1$s needs to work.</string>
+    <string name="ui_setup_all_set">All set</string>
+    <string name="ui_setup_all_set_body">The microphone, the dictation bubble and the speech model are ready.</string>
+
+    <string name="ui_settings_bubble">Bubble</string>
+    <string name="ui_bubble_note">The floating button you tap to talk. Make it bigger, smaller or more see-through.</string>
+    <string name="ui_bubble_preview">Preview: a %1$s bubble, %2$d percent transparent while idle</string>
+    <string name="ui_bubble_idle">Idle</string>
+    <string name="ui_bubble_listening">Listening</string>
+    <string name="ui_bubble_size">Size</string>
+    <string name="ui_bubble_small">Small</string>
+    <string name="ui_bubble_medium">Medium</string>
+    <string name="ui_bubble_large">Large</string>
+    <string name="ui_bubble_extra_large">Extra large</string>
+    <string name="ui_bubble_recommended">Recommended</string>
+    <string name="ui_bubble_transparency">Transparency while idle</string>
+    <string name="ui_bubble_transparency_value">%1$d%%</string>
+    <string name="ui_bubble_transparency_spoken">%1$d percent</string>
+    <string name="ui_bubble_transparency_note">%1$d%% is recommended. Higher shows more of the app behind it. It turns solid while it listens, so the red ring is clear.</string>
+    <string name="ui_bubble_reset">Reset to recommended</string>
+    <string name="ui_bubble_position">Position</string>
+    <string name="ui_bubble_position_auto">Next to the keyboard, on the right. Drag it anywhere and it stays there.</string>
+    <string name="ui_bubble_position_placed">Where you dropped it. It moves aside if it would cover the line you\'re typing on.</string>
+    <string name="ui_bubble_snap">Snap to screen edge</string>
+    <string name="ui_bubble_snap_note">After a drag, it moves to the nearer side.</string>
+    <string name="ui_bubble_position_reset">Reset position</string>
+
+    <string name="ui_settings_model">Speech model</string>
+    <string name="ui_settings_model_body">Turns your voice into text on this phone. A new choice applies from your next take.</string>
+    <string name="ui_model_english_detail">Most accurate for English</string>
+    <string name="ui_model_multilingual_detail">Supports %1$d languages</string>
+    <string name="ui_model_languages">See supported languages</string>
+    <string name="ui_model_languages_show">Show the languages</string>
+    <string name="ui_model_languages_hide">Hide the languages</string>
+    <string name="ui_expanded">Expanded</string>
+    <string name="ui_collapsed">Collapsed</string>
+    <string name="ui_model_canary_detail">Smaller download and less memory, but slower. Still being tested.</string>
+    <string name="ui_manage_models">Download or delete models</string>
+    <string name="ui_models_title">Speech models</string>
+    <string name="ui_models_body">They run on your phone. Each one downloads once, then works offline.</string>
+    <string name="ui_wifi_only">Download on Wi-Fi only</string>
+    <string name="ui_wifi_only_body">Models are big files, so Wi-Fi is best. Turn this off to use mobile data.</string>
+    <string name="ui_models_metered">You\'re on mobile data. Download now, or wait for Wi-Fi?</string>
+    <string name="ui_use_mobile_data">Use mobile data</string>
+    <string name="ui_models_progress_bytes">%1$s of %2$s</string>
+
+    <string name="ui_settings_dictionary">Dictionary</string>
+    <string name="ui_dictionary_note">Names and terms %1$s spells your way.</string>
+    <string name="ui_dictionary_open">Open the dictionary</string>
+    <string name="ui_dictionary_none">No words yet</string>
+
+    <string name="ui_settings_history">History</string>
+    <string name="ui_history_note">How long your takes stay on this phone.</string>
+    <string name="ui_keep_for">Keep takes for</string>
+    <string name="ui_keep_at_most">Keep at most this many takes</string>
+    <plurals name="ui_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <string name="ui_forever">Forever</string>
+    <string name="ui_unlimited">No limit</string>
+    <string name="ui_retention_body">Both rules apply, so the stricter one wins. A take that is still recording or being typed is never deleted.</string>
+    <string name="ui_storage_used">Recordings use %1$s on this phone.</string>
+    <string name="ui_retention_confirm_title">Delete older takes?</string>
+    <plurals name="ui_retention_confirm_body">
+        <item quantity="one">The new rule deletes 1 take and its recording now. It can\'t be undone.</item>
+        <item quantity="other">The new rule deletes %d takes and their recordings now. It can\'t be undone.</item>
+    </plurals>
+
+    <string name="ui_settings_about">About</string>
+    <string name="ui_about_note">Version, privacy and licenses.</string>
+    <string name="ui_version">Version %1$s</string>
+    <string name="ui_privacy_title">Everything stays on your phone</string>
+    <string name="ui_privacy_body">Your voice becomes text on this phone. Audio and text never leave it. The internet is used only to download speech models.</string>
+    <string name="ui_licenses">Open-source licenses and credits</string>
+    <string name="ui_license_engine">transcribe.cpp, ggml and miniz: MIT License</string>
+    <string name="ui_license_vad">Silero VAD: MIT License</string>
+    <string name="ui_license_cleanup">Text cleanup rules adapted from MIT-licensed code, Copyright (c) 2025 CJ Pais</string>
+    <string name="ui_license_libcxx">LLVM libc++, the C++ runtime from the Android NDK: Apache License 2.0 with LLVM Exceptions</string>
+    <string name="ui_license_icons">Material icons by Google: Apache License 2.0</string>
+    <string name="ui_license_parakeet">Parakeet speech model by NVIDIA: NVIDIA Open Model License</string>
+    <string name="ui_license_parakeet_v3">Multilingual Parakeet speech model (Parakeet TDT 0.6B v3) by NVIDIA: CC BY 4.0. Converted to GGUF, 8-bit (Q8_0).</string>
+    <string name="ui_license_links">Links:</string>
+    <string name="ui_license_link_model">NVIDIA\'s model</string>
+    <string name="ui_license_link_gguf">GGUF file</string>
+    <string name="ui_license_link_license">CC BY 4.0 license</string>
+    <string name="ui_license_canary">Canary speech model by NVIDIA: CC BY 4.0</string>
+    <string name="ui_license_wordfreq">wordfreq word frequency data (the common-word list): CC BY-SA 4.0</string>
+    <string name="ui_privacy_policy">Privacy policy</string>
+    <string name="ui_website">Website</string>
+</resources>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Dictionary tab: the custom words each take's text is corrected with (CustomWords). The app's name is always an
+     argument (BrandTest). -->
+<resources>
+    <string name="ui_dictionary">Dictionary</string>
+    <string name="ui_dictionary_intro">Names and words %1$s should spell your way: family, friends, colleagues, places, work terms.</string>
+    <string name="ui_dictionary_add_label">Word or phrase</string>
+    <string name="ui_dictionary_add">Add</string>
+    <string name="ui_dictionary_problem_duplicate">Already in your Dictionary.</string>
+    <string name="ui_dictionary_problem_long">Too long: an entry has at most %1$d characters.</string>
+    <string name="ui_dictionary_problem_several">One at a time here. Use Paste a list for several.</string>
+    <string name="ui_words_risky_one">“%1$s” is also a common word, so every “%2$s” will be written “%1$s”.</string>
+    <string name="ui_dictionary_added_one">Added “%1$s”.</string>
+    <plurals name="ui_dictionary_added">
+        <item quantity="one">Added 1 word.</item>
+        <item quantity="other">Added %d words.</item>
+    </plurals>
+
+    <string name="ui_dictionary_paste">Paste a list</string>
+    <string name="ui_dictionary_paste_title">Add a list</string>
+    <string name="ui_dictionary_paste_body">Paste names or terms separated by commas or new lines.</string>
+    <string name="ui_dictionary_paste_label">Names and terms</string>
+    <plurals name="ui_dictionary_will_add">
+        <item quantity="one">1 will be added.</item>
+        <item quantity="other">%d will be added.</item>
+    </plurals>
+    <string name="ui_dictionary_nothing_new">Nothing new to add.</string>
+    <plurals name="ui_dictionary_skip_duplicates">
+        <item quantity="one">1 duplicate</item>
+        <item quantity="other">%d duplicates</item>
+    </plurals>
+    <plurals name="ui_dictionary_skip_long">
+        <item quantity="one">1 long entry</item>
+        <item quantity="other">%d long entries</item>
+    </plurals>
+    <plurals name="ui_dictionary_skip_full">
+        <item quantity="one">1 over the limit of %2$d</item>
+        <item quantity="other">%1$d over the limit of %2$d</item>
+    </plurals>
+    <string name="ui_dictionary_will_skip">%1$s will be skipped.</string>
+    <string name="ui_dictionary_and">%1$s and %2$s</string>
+
+    <string name="ui_dictionary_edit">Edit %1$s</string>
+    <string name="ui_dictionary_delete">Delete %1$s</string>
+    <string name="ui_dictionary_edit_title">Edit entry</string>
+    <string name="ui_dictionary_save">Save</string>
+
+    <string name="ui_dictionary_empty_title">No words yet</string>
+    <string name="ui_dictionary_empty_body">Add the names and terms you say often: Mom\'s name, your street, your team\'s product names.</string>
+
+    <string name="ui_dictionary_try">Try a phrase</string>
+    <string name="ui_dictionary_try_prompt">Type a sentence to see how your Dictionary changes it.</string>
+    <string name="ui_dictionary_try_label">Sentence</string>
+    <string name="ui_dictionary_try_result">%1$s would type: %2$s</string>
+    <string name="ui_dictionary_try_same">No Dictionary changes.</string>
+    <string name="ui_dictionary_try_note">This checks spelling changes, not speech recognition.</string>
+
+    <string name="ui_dictionary_hint">Add names %1$s should spell your way: family, friends, work terms.</string>
+    <string name="ui_dictionary_hint_open">Open Dictionary</string>
+    <string name="ui_dictionary_hint_later">Not now</string>
+
+    <plurals name="ui_words_count">
+        <item quantity="one">%d word</item>
+        <item quantity="other">%d words</item>
+    </plurals>
+    <string name="ui_words_limit">%1$s, the most it keeps</string>
+</resources>

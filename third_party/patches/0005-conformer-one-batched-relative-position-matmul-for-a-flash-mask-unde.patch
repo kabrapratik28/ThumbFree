@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Fri, 25 Sep 2026 22:18:27 -0700
+Subject: [PATCH] conformer: one batched relative-position matmul for a flash
+ mask under 64 MiB
+
+The full-attention flash path built the relative-position mask one head at
+a time (a matmul, a copy, a scale, a cast and a concat per head: 36 extra
+graph nodes per block, and the concat chain copies the growing mask again
+for every head) to bound the allocator's peak on long inputs. When the
+whole [2T-1, T, heads] F32 result is under 64 MiB (T up to about 1,020
+frames, 82 s, with 8 heads), one batched matmul and one copy, scale and
+cast do the same per-element arithmetic. Parakeet's encoder graph for JFK
+drops from 2,398 to 1,558 computed nodes, each a barrier across the CPU
+threads. Encoder output bit-identical on the 11 public clips; Canary 180M
+Flash texts identical. TRANSCRIBE_SPLIT_FLASH_MASK=1 splits at any size.
+---
+ src/conformer/conformer.cpp | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/src/conformer/conformer.cpp b/src/conformer/conformer.cpp
+index f811d36d..de57771c 100644
+--- a/src/conformer/conformer.cpp
++++ b/src/conformer/conformer.cpp
+@@ -669,7 +669,18 @@ ggml_tensor * rel_pos_mhsa(ggml_context *      ctx,
+     // matmul for each head. Build and narrow those one head at a time so
+     // the allocator never needs the [2*T-1, T, H] F32 result at once.
+     // Masked/local cases retain the common path below.
+-    const bool    split_flash_mask = flash && !is_local && !is_chunked && params.attn_pad_mask == nullptr;
++    //
++    // The split costs 5 nodes per head plus a concat chain per block (on
++    // the CPU backend each node ends in a barrier across the threads, and
++    // the chain copies the growing mask again for every head). It only
++    // pays for long inputs, so a result under 64 MiB (T up to about 1,020
++    // frames, 82 s, with 8 heads) takes one batched matmul instead: the same
++    // per-element arithmetic, bit-identical. TRANSCRIBE_SPLIT_FLASH_MASK=1
++    // splits at any size.
++    const size_t  full_scores      = static_cast<size_t>(pos_len) * static_cast<size_t>(T_q) *
++                                static_cast<size_t>(n_head) * static_cast<size_t>(B) * sizeof(float);
++    const bool    split_flash_mask = flash && !is_local && !is_chunked && params.attn_pad_mask == nullptr &&
++                                  (full_scores > (size_t{ 64 } << 20) || transcribe::env::flag("TRANSCRIBE_SPLIT_FLASH_MASK"));
+     ggml_tensor * matrix_bd        = nullptr;
+     if (split_flash_mask) {
+         for (int h = 0; h < n_head; ++h) {

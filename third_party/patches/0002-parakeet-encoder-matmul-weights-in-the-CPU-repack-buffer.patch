@@ -1,0 +1,224 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Fri, 25 Sep 2026 15:47:10 -0700
+Subject: [PATCH] parakeet: encoder matmul weights in the CPU repack buffer
+
+On a CPU primary backend, put the encoder's 2-D matmul weights (the
+pre-encode projection and the feed-forward and attention linears) and
+the Q8_0 pointwise conv copies in the CPU backend's extra buffer type
+(CPU_REPACK in our build) whenever ggml says it runs their matmul there.
+ggml then re-lays the Q8_0 weights out at load for its tiled GEMM kernels
+(4x4 dotprod or 4x8 i8mm on Arm), which also share each matmul between
+threads in chunks. The decoder reads its weights back, which a repacked
+buffer cannot do, so its tensors stay in the default buffer.
+TRANSCRIBE_NO_REPACK=1 keeps every weight in the default buffer.
+---
+ src/arch/parakeet/model.cpp    | 102 ++++++++++++++++++++++++++++++---
+ src/arch/parakeet/parakeet.h   |   6 ++
+ src/transcribe-load-common.cpp |   6 +-
+ src/transcribe-load-common.h   |   7 ++-
+ 4 files changed, 111 insertions(+), 10 deletions(-)
+
+diff --git a/src/arch/parakeet/model.cpp b/src/arch/parakeet/model.cpp
+index b9275fe4..0b3b5092 100644
+--- a/src/arch/parakeet/model.cpp
++++ b/src/arch/parakeet/model.cpp
+@@ -134,6 +134,10 @@ ParakeetModel::~ParakeetModel() {
+         safe_buffer_free(backend_buffer);
+         backend_buffer = nullptr;
+     }
++    if (repack_buffer != nullptr) {
++        safe_buffer_free(repack_buffer);
++        repack_buffer = nullptr;
++    }
+     for (auto it = plan.scheduler_list.rbegin(); it != plan.scheduler_list.rend(); ++it) {
+         safe_backend_free(*it);
+     }
+@@ -298,18 +302,81 @@ bool conv_pw_to_q8_0(ParakeetModel & m) {
+     return true;
+ }
+ 
++// On a CPU primary backend, the CPU backend's CPU_REPACK buffer type for
++// weights whose matmuls it has faster kernels for: it re-lays them out at
++// load (Q8_0 into 4x4 dotprod or 4x8 i8mm tiles on Arm) and shares each
++// matmul between threads in chunks they claim as they finish. Found by name
++// among the backend's extra buffer types (KleidiAI's, if a build enables
++// it, is not this one), through the registry so the DL build stays safe.
++// TRANSCRIBE_NO_REPACK=1 disables it.
++ggml_backend_buffer_type_t repack_buft(const ParakeetModel & m) {
++    if (m.plan.primary_kind != BackendKind::Cpu || transcribe::env::flag("TRANSCRIBE_NO_REPACK")) {
++        return nullptr;
++    }
++    ggml_backend_dev_t dev       = ggml_backend_get_device(m.plan.primary);
++    auto               get_extra = (ggml_backend_dev_get_extra_bufts_t) ggml_backend_reg_get_proc_address(
++        ggml_backend_dev_backend_reg(dev), "ggml_backend_dev_get_extra_bufts");
++    for (ggml_backend_buffer_type_t * b = get_extra != nullptr ? get_extra(dev) : nullptr; b != nullptr && *b != nullptr;
++         ++b) {
++        if (std::strcmp(ggml_backend_buft_name(*b), "CPU_REPACK") == 0) {
++            return *b;
++        }
++    }
++    return nullptr;
++}
++
++// Whether `backend` runs a matmul of F32 activations by a 2-D `type` weight
++// [ne0, ne1] held in a buffer of `buft` (the check llama.cpp makes before it
++// places a weight in an extra buffer type). A 0-byte buffer stands in for
++// the weight's own.
++bool buft_runs_matmul(ggml_backend_t backend, ggml_backend_buffer_type_t buft, ggml_type type, int64_t ne0, int64_t ne1) {
++    ggml_init_params ip = { 3 * ggml_tensor_overhead(), nullptr, /*no_alloc=*/true };
++    ggml_context *   ctx = ggml_init(ip);
++    if (ctx == nullptr) {
++        return false;
++    }
++    ggml_tensor * w  = ggml_new_tensor_2d(ctx, type, ne0, ne1);
++    ggml_tensor * op = ggml_mul_mat(ctx, w, ggml_new_tensor_2d(ctx, GGML_TYPE_F32, ne0, 64));
++    w->buffer        = ggml_backend_buft_alloc_buffer(buft, 0);
++    const bool ok    = w->buffer != nullptr && ggml_backend_supports_op(backend, op);
++    if (w->buffer != nullptr) {
++        ggml_backend_buffer_free(w->buffer);
++    }
++    ggml_free(ctx);
++    return ok;
++}
++
++// The encoder's 2-D matmul weights: pre-encode projection, feed-forward and
++// attention linears. Only ever the weight operand of a mul_mat with F32
++// activations, and never read back, which a repacked buffer requires.
++std::vector<ggml_tensor *> encoder_matmul_weights(ParakeetWeights & w) {
++    std::vector<ggml_tensor *> out = { w.pre_encode.out_w };
++    for (auto & b : w.blocks) {
++        out.insert(out.end(), { b.ff1_lin1_w, b.ff1_lin2_w, b.ff2_lin1_w, b.ff2_lin2_w, b.attn_q_w, b.attn_k_w,
++                                b.attn_v_w, b.attn_out_w, b.attn_pos_w });
++    }
++    return out;
++}
++
+ // On a CPU primary backend, convert the conformer 1×1 pointwise conv
+ // weights from F16 to Q8_0 or F32 (see conv_pw_to_q8_0): CPUs without
+ // native F16 arithmetic pay a per-matmul F16→F32 upconvert that erases
+ // the bandwidth win. The machinery lives in transcribe::load_common; this
+-// is the parakeet-specific weight walk. After a Q8_0 conversion the F16
+-// sources' scratch buffer is freed.
++// is the parakeet-specific weight walk. Q8_0 copies go to the repack
++// buffer type when it takes them; after a Q8_0 conversion the F16 sources'
++// scratch buffer is freed.
+ transcribe_status promote_conv_pw_to_f32_on_cpu(ParakeetModel & m) {
+-    const auto              slots = conv_pw_f16_slots(m);
+-    const bool              q8    = conv_pw_to_q8_0(m);
+-    const transcribe_status st =
+-        load_common::promote_conv_pw_f16_to_f32_on_cpu(m.plan, slots, "parakeet", &m.conv_pw_f32_ctx,
+-                                                       &m.conv_pw_f32_buffer, q8 ? GGML_TYPE_Q8_0 : GGML_TYPE_F32);
++    const auto                 slots = conv_pw_f16_slots(m);
++    const bool                 q8    = conv_pw_to_q8_0(m);
++    ggml_backend_buffer_type_t buft  = q8 ? repack_buft(m) : nullptr;
++    for (const auto & s : slots) {
++        if (buft != nullptr &&
++            !buft_runs_matmul(m.plan.primary, buft, GGML_TYPE_Q8_0, s.src->ne[0] * s.src->ne[1], s.src->ne[2])) {
++            buft = nullptr;
++        }
++    }
++    const transcribe_status st = load_common::promote_conv_pw_f16_to_f32_on_cpu(
++        m.plan, slots, "parakeet", &m.conv_pw_f32_ctx, &m.conv_pw_f32_buffer, q8 ? GGML_TYPE_Q8_0 : GGML_TYPE_F32, buft);
+     if (st == TRANSCRIBE_OK && m.conv_pw_f32_buffer != nullptr && m.conv_pw_f16_buffer != nullptr) {
+         // Every slot now points at its copy; the sources stay in ctx_meta without storage.
+         for (const auto & s : slots) {
+@@ -613,6 +680,27 @@ transcribe_status load(Loader & loader, const transcribe_model_load_params * par
+         }
+     }
+ 
++    // The encoder matmul weights the repack buffer type takes go there.
++    if (ggml_backend_buffer_type_t buft = repack_buft(*m); buft != nullptr) {
++        std::vector<ggml_tensor *> repacked;
++        for (ggml_tensor * t : encoder_matmul_weights(m->weights)) {
++            if (t != nullptr && ggml_n_dims(t) == 2 && buft_runs_matmul(m->plan.primary, buft, t->type, t->ne[0], t->ne[1])) {
++                repacked.push_back(t);
++            }
++        }
++        if (!repacked.empty()) {
++            m->repack_buffer = alloc_tensors(buft, repacked);
++            if (m->repack_buffer == nullptr) {
++                gguf_free(gguf_data);
++                log_msg(TRANSCRIBE_LOG_LEVEL_ERROR, "parakeet: %s buffer alloc failed", ggml_backend_buft_name(buft));
++                return TRANSCRIBE_ERR_OOM;
++            }
++            ggml_backend_buffer_set_usage(m->repack_buffer, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
++            log_msg(TRANSCRIBE_LOG_LEVEL_INFO, "parakeet: %zu encoder weights in %s", repacked.size(),
++                    ggml_backend_buft_name(buft));
++        }
++    }
++
+     // Allocate a backend buffer for every other tensor in ctx_meta on the
+     // primary backend; the weight bytes are streamed in below.
+     ggml_backend_buffer_t weights_buffer = ggml_backend_alloc_ctx_tensors(m->ctx_meta, m->plan.primary);
+diff --git a/src/arch/parakeet/parakeet.h b/src/arch/parakeet/parakeet.h
+index e7b3c484..ef070583 100644
+--- a/src/arch/parakeet/parakeet.h
++++ b/src/arch/parakeet/parakeet.h
+@@ -87,6 +87,12 @@ struct ParakeetModel final : public transcribe_model {
+     transcribe::BackendPlan plan;
+     ggml_backend_buffer_t   backend_buffer = nullptr;
+ 
++    // On a CPU primary backend, the encoder's quantized matmul weights live
++    // here instead of backend_buffer: a buffer of the CPU backend's repack
++    // type, which re-lays them out at load for ggml's GEMM kernels (see
++    // repack_buft in model.cpp). Freed in dtor.
++    ggml_backend_buffer_t repack_buffer = nullptr;
++
+     // Fused BN parameters live in a separate ggml context + buffer,
+     // computed at load time from the raw BN tensors. Freed in dtor.
+     ggml_context *        bn_fused_ctx    = nullptr;
+diff --git a/src/transcribe-load-common.cpp b/src/transcribe-load-common.cpp
+index 9de53506..07489170 100644
+--- a/src/transcribe-load-common.cpp
++++ b/src/transcribe-load-common.cpp
+@@ -499,7 +499,8 @@ transcribe_status promote_conv_pw_f16_to_f32_on_cpu(const BackendPlan &
+                                                     const char *                       error_tag,
+                                                     ggml_context **                    out_ctx,
+                                                     ggml_backend_buffer_t *            out_buffer,
+-                                                    ggml_type                          dst_type) {
++                                                    ggml_type                          dst_type,
++                                                    ggml_backend_buffer_type_t         buft) {
+     // Key off the classified primary kind, not off ACCEL/CPU ordering in
+     // the backend list, so a strict-CPU request reliably triggers promotion
+     // even when an ACCEL backend sorts ahead of CPU.
+@@ -542,7 +543,8 @@ transcribe_status promote_conv_pw_f16_to_f32_on_cpu(const BackendPlan &
+         replacements.push_back(r);
+     }
+ 
+-    ggml_backend_buffer_t buffer = ggml_backend_alloc_ctx_tensors(ctx, plan.primary);
++    ggml_backend_buffer_t buffer = buft != nullptr ? ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft) :
++                                                     ggml_backend_alloc_ctx_tensors(ctx, plan.primary);
+     if (buffer == nullptr) {
+         log_msg(TRANSCRIBE_LOG_LEVEL_ERROR, "%s: conv_pw f32 promotion buffer alloc failed", error_tag);
+         ggml_free(ctx);
+diff --git a/src/transcribe-load-common.h b/src/transcribe-load-common.h
+index 8207e040..7c203ea0 100644
+--- a/src/transcribe-load-common.h
++++ b/src/transcribe-load-common.h
+@@ -27,6 +27,8 @@ struct ggml_backend;
+ typedef struct ggml_backend * ggml_backend_t;
+ struct ggml_backend_buffer;
+ typedef struct ggml_backend_buffer * ggml_backend_buffer_t;
++struct ggml_backend_buffer_type;
++typedef struct ggml_backend_buffer_type * ggml_backend_buffer_type_t;
+ struct ggml_backend_device;
+ typedef struct ggml_backend_device * ggml_backend_dev_t;
+ struct ggml_context;
+@@ -143,12 +145,15 @@ struct ConvPwF32Slot {
+ // (Q8_0) makes each replacement a 2-D [ne0*ne1, ne2] matrix instead, whose
+ // rows (the input channels) must be a whole number of blocks; that suits
+ // callers that use the weight as a direct mul_mat operand, not im2col.
++// buft: where the replacements live; nullptr means the primary backend's
++// default buffer type.
+ transcribe_status promote_conv_pw_f16_to_f32_on_cpu(const BackendPlan &                plan,
+                                                     const std::vector<ConvPwF32Slot> & slots,
+                                                     const char *                       error_tag,
+                                                     ggml_context **                    out_ctx,
+                                                     ggml_backend_buffer_t *            out_buffer,
+-                                                    ggml_type                          dst_type = GGML_TYPE_F32);
++                                                    ggml_type                          dst_type = GGML_TYPE_F32,
++                                                    ggml_backend_buffer_type_t         buft     = nullptr);
+ 
+ // Read a small F32 tensor from the GGUF file into a std::vector<float>.
+ //

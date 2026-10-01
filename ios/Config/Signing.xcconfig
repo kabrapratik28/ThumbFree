@@ -1,0 +1,5 @@
+// Signing for phone builds. Simulator builds need no team. Put your Apple team in Config/Signing.local.xcconfig, which
+// git ignores, as one line: DEVELOPMENT_TEAM = <your team id>. Another team also needs its own bundle ids and App
+// Group, since Apple registers each to one team (AGENTS.md, "On a phone").
+DEVELOPMENT_TEAM =
+#include? "Signing.local.xcconfig"

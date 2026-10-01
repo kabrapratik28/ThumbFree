@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The tabs, the setup rows, the Try tab and the History tab (ui.HomeScreen, ui.TryScreen, ui.HistoryScreen). -->
+<resources>
+    <string name="ui_tab_try">Try</string>
+    <string name="ui_tab_history">History</string>
+    <string name="ui_tab_dictionary">Dictionary</string>
+    <string name="ui_tab_settings">Settings</string>
+
+    <string name="ui_setup">Setup</string>
+    <string name="ui_setup_mic">Microphone</string>
+    <string name="ui_setup_mic_missing">Needed to hear you</string>
+    <string name="ui_setup_allowed">Allowed</string>
+    <string name="ui_setup_service">Dictation bubble</string>
+    <string name="ui_setup_service_ok">On</string>
+    <string name="ui_setup_service_missing">Off in Accessibility settings</string>
+    <string name="ui_setup_model">English speech model</string>
+    <string name="ui_setup_model_multilingual">Multilingual speech model</string>
+    <string name="ui_setup_model_canary">Canary speech model</string>
+    <string name="ui_model_verified">Ready</string>
+    <string name="ui_model_missing">Not downloaded</string>
+    <string name="ui_model_missing_size">Not downloaded · %1$s</string>
+    <string name="ui_model_downloaded_size">Downloaded · %1$s</string>
+    <string name="ui_model_downloading">Downloading · %1$d%%</string>
+    <string name="ui_model_wrong_size">Download not finished</string>
+    <string name="ui_model_corrupt">The file is damaged</string>
+    <string name="ui_model_checking">Checking the speech model</string>
+    <string name="ui_model_check_failed">Could not check the file</string>
+    <string name="ui_model_english">English (recommended)</string>
+    <string name="ui_model_multilingual">Multilingual</string>
+    <string name="ui_model_canary">Canary (experimental)</string>
+    <string name="ui_allow">Allow</string>
+    <string name="ui_turn_on">Turn on</string>
+    <!-- On a phone without Android's accessibility list, over App info. %1$s is the app name. -->
+    <string name="ui_accessibility_elsewhere">In your phone\'s Settings, open Accessibility, then tap %1$s and turn it on.</string>
+    <string name="ui_get_model">Get it</string>
+    <string name="ui_mic_blocked">The microphone is blocked. Allow it in App info.</string>
+    <string name="ui_open">Open</string>
+
+    <string name="ui_try_title">Try it</string>
+    <string name="ui_setup_card_title">Finish setup</string>
+    <string name="ui_setup_card_count">%1$d of %2$d done</string>
+    <string name="ui_setup_card_body">Three quick steps, then you can dictate in any app.</string>
+    <string name="ui_ready">Ready · works offline</string>
+    <string name="ui_practice">Try it here</string>
+    <string name="ui_practice_placeholder">Tap here, then tap the yellow bubble and speak.</string>
+    <string name="ui_practice_note">Only for practice. Nothing here is sent anywhere.</string>
+    <string name="ui_clear">Clear</string>
+    <string name="ui_how_title">How it works</string>
+    <string name="ui_how_1">Tap a text field. The yellow bubble appears beside it.</string>
+    <string name="ui_how_2">Tap the bubble and speak.</string>
+    <string name="ui_how_3">Tap it again to stop. Your words appear.</string>
+    <string name="ui_how_hold">Or hold the bubble while you talk, and let go to stop.</string>
+    <string name="ui_examples_title">Try saying</string>
+    <string name="ui_example_1">Let\'s meet at the café at ten tomorrow.</string>
+    <string name="ui_example_2">Can you send me the slides from today\'s meeting?</string>
+    <string name="ui_example_3">Pick up bread, bananas and coffee on the way home.</string>
+
+    <string name="ui_history">History</string>
+    <string name="ui_history_search">Search your takes</string>
+    <string name="ui_history_search_clear">Clear search</string>
+    <string name="ui_history_clear_all">Clear all</string>
+    <string name="ui_history_clear_title">Delete all takes?</string>
+    <plurals name="ui_history_clear_body">
+        <item quantity="one">This deletes 1 take and its recording from this phone. It can\'t be undone.</item>
+        <item quantity="other">This deletes %d takes and their recordings from this phone. It can\'t be undone.</item>
+    </plurals>
+    <string name="ui_history_clear_confirm">Delete all</string>
+    <string name="ui_cancel">Cancel</string>
+    <string name="ui_history_empty_title">No takes yet</string>
+    <string name="ui_history_empty_body">Everything you dictate shows up here, so you can copy it or transcribe it again. It never leaves your phone.</string>
+    <string name="ui_history_empty_action">Try it</string>
+    <string name="ui_history_no_match">No takes match \"%1$s\".</string>
+    <string name="ui_history_read_failed">Could not read history.</string>
+    <string name="ui_today">Today</string>
+    <string name="ui_yesterday">Yesterday</string>
+    <string name="ui_retention_line">%1$s · %2$s</string>
+    <!-- A no-break space before MB, so the unit never wraps onto a line alone. -->
+    <string name="ui_under_1_mb">under 1\u00A0MB</string>
+    <string name="ui_keep_all">Keeps every take</string>
+    <string name="ui_keep_takes">Keeps your last %1$s takes</string>
+    <string name="ui_keep_days">Keeps takes for %1$d days</string>
+    <string name="ui_keep_both">Keeps takes for %1$d days, up to %2$s</string>
+    <string name="ui_change">Change</string>
+    <string name="ui_status_inserted">Typed</string>
+    <string name="ui_status_inserted_into">Typed into %1$s</string>
+    <string name="ui_status_unverified">Check the field</string>
+    <string name="ui_status_not_inserted">Not inserted</string>
+    <string name="ui_retranscribed">Transcribed again</string>
+    <string name="ui_retranscribed_not_typed">Transcribed again. This text wasn\'t typed in.</string>
+    <string name="ui_status_no_speech">No speech</string>
+    <string name="ui_status_cancelled">Cancelled</string>
+    <string name="ui_status_failed">Failed</string>
+    <string name="ui_status_interrupted">Interrupted</string>
+    <string name="ui_status_needs_review">May already be in the field</string>
+    <string name="ui_status_live">In progress</string>
+    <string name="ui_partial">%1$s (partial)</string>
+    <string name="ui_audio_only">Audio only, no text</string>
+    <string name="ui_copy">Copy</string>
+    <string name="ui_transcribe">Transcribe again</string>
+    <string name="ui_delete">Delete</string>
+    <string name="ui_delete_failed">Could not delete.</string>
+</resources>

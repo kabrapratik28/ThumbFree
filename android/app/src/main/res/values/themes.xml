@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The window under the Compose UI: day and night backgrounds matching ui.Theme, so the system splash and the first
+     frame never flash white in dark mode. -->
+<resources>
+    <color name="window_background">#FFFFFBF5</color>
+    <style name="Theme.App" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>

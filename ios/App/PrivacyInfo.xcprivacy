@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The app's privacy manifest. It also covers ThumbFreeKit (TFCore, TFEngine), which links statically into this binary.
+     Nothing is collected or tracked: the only network use is the speech model download from Hugging Face. -->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!-- CA92.1: settings, Dictionary, model choice and the Encoder placement memory in UserDefaults.standard.
+		     1C8F.1: the App Group suite shared with the keyboard (AutoReturn in Shared/). -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+				<string>1C8F.1</string>
+			</array>
+		</dict>
+		<!-- C617.1: modification dates of files in the app's and the App Group's containers: the model install receipt
+		     (ModelDownloader), the Encoder placement fingerprint (TFEngine), the keyboard's mark (KeyboardMark). -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+		<!-- 3EC4.1: ThumbFree is a custom keyboard app; its setup reads iOS's list of enabled keyboards (the AppleKeyboards
+		     preference, KeyboardStatus) to see whether its own keyboard is added. The answer stays on this iPhone. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryActiveKeyboards</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>3EC4.1</string>
+			</array>
+		</dict>
+		<!-- E174.1: free space checked before a take (64 MiB) and before a model download (SessionHost.freeBytes); ThumbFree
+		     then refuses with a message. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>E174.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

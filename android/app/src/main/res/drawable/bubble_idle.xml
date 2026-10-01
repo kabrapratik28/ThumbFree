@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ThumbFree floating bubble: the app icon artwork in a circle, with shadow halo and rims. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="256" android:viewportHeight="256">
+<path android:pathData="M4,131A124,124 0 1 0 252,131A124,124 0 1 0 4,131Z">
+  <aapt:attr name="android:fillColor">
+    <gradient android:type="radial" android:centerX="128" android:centerY="131" android:gradientRadius="124">
+      <item android:offset="0" android:color="#57000000"/>
+      <item android:offset="0.74" android:color="#57000000"/>
+      <item android:offset="0.86" android:color="#21000000"/>
+      <item android:offset="1" android:color="#00000000"/>
+    </gradient>
+  </aapt:attr>
+</path>
+<group android:translateX="28" android:translateY="28" android:scaleX="0.1953125" android:scaleY="0.1953125">
+<clip-path android:pathData="M0,512A512,512 0 1 0 1024,512A512,512 0 1 0 0,512Z"/>
+<path android:pathData="M0,0h1024v1024h-1024z">
+  <aapt:attr name="android:fillColor">
+    <gradient android:type="linear" android:startX="512" android:startY="0" android:endX="512" android:endY="1024"
+        android:startColor="#FFD35A" android:endColor="#FFB61E"/>
+  </aapt:attr>
+</path>
+<group android:translateY="-4">
+<path android:pathData="M328,756A184,28 0 1 0 696,756A184,28 0 1 0 328,756Z" android:fillColor="#1F1B3A" android:fillAlpha="0.2"/>
+<group android:rotation="-9" android:pivotX="512" android:pivotY="440">
+<path android:pathData="M388,258H636A86,86 0 0 1 722,344V538A86,86 0 0 1 636,624H388A86,86 0 0 1 302,538V344A86,86 0 0 1 388,258Z" android:fillColor="#1F1B3A"/>
+<path android:pathData="M400,276H624A62,62 0 0 1 686,338V484A62,62 0 0 1 624,546H400A62,62 0 0 1 338,484V338A62,62 0 0 1 400,276Z" android:fillColor="#39335F"/>
+<path android:pathData="M396,376H396A17,17 0 0 1 413,393V429A17,17 0 0 1 396,446H396A17,17 0 0 1 379,429V393A17,17 0 0 1 396,376ZM454,346H454A17,17 0 0 1 471,363V459A17,17 0 0 1 454,476H454A17,17 0 0 1 437,459V363A17,17 0 0 1 454,346ZM512,321H512A17,17 0 0 1 529,338V484A17,17 0 0 1 512,501H512A17,17 0 0 1 495,484V338A17,17 0 0 1 512,321ZM570,346H570A17,17 0 0 1 587,363V459A17,17 0 0 1 570,476H570A17,17 0 0 1 553,459V363A17,17 0 0 1 570,346ZM628,376H628A17,17 0 0 1 645,393V429A17,17 0 0 1 628,446H628A17,17 0 0 1 611,429V393A17,17 0 0 1 628,376Z" android:fillColor="#FFC83D"/>
+</group>
+</group>
+</group>
+<path android:pathData="M28,128A100,100 0 1 0 228,128A100,100 0 1 0 28,128Z" android:strokeColor="#FFFFFF" android:strokeAlpha="0.75" android:strokeWidth="3"/>
+<path android:pathData="M25.8,128A102.2,102.2 0 1 0 230.2,128A102.2,102.2 0 1 0 25.8,128Z" android:strokeColor="#000000" android:strokeAlpha="0.16" android:strokeWidth="1.5"/>
+</vector>

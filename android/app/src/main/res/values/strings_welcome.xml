@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The first-run welcome screens (ui.WelcomeScreen). %1$s is the app name (BrandTest keeps it out of these files). -->
+<resources>
+    <string name="welcome_step">Step %1$d of %2$d</string>
+    <string name="welcome_back">Back</string>
+    <string name="welcome_close">Close</string>
+    <string name="welcome_continue">Continue</string>
+    <string name="welcome_not_now">Not now</string>
+
+    <string name="welcome_title">Talk instead of typing</string>
+    <string name="welcome_body">Tap the bubble in any app, speak, and your words appear. Everything stays on your phone.</string>
+    <string name="welcome_start">Get started</string>
+    <!-- The speech model Get started downloads. %1$s is its size, such as "731 MB". -->
+    <string name="welcome_model_english">English model · %1$s · on Wi-Fi</string>
+    <string name="welcome_model_multilingual">Multilingual model · %1$s · on Wi-Fi</string>
+    <string name="welcome_model_english_any_network">English model · %1$s</string>
+    <string name="welcome_model_multilingual_any_network">Multilingual model · %1$s</string>
+    <string name="welcome_model_english_ready">English model · ready</string>
+    <string name="welcome_model_multilingual_ready">Multilingual model · ready</string>
+    <string name="welcome_model_other_language">Other language?</string>
+    <string name="welcome_model_use_english">Use English</string>
+    <!-- The welcome picture: a reply being dictated into a message box. -->
+    <string name="welcome_scene_reply">Running ten minutes late, save me a seat</string>
+    <string name="welcome_scene_read">Picture: the bubble beside a message box is tapped, turns red while it listens, and the words appear in the box.</string>
+
+    <string name="welcome_mic_title">Let %1$s hear you</string>
+    <string name="welcome_mic_body">The mic is on only while the bubble is red.</string>
+    <string name="welcome_mic_allow">Allow microphone</string>
+    <string name="welcome_mic_granted">Microphone allowed</string>
+    <string name="welcome_mic_denied">Dictation needs the mic. You can allow it later too.</string>
+    <string name="welcome_mic_blocked">The mic is blocked. Allow it in App info.</string>
+    <string name="welcome_open_app_settings">Open app settings</string>
+    <!-- The microphone picture: Android's question, in Android's words. -->
+    <string name="welcome_mic_while_using">While using the app</string>
+    <string name="welcome_mic_only_this_time">Only this time</string>
+    <string name="welcome_mic_dont_allow">Don\'t allow</string>
+    <string name="welcome_mic_choose">Choose While using the app</string>
+    <string name="welcome_mic_read">Picture of Android\'s microphone question, with its answers While using the app, Only this time and Don\'t allow. Choose While using the app.</string>
+
+    <string name="welcome_service_title">Turn on the bubble</string>
+    <!-- The prominent disclosure Google Play requires before the accessibility setting. -->
+    <string name="welcome_service_body">%1$s uses Android accessibility only to show its bubble and type your words. It reads only the field you\'re typing in, and nothing leaves your phone.</string>
+    <string name="welcome_service_agree">Agree and open settings</string>
+    <string name="welcome_service_on">The bubble is on</string>
+    <string name="welcome_restricted_title">Switch greyed out?</string>
+    <string name="welcome_service_restricted">Open App info, tap the three dots at the top, choose Allow restricted settings, then try again.</string>
+    <string name="welcome_open_app_info">Open App info</string>
+    <!-- The walkthrough of Android's accessibility settings, in Android's words, one step at a time. -->
+    <string name="welcome_walk_tap">Tap %1$s</string>
+    <string name="welcome_walk_turn_on">Turn on Use %1$s</string>
+    <string name="welcome_walk_allow">Tap Allow</string>
+    <string name="welcome_walk_off">Off</string>
+    <string name="welcome_walk_use">Use %1$s</string>
+    <string name="welcome_walk_shortcut">%1$s shortcut</string>
+    <string name="welcome_walk_leave_off">Leave off</string>
+    <string name="welcome_walk_question">Allow %1$s to have full control of your device?</string>
+    <string name="welcome_walk_allow_button">Allow</string>
+    <string name="welcome_walk_read">Picture of three steps in Android\'s settings. 1: tap %1$s. 2: turn on Use %1$s, and leave %1$s shortcut off. 3: tap Allow.</string>
+</resources>

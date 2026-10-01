@@ -1,0 +1,361 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Fri, 25 Sep 2026 23:12:58 -0700
+Subject: [PATCH] parakeet: a session can run its graphs on the caller's
+ persistent CPU pool
+
+Every CPU graph compute without a threadpool starts and joins one of its
+own, and the decoder builds a pool for every decode call: 4 worker threads
+per encoder run and per decode with 5 threads, plus the mel's. A new
+transcribe_session_set_threads(session, n_threads, threadpool) sets the
+session's thread count and, optionally, a persistent ggml CPU pool made by
+the caller (the CPU backend's ggml_threadpool_new, whose thread 0 is the
+thread that calls transcribe_run), so the caller can keep its workers
+alive, place them on chosen CPUs and give their ids to a performance hint
+session. Parakeet runs the encoder on it (attached to the model's CPU
+backends for the compute, then detached, which pauses it) and the
+decoder's encoder projection; the decoder's step graphs too when they use
+from 2 threads up to the session's count (one thread keeps its own pool,
+which has no workers, and the session's pool is paused meanwhile); and the
+mel on the session's thread count. Other models take only the count.
+Without a pool nothing changes.
+---
+ include/transcribe.h          | 16 ++++++++++
+ src/arch/parakeet/decoder.cpp | 59 ++++++++++++++++++++++-------------
+ src/arch/parakeet/decoder.h   | 11 +++++--
+ src/arch/parakeet/model.cpp   | 33 ++++++++++++++++++--
+ src/transcribe-session.h      |  4 +++
+ src/transcribe.cpp            | 11 +++++++
+ 6 files changed, 107 insertions(+), 27 deletions(-)
+
+diff --git a/include/transcribe.h b/include/transcribe.h
+index d15a9bde..0a53a541 100644
+--- a/include/transcribe.h
++++ b/include/transcribe.h
+@@ -1669,6 +1669,22 @@ TRANSCRIBE_API void transcribe_set_abort_callback(struct transcribe_session * se
+                                                   transcribe_abort_callback   cb,
+                                                   void *                      user_data);
+
++/*
++ * Sets how many CPU threads the session's runs use, and optionally a
++ * persistent ggml CPU thread pool to run their graphs on: a
++ * ggml_threadpool_t with at least n_threads threads, made with the CPU
++ * backend's "ggml_threadpool_new" registry function, whose calling thread
++ * is the one that calls transcribe_run. Without one (NULL) every graph
++ * starts and joins a pool of its own, as before. The caller owns the pool
++ * and frees it only after setting another one (or NULL) or freeing the
++ * session. Parakeet runs its graphs on the pool; other models take only the
++ * thread count. Returns TRANSCRIBE_ERR_INVALID_ARG for a NULL session or
++ * n_threads < 1. Not thread-safe with a run on the same session.
++ */
++TRANSCRIBE_API transcribe_status transcribe_session_set_threads(struct transcribe_session * session,
++                                                                int                         n_threads,
++                                                                void *                      threadpool);
++
+ /*
+  * True if the most recent transcribe_run was aborted by the installed
+  * callback returning true. Reset to false at the top of each
+diff --git a/src/arch/parakeet/decoder.cpp b/src/arch/parakeet/decoder.cpp
+index 8432daa1..79d781d7 100644
+--- a/src/arch/parakeet/decoder.cpp
++++ b/src/arch/parakeet/decoder.cpp
+@@ -476,8 +476,14 @@ struct PredGraph {
+ // ending in the joint's pred projection (j.g_pred_w/g_pred_b), which only
+ // changes when the predictor state does. Returns false if the resident
+ // weights are absent or any ggml step fails (→ hard decode error).
+-// n_threads is the resolved (>0) thread count.
+-bool build_pred_graph(PredGraph & g, const HostPredictor & p, const HostJoint & j, int n_threads) {
++// n_threads is the resolved (>0) thread count. The steps run on
++// shared_pool when it is not null (the session's, not owned here), else on
++// a persistent pool of their own.
++bool build_pred_graph(PredGraph &         g,
++                      const HostPredictor & p,
++                      const HostJoint &   j,
++                      int                 n_threads,
++                      ggml_threadpool_t   shared_pool) {
+     if (!p.lstm_ready || !j.w_ready || j.g_pred_w == nullptr || j.g_pred_b == nullptr) {
+         return false;
+     }
+@@ -534,7 +540,11 @@ bool build_pred_graph(PredGraph & g, const HostPredictor & p, const HostJoint &
+     // 70-110 ms because parked workers are slow to reschedule. With one
+     // thread the pool has no workers, so a step has no barrier or wake-up,
+     // and ggml makes no pool per graph compute.
+-    {
++    if (shared_pool != nullptr) {
++        if (auto tp_set = (pfn_set_threadpool) cpu_backend_proc(g.backend, "ggml_backend_cpu_set_threadpool")) {
++            tp_set(g.backend, shared_pool);
++        }
++    } else {
+         auto tp_new = (pfn_threadpool_new) cpu_backend_proc(g.backend, "ggml_threadpool_new");
+         auto tp_set = (pfn_set_threadpool) cpu_backend_proc(g.backend, "ggml_backend_cpu_set_threadpool");
+         if (tp_new != nullptr && tp_set != nullptr) {
+@@ -1033,26 +1043,24 @@ bool precompute_enc_proj_ggml(const HostJoint &    j,
+ }
+
+ // The encoder projection on the session's thread count nt, whatever the
+-// steps use (nt_loop): on the steps' pool when it has nt threads or more,
+-// else on a transient pool of its own, then back to the steps' count and pool.
++// steps use (nt_loop): on the session's shared pool when there is one, else
++// on the steps' pool when it has nt threads or more, else on a transient
++// pool of its own, then back to the steps' count and pool.
+ static bool precompute_enc_proj_session(const HostJoint &    j,
+                                         PredGraph &          pg,
++                                        ggml_threadpool_t    shared_pool,
+                                         int                  nt,
+                                         int                  nt_loop,
+                                         const float *        enc_out,
+                                         int                  T,
+                                         int                  d_enc,
+                                         std::vector<float> & out) {
+-    const bool transient = nt > nt_loop;
+-    if (transient) {
+-        set_backend_threadpool(pg.backend, nullptr);
+-    }
++    ggml_threadpool_t steps = pg.tp != nullptr ? pg.tp : shared_pool;
++    set_backend_threadpool(pg.backend, shared_pool != nullptr ? shared_pool : nt > nt_loop ? nullptr : pg.tp);
+     set_backend_threads(pg.backend, nt);
+     const bool ok = precompute_enc_proj_ggml(j, pg.backend, enc_out, T, d_enc, out);
+     set_backend_threads(pg.backend, nt_loop);
+-    if (transient) {
+-        set_backend_threadpool(pg.backend, pg.tp);
+-    }
++    set_backend_threadpool(pg.backend, steps);
+     return ok;
+ }
+
+@@ -1126,7 +1134,8 @@ transcribe_status decode_tdt_greedy(const HostDecoderWeights & w,
+                                     int                        T_enc,
+                                     int                        d_enc,
+                                     int                        n_threads,
+-                                    std::vector<TdtToken> &    out_tokens) {
++                                    std::vector<TdtToken> &    out_tokens,
++                                    ggml_threadpool_t          shared_pool) {
+     if (enc_out == nullptr || T_enc <= 0 || d_enc <= 0) {
+         return TRANSCRIBE_ERR_INVALID_ARG;
+     }
+@@ -1153,7 +1162,9 @@ transcribe_status decode_tdt_greedy(const HostDecoderWeights & w,
+     PredGraph  pg;
+     JointGraph jg;
+     const int  nt_loop = resolve_loop_threads(nt);
+-    build_pred_graph(pg, w.predictor, w.joint, nt_loop);
++    // The steps share the session's pool when they use more than one of its
++    // threads; one thread, or more than the pool has, gets a pool of its own.
++    build_pred_graph(pg, w.predictor, w.joint, nt_loop, nt_loop > 1 && nt_loop <= nt ? shared_pool : nullptr);
+     if (pg.ready) {
+         build_joint_graph(jg, w.joint, pg.backend);
+     }
+@@ -1178,7 +1189,7 @@ transcribe_status decode_tdt_greedy(const HostDecoderWeights & w,
+     std::vector<float> enc_proj_all;
+     const int64_t      t_enc_proj_start = ggml_time_us();
+     const bool enc_proj_ok =
+-        precompute_enc_proj_session(w.joint, pg, nt, nt_loop, enc_out, T_enc, d_enc, enc_proj_all);
++        precompute_enc_proj_session(w.joint, pg, shared_pool, nt, nt_loop, enc_out, T_enc, d_enc, enc_proj_all);
+     if (!enc_proj_ok) {
+         log_msg(TRANSCRIBE_LOG_LEVEL_ERROR, "parakeet decoder: enc_proj graph failed");
+         return TRANSCRIBE_ERR_BACKEND;
+@@ -1350,7 +1361,8 @@ transcribe_status decode_rnnt_greedy(const HostDecoderWeights & w,
+                                      int                        T_enc,
+                                      int                        d_enc,
+                                      int                        n_threads,
+-                                     std::vector<TdtToken> &    out_tokens) {
++                                     std::vector<TdtToken> &    out_tokens,
++                                     ggml_threadpool_t          shared_pool) {
+     if (enc_out == nullptr || T_enc <= 0 || d_enc <= 0) {
+         return TRANSCRIBE_ERR_INVALID_ARG;
+     }
+@@ -1372,7 +1384,9 @@ transcribe_status decode_rnnt_greedy(const HostDecoderWeights & w,
+     PredGraph  pg;
+     JointGraph jg;
+     const int  nt_loop = resolve_loop_threads(nt);
+-    build_pred_graph(pg, w.predictor, w.joint, nt_loop);
++    // The steps share the session's pool when they use more than one of its
++    // threads; one thread, or more than the pool has, gets a pool of its own.
++    build_pred_graph(pg, w.predictor, w.joint, nt_loop, nt_loop > 1 && nt_loop <= nt ? shared_pool : nullptr);
+     if (pg.ready) {
+         build_joint_graph(jg, w.joint, pg.backend);
+     }
+@@ -1391,7 +1405,7 @@ transcribe_status decode_rnnt_greedy(const HostDecoderWeights & w,
+     std::vector<float> enc_proj_all;
+     const int64_t      t_enc_proj_start = ggml_time_us();
+     const bool enc_proj_ok =
+-        precompute_enc_proj_session(w.joint, pg, nt, nt_loop, enc_out, T_enc, d_enc, enc_proj_all);
++        precompute_enc_proj_session(w.joint, pg, shared_pool, nt, nt_loop, enc_out, T_enc, d_enc, enc_proj_all);
+     if (!enc_proj_ok) {
+         log_msg(TRANSCRIBE_LOG_LEVEL_ERROR, "parakeet decoder: enc_proj graph failed");
+         return TRANSCRIBE_ERR_BACKEND;
+@@ -1515,7 +1529,8 @@ transcribe_status decode_rnnt_greedy_streaming(const HostDecoderWeights & w,
+                                                int &                      last_token_io,
+                                                int                        frame_offset,
+                                                int                        n_threads,
+-                                               std::vector<TdtToken> &    out_tokens) {
++                                               std::vector<TdtToken> &    out_tokens,
++                                               ggml_threadpool_t          shared_pool) {
+     if (enc_out == nullptr || T_enc_new <= 0 || d_enc <= 0) {
+         return TRANSCRIBE_ERR_INVALID_ARG;
+     }
+@@ -1547,7 +1562,9 @@ transcribe_status decode_rnnt_greedy_streaming(const HostDecoderWeights & w,
+     PredGraph  pg;
+     JointGraph jg;
+     const int  nt_loop = resolve_loop_threads(nt);
+-    build_pred_graph(pg, w.predictor, w.joint, nt_loop);
++    // The steps share the session's pool when they use more than one of its
++    // threads; one thread, or more than the pool has, gets a pool of its own.
++    build_pred_graph(pg, w.predictor, w.joint, nt_loop, nt_loop > 1 && nt_loop <= nt ? shared_pool : nullptr);
+     if (pg.ready) {
+         build_joint_graph(jg, w.joint, pg.backend);
+     }
+@@ -1573,7 +1590,7 @@ transcribe_status decode_rnnt_greedy_streaming(const HostDecoderWeights & w,
+     const int          joint_h = w.joint.joint_h;
+     std::vector<float> enc_proj_all;
+     const bool enc_proj_ok =
+-        precompute_enc_proj_session(w.joint, pg, nt, nt_loop, enc_out, T_enc_new, d_enc, enc_proj_all);
++        precompute_enc_proj_session(w.joint, pg, shared_pool, nt, nt_loop, enc_out, T_enc_new, d_enc, enc_proj_all);
+     if (!enc_proj_ok) {
+         log_msg(TRANSCRIBE_LOG_LEVEL_ERROR, "parakeet decoder (rnnt-stream): enc_proj graph failed");
+         return TRANSCRIBE_ERR_BACKEND;
+diff --git a/src/arch/parakeet/decoder.h b/src/arch/parakeet/decoder.h
+index 7ca62cef..a994e216 100644
+--- a/src/arch/parakeet/decoder.h
++++ b/src/arch/parakeet/decoder.h
+@@ -221,12 +221,15 @@ struct TdtToken {
+ //
+ // Returns TRANSCRIBE_OK on success; cannot fail except via invalid args
+ // (validated by the family driver before this is called).
++// shared_pool: the session's persistent CPU pool (transcribe_session_set_threads)
++// for the decoder's graphs, or null. Also for the RNN-T variants below.
+ transcribe_status decode_tdt_greedy(const HostDecoderWeights & w,
+                                     const float *              enc_out,
+                                     int                        T_enc,
+                                     int                        d_enc,
+                                     int                        n_threads,
+-                                    std::vector<TdtToken> &    out_tokens);
++                                    std::vector<TdtToken> &    out_tokens,
++                                    ggml_threadpool_t          shared_pool = nullptr);
+
+ // Run RNNT greedy decode end-to-end. Same predictor + joint code as TDT,
+ // but the joint emits `vocab+1` logits (no duration extras) and the step
+@@ -238,7 +241,8 @@ transcribe_status decode_rnnt_greedy(const HostDecoderWeights & w,
+                                      int                        T_enc,
+                                      int                        d_enc,
+                                      int                        n_threads,
+-                                     std::vector<TdtToken> &    out_tokens);
++                                     std::vector<TdtToken> &    out_tokens,
++                                     ggml_threadpool_t          shared_pool = nullptr);
+
+ // Streaming variant of RNN-T greedy decode. Consumes T_enc_new encoder
+ // frames (the chunk just produced) and APPENDS emitted tokens to
+@@ -255,7 +259,8 @@ transcribe_status decode_rnnt_greedy_streaming(const HostDecoderWeights & w,
+                                                int &                      last_token_io,
+                                                int                        frame_offset,
+                                                int                        n_threads,
+-                                               std::vector<TdtToken> &    out_tokens);
++                                               std::vector<TdtToken> &    out_tokens,
++                                               ggml_threadpool_t          shared_pool = nullptr);
+
+ // Run CTC greedy decode end-to-end. Per-frame: logits = W @ enc[t] + b,
+ // argmax; collapse rule "drop adjacent duplicates, then drop blanks"
+diff --git a/src/arch/parakeet/model.cpp b/src/arch/parakeet/model.cpp
+index 89632c77..746b50ba 100644
+--- a/src/arch/parakeet/model.cpp
++++ b/src/arch/parakeet/model.cpp
+@@ -909,6 +909,25 @@ static void set_cpu_abort(const std::vector<ggml_backend_t> & backends, Parakeet
+     }
+ }
+
++// Points the CPU backends of `backends` at the session's persistent pool
++// (transcribe_session_set_threads), or back at a pool per graph (null). The
++// backends belong to the model and outlive the pool: reset after the
++// compute (which also pauses the pool).
++static void set_cpu_threadpool(const std::vector<ggml_backend_t> & backends, void * pool) {
++    for (ggml_backend_t backend : backends) {
++        ggml_backend_dev_t dev = ggml_backend_get_device(backend);
++        if (dev == nullptr || ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_CPU) {
++            continue;
++        }
++        using set_threadpool_t = void (*)(ggml_backend_t, ggml_threadpool_t);
++        auto set_threadpool    = (set_threadpool_t) ggml_backend_reg_get_proc_address(
++            ggml_backend_dev_backend_reg(dev), "ggml_backend_cpu_set_threadpool");
++        if (set_threadpool != nullptr) {
++            set_threadpool(backend, static_cast<ggml_threadpool_t>(pool));
++        }
++    }
++}
++
+ static double parakeet_ms_per_enc_frame(const ParakeetHParams & hp) {
+     return 1000.0 * static_cast<double>(hp.enc_subsampling_factor) * static_cast<double>(hp.fe_hop_length) /
+            static_cast<double>(hp.fe_sample_rate);
+@@ -952,10 +971,12 @@ static transcribe_status decode_and_populate(ParakeetSession *             pc,
+         transcribe_status st = TRANSCRIBE_OK;
+         switch (pm->host_decoder.head_kind) {
+             case HostHeadKind::TDT:
+-                st = decode_tdt_greedy(pm->host_decoder, enc, T_enc, d_enc, pc->n_threads, pc->raw_tokens);
++                st = decode_tdt_greedy(pm->host_decoder, enc, T_enc, d_enc, pc->n_threads, pc->raw_tokens,
++                                       static_cast<ggml_threadpool_t>(pc->cpu_threadpool));
+                 break;
+             case HostHeadKind::RNNT:
+-                st = decode_rnnt_greedy(pm->host_decoder, enc, T_enc, d_enc, pc->n_threads, pc->raw_tokens);
++                st = decode_rnnt_greedy(pm->host_decoder, enc, T_enc, d_enc, pc->n_threads, pc->raw_tokens,
++                                        static_cast<ggml_threadpool_t>(pc->cpu_threadpool));
+                 break;
+             case HostHeadKind::CTC:
+                 st = decode_ctc_greedy(pm->host_decoder, enc, T_enc, d_enc, pc->n_threads, pc->raw_tokens);
+@@ -1179,7 +1200,7 @@ transcribe_status run_one_shot_inner(ParakeetSession *             pc,
+     int           mel_n_mels   = 0;
+     int           mel_n_frames = 0;
+     if (const transcribe_status mst =
+-            pm->mel->compute(pcm, static_cast<size_t>(n_samples), pc->mel_buf, mel_n_mels, mel_n_frames);
++            pm->mel->compute(pcm, static_cast<size_t>(n_samples), pc->mel_buf, mel_n_mels, mel_n_frames, pc->n_threads);
+         mst != TRANSCRIBE_OK) {
+         log_msg(TRANSCRIBE_LOG_LEVEL_ERROR, "parakeet run: MelFrontend::compute failed (%s)",
+                 transcribe_status_string(mst));
+@@ -1459,7 +1480,13 @@ transcribe_status run_one_shot_inner(ParakeetSession *             pc,
+     // An abort also stops the encoder between graph nodes (set_cpu_abort).
+     const int64_t t_enc_start = ggml_time_us();
+     set_cpu_abort(pm->plan.scheduler_list, pc);
++    if (pc->cpu_threadpool != nullptr) {
++        set_cpu_threadpool(pm->plan.scheduler_list, pc->cpu_threadpool);
++    }
+     const ggml_status gs = ggml_backend_sched_graph_compute(pc->sched, eb.graph);
++    if (pc->cpu_threadpool != nullptr) {
++        set_cpu_threadpool(pm->plan.scheduler_list, nullptr);
++    }
+     set_cpu_abort(pm->plan.scheduler_list, nullptr);
+     if (gs == GGML_STATUS_ABORTED && pc->was_aborted) {
+         return TRANSCRIBE_ERR_ABORTED;
+diff --git a/src/transcribe-session.h b/src/transcribe-session.h
+index 3aa67b69..fec6ba0b 100644
+--- a/src/transcribe-session.h
++++ b/src/transcribe-session.h
+@@ -65,6 +65,10 @@ struct transcribe_session {
+     // "library picks a sensible default" (matches the factory).
+     int n_threads = 0;
+
++    // The caller's persistent ggml CPU thread pool (ggml_threadpool_t), or
++    // null: see transcribe_session_set_threads.
++    void * cpu_threadpool = nullptr;
++
+     // Cached n_ctx value the caller passed at init time (decoder context
+     // cap in tokens). 0 means "use the model's true maximum from GGUF".
+     // A positive value lowers the ceiling to bound KV-cache memory and is
+diff --git a/src/transcribe.cpp b/src/transcribe.cpp
+index dfeb5fb4..5cc829aa 100644
+--- a/src/transcribe.cpp
++++ b/src/transcribe.cpp
+@@ -1692,6 +1692,17 @@ extern "C" void transcribe_set_abort_callback(struct transcribe_session * sessio
+     session->abort_userdata = user_data;
+ }
+
++extern "C" transcribe_status transcribe_session_set_threads(struct transcribe_session * session,
++                                                            int                         n_threads,
++                                                            void *                      threadpool) {
++    if (session == nullptr || n_threads < 1) {
++        return TRANSCRIBE_ERR_INVALID_ARG;
++    }
++    session->n_threads      = n_threads;
++    session->cpu_threadpool = threadpool;
++    return TRANSCRIBE_OK;
++}
++
+ extern "C" bool transcribe_was_aborted(const struct transcribe_session * session) {
+     if (session == nullptr) {
+         return false;

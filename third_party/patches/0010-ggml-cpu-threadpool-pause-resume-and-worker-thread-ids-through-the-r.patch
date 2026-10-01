@@ -1,0 +1,118 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Fri, 25 Sep 2026 23:12:04 -0700
+Subject: [PATCH] ggml-cpu: threadpool pause, resume and worker thread ids
+ through the registry
+
+Under GGML_BACKEND_DL the CPU backend's functions are reachable only
+through its registry. It exposed ggml_threadpool_new, _free and
+ggml_backend_cpu_set_threadpool; it now also exposes ggml_threadpool_pause
+and ggml_threadpool_resume, so a long-lived pool can sleep between runs,
+and a new ggml_threadpool_get_tids, which returns the worker threads'
+kernel thread ids (each worker records its own when it starts), so a
+caller can give them to a performance hint session or check their
+placement.
+---
+ ggml/include/ggml-cpu.h        |  3 +++
+ ggml/src/ggml-cpu/ggml-cpu.c   | 33 +++++++++++++++++++++++++++++++++
+ ggml/src/ggml-cpu/ggml-cpu.cpp |  9 +++++++++
+ 3 files changed, 45 insertions(+)
+
+diff --git a/ggml/include/ggml-cpu.h b/ggml/include/ggml-cpu.h
+index dc6453c6..15331782 100644
+--- a/ggml/include/ggml-cpu.h
++++ b/ggml/include/ggml-cpu.h
+@@ -60,6 +60,9 @@ extern "C" {
+     GGML_BACKEND_API int                           ggml_threadpool_get_n_threads (struct ggml_threadpool * threadpool);
+     GGML_BACKEND_API void                          ggml_threadpool_pause         (struct ggml_threadpool * threadpool);
+     GGML_BACKEND_API void                          ggml_threadpool_resume        (struct ggml_threadpool * threadpool);
++    // Thread ids of the pool's worker threads (all but the calling thread 0), at most max of them; returns how many.
++    // Waits up to 100 ms for workers that have not started yet. 0 where the platform has no thread ids here.
++    GGML_BACKEND_API int                           ggml_threadpool_get_tids      (struct ggml_threadpool * threadpool, int32_t * tids, int max);
+
+     // ggml_graph_plan() has to be called before ggml_graph_compute()
+     // when plan.work_size > 0, caller must allocate memory for plan.work_data
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.c b/ggml/src/ggml-cpu/ggml-cpu.c
+index e8bfab1b..1f07410e 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
+@@ -198,6 +198,9 @@ typedef void * thread_ret_t;
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <unistd.h>
++#if defined(__linux__) && !defined(__ANDROID__)
++#include <sys/syscall.h>
++#endif
+
+ #endif
+
+@@ -510,6 +513,7 @@ struct ggml_compute_state {
+     ggml_thread_t thrd;
+     int  last_graph;
+     bool pending;
++    atomic_int tid; // the worker's thread id once it runs (ggml_threadpool_get_tids)
+ #endif
+     bool cpumask[GGML_MAX_N_THREADS];
+     struct ggml_threadpool * threadpool;
+@@ -3286,6 +3290,13 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
+     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
+     struct ggml_threadpool * threadpool = state->threadpool;
+
++#if defined(__ANDROID__)
++    atomic_store_explicit(&state->tid, (int) gettid(), memory_order_release);
++#elif defined(__linux__)
++    atomic_store_explicit(&state->tid, (int) syscall(SYS_gettid), memory_order_release);
++#else
++    atomic_store_explicit(&state->tid, -1, memory_order_release);
++#endif
+     ggml_thread_apply_priority(threadpool->prio);
+     if (ggml_thread_cpumask_is_valid(state->cpumask)) {
+         ggml_thread_apply_affinity(state->cpumask);
+@@ -3431,6 +3442,28 @@ struct ggml_threadpool * ggml_threadpool_new(struct ggml_threadpool_params * tpp
+     return ggml_threadpool_new_impl(tpp, NULL, NULL);
+ }
+
++int ggml_threadpool_get_tids(struct ggml_threadpool * threadpool, int32_t * tids, int max) {
++    int n = 0;
++#ifndef GGML_USE_OPENMP
++    const int64_t deadline = ggml_time_us() + 100000;
++    for (int j = 1; j < threadpool->n_threads && n < max; j++) {
++        int tid;
++        while ((tid = atomic_load_explicit(&threadpool->workers[j].tid, memory_order_acquire)) == 0 &&
++               ggml_time_us() < deadline) {
++            sched_yield();
++        }
++        if (tid > 0) {
++            tids[n++] = tid;
++        }
++    }
++#else
++    GGML_UNUSED(threadpool);
++    GGML_UNUSED(tids);
++    GGML_UNUSED(max);
++#endif
++    return n;
++}
++
+ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
+     ggml_cpu_init();
+
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.cpp b/ggml/src/ggml-cpu/ggml-cpu.cpp
+index 1df0f2bb..55e87c53 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.cpp
++++ b/ggml/src/ggml-cpu/ggml-cpu.cpp
+@@ -687,5 +687,14 @@ static void * ggml_backend_cpu_get_proc_address(ggml_backend_reg_t reg, const ch
+     if (strcmp(name, "ggml_backend_cpu_set_threadpool") == 0) {
+         return (void *)ggml_backend_cpu_set_threadpool;
+     }
++    if (strcmp(name, "ggml_threadpool_pause") == 0) {
++        return (void *)ggml_threadpool_pause;
++    }
++    if (strcmp(name, "ggml_threadpool_resume") == 0) {
++        return (void *)ggml_threadpool_resume;
++    }
++    if (strcmp(name, "ggml_threadpool_get_tids") == 0) {
++        return (void *)ggml_threadpool_get_tids;
++    }
+
+     return NULL;

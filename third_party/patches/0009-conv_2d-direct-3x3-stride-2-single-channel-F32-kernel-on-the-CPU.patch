@@ -1,0 +1,117 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Fri, 25 Sep 2026 22:43:26 -0700
+Subject: [PATCH] conv_2d: direct 3x3 stride-2 single-channel F32 kernel on the
+ CPU
+
+A FastConformer pre-encode starts with a 3x3, stride-2 conv from one input
+channel (the mel) to 256 channels. The general CPU path makes it an im2col
+plus a GEMM with K = 9, which is one 9-long vec_dot call per output (9
+million for 11 s of audio), then scatters the result: 4 to 5% of the
+Parakeet encoder at every input length. With NEON and without SVE, this
+shape now runs directly: each thread builds the three zero-padded input
+rows of an output row once and computes 4 outputs of every channel per
+step. Each output keeps ggml_vec_dot_f32's arithmetic for n = 9 as the
+Mac's and the NDK's clang compile it (the products of taps 0 to 7 rounded
+and added in order, then tap 8 fused), so the result is bit-identical. The
+SVE modules (armv9.x, opt-in) keep the general path, whose vec_dot there
+reduces SVE lanes by vector length. On a Mac armv8.6-like build the conv
+takes 2.1 ms instead of 10.3 ms for JFK and 4.9 ms instead of 27.3 ms for
+29.4 s; encoder output identical on the 11 public clips.
+TRANSCRIBE_CONV2D_GENERIC=1 runs the general path.
+---
+ ggml/src/ggml-cpu/ops.cpp | 75 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 75 insertions(+)
+
+diff --git a/ggml/src/ggml-cpu/ops.cpp b/ggml/src/ggml-cpu/ops.cpp
+index ba00a0a7..fd029d22 100644
+--- a/ggml/src/ggml-cpu/ops.cpp
++++ b/ggml/src/ggml-cpu/ops.cpp
+@@ -7206,6 +7206,78 @@ static void ggml_compute_forward_conv_2d_impl(const ggml_compute_params * params
+     }
+ }
+
++// A 3x3 F32 kernel over one input channel, stride 2, padding 1, dilation 1 (a FastConformer pre-encode's first
++// conv), computed directly: the general path's GEMM has K = 9, so it makes one 9-long vec_dot call per output. Each
++// output keeps ggml_vec_dot_f32's arithmetic for n = 9 as both the Mac and the NDK clang compile it: the products of
++// taps 0 to 7 rounded and added in order to +0.0, then tap 8 fused (fma). So the result is bit-identical. Not with
++// SVE, where ggml_vec_dot_f32 accumulates in SVE lanes and reduces by vector length. False when the shape does not
++// fit, or with TRANSCRIBE_CONV2D_GENERIC=1; the caller then runs the general path.
++static bool ggml_compute_forward_conv_2d_c1_3x3_s2_f32(const ggml_compute_params * params,
++                                                        const ggml_tensor *         kernel,  // [3, 3, 1, OC]
++                                                        const ggml_tensor *         src,     // [W, H, 1, N]
++                                                        ggml_tensor *               dst) {   // [OW, OH, OC, N]
++#if defined(__ARM_NEON) && !defined(__ARM_FEATURE_SVE)
++    const int32_t * op = dst->op_params;
++    if (kernel->type != GGML_TYPE_F32 || src->type != GGML_TYPE_F32 || dst->type != GGML_TYPE_F32 ||
++        kernel->ne[0] != 3 || kernel->ne[1] != 3 || kernel->ne[2] != 1 || src->ne[2] != 1 ||
++        op[0] != 2 || op[1] != 2 || op[2] != 1 || op[3] != 1 || op[4] != 1 || op[5] != 1 ||
++        !ggml_is_contiguous(kernel) || !ggml_is_contiguous(src) || !ggml_is_contiguous(dst) ||
++        dst->ne[0] % 4 != 0 || src->ne[0] > 2046 || src->ne[0] != 2 * dst->ne[0] ||
++        dst->ne[1] != (src->ne[1] - 1) / 2 + 1 || getenv("TRANSCRIBE_CONV2D_GENERIC") != nullptr) {
++        return false;
++    }
++    const int64_t W = src->ne[0], H = src->ne[1], OW = dst->ne[0], OH = dst->ne[1], OC = dst->ne[2];
++    const float * w = (const float *) kernel->data;  // tap k = ky * 3 + kx of channel oc at w[oc * 9 + k]
++
++    // Output rows are shared between the threads; each builds the three zero-padded input rows of its output row
++    // once and runs every channel over them.
++    float rows[3][2048 + 4];
++    for (int64_t n = 0; n < dst->ne[3]; ++n) {
++        const float * in  = (const float *) ((const char *) src->data + n * src->nb[3]);
++        float *       out = (float *) ((char *) dst->data + n * dst->nb[3]);
++        for (int64_t oy = params->ith; oy < OH; oy += params->nth) {
++            for (int ky = 0; ky < 3; ++ky) {
++                const int64_t iy = 2 * oy + ky - 1;
++                rows[ky][0]      = 0.0f;  // column -1
++                if (iy >= 0 && iy < H) {
++                    memcpy(rows[ky] + 1, in + iy * W, W * sizeof(float));
++                } else {
++                    memset(rows[ky] + 1, 0, W * sizeof(float));
++                }
++                rows[ky][W + 1] = rows[ky][W + 2] = rows[ky][W + 3] = 0.0f;
++            }
++            for (int64_t oc = 0; oc < OC; ++oc) {
++                const float * k   = w + oc * 9;
++                float *       row = out + oc * OW * OH + oy * OW;
++                for (int64_t ox = 0; ox < OW; ox += 4) {
++                    // Input column 2*ox + kx - 1 is rows[ky][2*ox + kx].
++                    float32x4_t acc = vdupq_n_f32(0.0f);
++                    float32x4_t tap[9];
++                    for (int ky = 0; ky < 3; ++ky) {
++                        const float32x4x2_t even_odd = vld2q_f32(rows[ky] + 2 * ox);
++                        tap[ky * 3 + 0]              = even_odd.val[0];
++                        tap[ky * 3 + 1]              = even_odd.val[1];
++                        tap[ky * 3 + 2]              = vld2q_f32(rows[ky] + 2 * ox + 2).val[0];
++                    }
++                    for (int t = 0; t < 8; ++t) {
++                        acc = vaddq_f32(acc, vmulq_f32(tap[t], vdupq_n_f32(k[t])));
++                    }
++                    acc = vfmaq_f32(acc, tap[8], vdupq_n_f32(k[8]));
++                    vst1q_f32(row + ox, acc);
++                }
++            }
++        }
++    }
++    return true;
++#else
++    GGML_UNUSED(params);
++    GGML_UNUSED(kernel);
++    GGML_UNUSED(src);
++    GGML_UNUSED(dst);
++    return false;
++#endif
++}
++
+ void ggml_compute_forward_conv_2d(
+         const ggml_compute_params * params,
+         ggml_tensor * dst) {
+@@ -7213,5 +7285,8 @@ void ggml_compute_forward_conv_2d(
+     const ggml_tensor * src0 = dst->src[0];
+     const ggml_tensor * src1 = dst->src[1];
+
++    if (ggml_compute_forward_conv_2d_c1_3x3_s2_f32(params, src0, src1, dst)) {
++        return;
++    }
+     ggml_compute_forward_conv_2d_impl(params, src0, src1, dst, src0->type);
+ }

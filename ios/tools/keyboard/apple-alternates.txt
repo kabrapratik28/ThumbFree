@@ -1,0 +1,55 @@
+# Apple's long-press alternatives, read by tools/dump-apple-keyboard.sh on the iOS 26.5 Simulator. Do not edit by hand.
+# kind<TAB>layer<TAB>key<TAB>the alternatives left to right<TAB>the one under the finger when they open (from 0)
+text	letters	w	w ŵ	0
+text	letters	e	ë é e è ê ě ẽ ē ė ę	2
+text	letters	r	r ř	0
+text	letters	t	t ț ť þ	0
+text	letters	y	ÿ ŷ ý y	3
+text	letters	u	ų ů ű ũ ü ú ù u û ǔ ū	7
+text	letters	i	į ı ī ĩ ï í ì i î ǐ	7
+text	letters	o	ő ō õ ø œ ǒ ö ó ò o ô	9
+text	letters	a	a à á â ä ǎ æ ã å ā ă ą	0
+text	letters	s	s ß ş ș ś š	0
+text	letters	d	d ď ð	0
+text	letters	g	g ğ ġ	0
+text	letters	h	h ħ	0
+text	letters	k	ķ k	1
+text	letters	l	ľ ļ ł l	3
+text	letters	z	z ź ž ż	0
+text	letters	c	c ç ć č ċ	0
+text	letters	n	ň ņ ń ñ n	4
+text	letters	W	W Ŵ	0
+text	letters	E	Ë É E È Ê Ě Ẽ Ē Ė Ę	2
+text	letters	R	R Ř	0
+text	letters	T	T Ț Ť Þ	0
+text	letters	Y	Ÿ Ŷ Ý Y	3
+text	letters	U	Ų Ů Ű Ũ Ü Ú Ù U Û Ǔ Ū	7
+text	letters	I	Į İ Ī Ĩ Ï Í Ì I Î Ǐ	7
+text	letters	O	Ő Ō Õ Ø Œ Ǒ Ö Ó Ò O Ô	9
+text	letters	A	A À Á Â Ä Ǎ Æ Ã Å Ā Ă Ą	0
+text	letters	S	S ẞ Ś Š Ş Ș	0
+text	letters	D	D Ď Ð	0
+text	letters	G	G Ğ Ġ	0
+text	letters	H	H Ħ	0
+text	letters	K	Ķ K	1
+text	letters	L	Ľ Ļ Ł L	3
+text	letters	Z	Z Ź Ž Ż	0
+text	letters	C	C Ç Ć Č Ċ	0
+text	letters	N	Ň Ņ Ń Ñ N	4
+text	numbers	0	° 0	1
+text	numbers	-	- – — •	0
+text	numbers	/	/ \	0
+text	numbers	$	₽ ¥ € $ ¢ £ ₩	3
+text	numbers	&	& §	0
+text	numbers	"	« » „ “ ” "	5
+text	numbers	.	. …	0
+text	numbers	?	? ¿	0
+text	numbers	!	! ¡	0
+text	numbers	'	` ‘ ’ '	3
+text	numbers	%	% ‰	0
+text	numbers	=	≈ ≠ =	2
+url	letters	.	. …	0
+url	letters	/	/ \	0
+url	letters	.com	.us .org .edu .net .com	4
+email	letters	.	.us .org .edu .net .com	4
+webSearch	letters	.	.us .edu .net .com .org	3

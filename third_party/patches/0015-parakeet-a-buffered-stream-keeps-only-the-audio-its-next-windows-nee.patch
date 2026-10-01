@@ -1,0 +1,101 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Sat, 26 Sep 2026 20:31:22 -0700
+Subject: [PATCH] parakeet: a buffered stream keeps only the audio its next
+ windows need
+
+A buffered stream (parakeet-unified) kept every sample it was fed, 3.8 MB
+a minute, though each chunk's window reaches back only left + chunk +
+right (at most 7.68 s) from the read cursor. After each chunk the buffer
+now drops what no later window can reach, and an absolute offset maps
+window coordinates into it, so a long stream holds about one window of
+audio. The windows, and so the text, are the same.
+TRANSCRIBE_STREAM_KEEP_PCM=1, read at stream_begin, keeps every sample as
+before, for an untrimmed reference.
+---
+ src/arch/parakeet/model.cpp  | 19 ++++++++++++++++---
+ src/arch/parakeet/parakeet.h |  6 ++++++
+ 2 files changed, 22 insertions(+), 3 deletions(-)
+
+diff --git a/src/arch/parakeet/model.cpp b/src/arch/parakeet/model.cpp
+index 7961d873..9e19137c 100644
+--- a/src/arch/parakeet/model.cpp
++++ b/src/arch/parakeet/model.cpp
+@@ -2619,7 +2619,7 @@ transcribe_status emit_buffered_chunk(ParakeetSession * pc,
+     std::vector<float> window_pcm(static_cast<size_t>(total_now), 0.0f);
+     const int64_t      buf_size = static_cast<int64_t>(pc->stream_pcm_buffer.size());
+     for (int64_t i = 0; i < total_now; ++i) {
+-        const int64_t src = start_abs + i;
++        const int64_t src = start_abs + i - pc->buf_pcm_offset;
+         if (src >= 0 && src < buf_size) {
+             window_pcm[static_cast<size_t>(i)] = pc->stream_pcm_buffer[static_cast<size_t>(src)];
+         }
+@@ -2850,6 +2850,16 @@ transcribe_status emit_buffered_chunk(ParakeetSession * pc,
+         pc->buf_next_audio_read += num_new_samples;
+         pc->buf_chunk_step += 1;
+         pc->buf_initialized = true;
++        // A later window starts at or after buf_next_audio_read - (left + chunk + right): drop what comes before.
++        const int64_t keep_from = pc->buf_next_audio_read - (static_cast<int64_t>(pc->buf_samples_left) +
++                                                             pc->buf_samples_chunk + pc->buf_samples_right);
++        const int64_t drop = std::min<int64_t>(keep_from - pc->buf_pcm_offset,
++                                               static_cast<int64_t>(pc->stream_pcm_buffer.size()));
++        if (drop > 0 && !pc->buf_keep_pcm) {
++            pc->stream_pcm_buffer.erase(pc->stream_pcm_buffer.begin(),
++                                        pc->stream_pcm_buffer.begin() + static_cast<ptrdiff_t>(drop));
++            pc->buf_pcm_offset += drop;
++        }
+     };
+
+     if (T_enc_full <= ctx_left_frames) {
+@@ -3168,6 +3178,8 @@ transcribe_status stream_begin(transcribe_session *             session,
+         pc->buf_initialized     = false;
+         pc->buf_chunk_step      = 0;
+         pc->buf_active          = true;
++        pc->buf_pcm_offset      = 0;
++        pc->buf_keep_pcm        = transcribe::env::flag("TRANSCRIBE_STREAM_KEEP_PCM");
+
+         pc->stream_pcm_buffer.clear();
+         pc->raw_tokens.clear();
+@@ -3294,7 +3306,7 @@ transcribe_status stream_feed(transcribe_session *       session,
+                                                            static_cast<int64_t>(pc->buf_samples_chunk) +
+                                                                static_cast<int64_t>(pc->buf_samples_right);
+             const int64_t need_end = pc->buf_next_audio_read + num_new;
+-            if (need_end > static_cast<int64_t>(pc->stream_pcm_buffer.size())) {
++            if (need_end > pc->buf_pcm_offset + static_cast<int64_t>(pc->stream_pcm_buffer.size())) {
+                 break;
+             }
+             if (const transcribe_status st = emit_buffered_chunk(pc, pm, num_new, /*is_last_chunk=*/false);
+@@ -3500,7 +3512,7 @@ transcribe_status stream_finalize(transcribe_session * session, transcribe_strea
+     if (pc->buf_active) {
+         const bool had_tentative = !pc->buf_tentative_tokens.empty();
+         pc->buf_tentative_tokens.clear();  // finalize commits every token it keeps
+-        const int64_t total = static_cast<int64_t>(pc->stream_pcm_buffer.size());
++        const int64_t total = pc->buf_pcm_offset + static_cast<int64_t>(pc->stream_pcm_buffer.size());
+         // An exact C+R+k*C input leaves right context retained at EOS.
+         if (pc->buf_next_audio_read < total || pc->buf_ctx_right > 0) {
+             if (pc->poll_abort()) {
+@@ -3619,6 +3631,7 @@ transcribe_status stream_finalize(transcribe_session * session, transcribe_strea
+ void stream_reset(transcribe_session * session) {
+     auto * pc = static_cast<ParakeetSession *>(session);
+     pc->stream_pcm_buffer.clear();  // keep the allocation
++    pc->buf_pcm_offset             = 0;
+     pc->stream_audio_input_samples = 0;
+ }
+
+diff --git a/src/arch/parakeet/parakeet.h b/src/arch/parakeet/parakeet.h
+index 24b21513..acb7f8cf 100644
+--- a/src/arch/parakeet/parakeet.h
++++ b/src/arch/parakeet/parakeet.h
+@@ -317,6 +317,12 @@ struct ParakeetSession final : public transcribe_session {
+     // per-chunk dump file naming.
+     int32_t buf_chunk_step      = 0;
+     bool    buf_active          = false;
++    // Absolute sample index of stream_pcm_buffer[0] on the buffered path. After each chunk the buffer drops what no
++    // later window can reach (anything before buf_next_audio_read - (left + chunk + right)), so a long stream holds
++    // about one window of audio instead of the whole take.
++    int64_t buf_pcm_offset      = 0;
++    // TRANSCRIBE_STREAM_KEEP_PCM=1 at stream_begin: the buffer keeps every sample (the path before the trim).
++    bool    buf_keep_pcm        = false;
+     // With TRANSCRIBE_STREAM_TENTATIVE=1: the tokens a greedy decode of each chunk's right-context frames gives on a
+     // copy of the decoder state. They follow raw_tokens in the public result as the uncommitted tail and are
+     // replaced at every chunk; finalize drops them. buf_committed_public counts the public tokens from raw_tokens.

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ThumbFree launcher foreground: key, sound wave and shadow. Design space is the central 72 dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="1536" android:viewportHeight="1536">
+<group android:translateX="256" android:translateY="256">
+<group android:translateY="-4">
+<path android:pathData="M328,756A184,28 0 1 0 696,756A184,28 0 1 0 328,756Z" android:fillColor="#1F1B3A" android:fillAlpha="0.2"/>
+<group android:rotation="-9" android:pivotX="512" android:pivotY="440">
+<path android:pathData="M388,258H636A86,86 0 0 1 722,344V538A86,86 0 0 1 636,624H388A86,86 0 0 1 302,538V344A86,86 0 0 1 388,258Z" android:fillColor="#1F1B3A"/>
+<path android:pathData="M400,276H624A62,62 0 0 1 686,338V484A62,62 0 0 1 624,546H400A62,62 0 0 1 338,484V338A62,62 0 0 1 400,276Z" android:fillColor="#39335F"/>
+<path android:pathData="M396,376H396A17,17 0 0 1 413,393V429A17,17 0 0 1 396,446H396A17,17 0 0 1 379,429V393A17,17 0 0 1 396,376ZM454,346H454A17,17 0 0 1 471,363V459A17,17 0 0 1 454,476H454A17,17 0 0 1 437,459V363A17,17 0 0 1 454,346ZM512,321H512A17,17 0 0 1 529,338V484A17,17 0 0 1 512,501H512A17,17 0 0 1 495,484V338A17,17 0 0 1 512,321ZM570,346H570A17,17 0 0 1 587,363V459A17,17 0 0 1 570,476H570A17,17 0 0 1 553,459V363A17,17 0 0 1 570,346ZM628,376H628A17,17 0 0 1 645,393V429A17,17 0 0 1 628,446H628A17,17 0 0 1 611,429V393A17,17 0 0 1 628,376Z" android:fillColor="#FFC83D"/>
+</group>
+</group>
+</group>
+</vector>

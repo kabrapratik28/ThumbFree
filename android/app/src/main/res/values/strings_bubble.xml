@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bubble labels and chip buttons (a11y.BubbleView). -->
+<resources>
+    <string name="bubble_start">Start dictation</string>
+    <string name="bubble_stop">Stop dictation</string>
+    <string name="bubble_transcribing">Transcribing</string>
+    <string name="bubble_loading_model">Loading model</string>
+    <string name="bubble_progress">%1$d of %2$d</string>
+    <string name="bubble_transcribing_progress">Transcribing, %1$d of %2$d</string>
+    <string name="bubble_cancel">Cancel dictation</string>
+    <string name="bubble_copy">Copy</string>
+    <string name="bubble_insert_here">Insert here</string>
+    <string name="bubble_undo">Undo</string>
+    <string name="bubble_retry">Retry</string>
+    <string name="bubble_dismiss">Dismiss</string>
+</resources>

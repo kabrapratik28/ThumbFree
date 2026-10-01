@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ThumbFree <thumbfree@localhost>
+Date: Fri, 25 Sep 2026 22:23:57 -0700
+Subject: [PATCH] parakeet: an abort stops the encoder at the next graph node
+
+Parakeet checked the abort callback only at the start of a run, so a
+cancelled chunk kept the engine busy to its end. The session's callback now
+also reaches the CPU backend, which checks it after every graph node, and
+is polled after the mel and after the encoder; an aborted run returns
+TRANSCRIBE_ERR_ABORTED with no text. On a Mac an abort during the 29.4 s
+encoder returns within 2 to 6 ms, where the run went on for another 360 to
+640 ms before. Texts identical when nothing aborts.
+---
+ src/arch/parakeet/model.cpp | 38 ++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 37 insertions(+), 1 deletion(-)
+
+diff --git a/src/arch/parakeet/model.cpp b/src/arch/parakeet/model.cpp
+index 0b3b5092..6ba031dd 100644
+--- a/src/arch/parakeet/model.cpp
++++ b/src/arch/parakeet/model.cpp
+@@ -886,6 +886,29 @@ static void normalize_transcript_whitespace(std::string & s) {
+ // sample_rate). Returned as a double — not pre-rounded — so a non-integral
+ // stride doesn't quantize before the call-site multiply. Shared by both
+ // result builders.
++// Points the CPU backends of `backends` at the session's abort callback
++// (nullptr: none). ggml's CPU backend checks it after every graph node, so
++// an abort stops the encoder within a node instead of after the run. The
++// backends belong to the model and outlive a session: clear it after the
++// compute.
++static void set_cpu_abort(const std::vector<ggml_backend_t> & backends, ParakeetSession * pc) {
++    for (ggml_backend_t backend : backends) {
++        ggml_backend_dev_t dev = ggml_backend_get_device(backend);
++        if (dev == nullptr || ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_CPU) {
++            continue;
++        }
++        auto set_abort = (ggml_backend_set_abort_callback_t) ggml_backend_reg_get_proc_address(
++            ggml_backend_dev_backend_reg(dev), "ggml_backend_set_abort_callback");
++        if (set_abort != nullptr) {
++            ggml_abort_callback cb = nullptr;
++            if (pc != nullptr) {
++                cb = [](void * data) { return static_cast<ParakeetSession *>(data)->poll_abort(); };
++            }
++            set_abort(backend, cb, pc);
++        }
++    }
++}
++
+ static double parakeet_ms_per_enc_frame(const ParakeetHParams & hp) {
+     return 1000.0 * static_cast<double>(hp.enc_subsampling_factor) * static_cast<double>(hp.fe_hop_length) /
+            static_cast<double>(hp.fe_sample_rate);
+@@ -1163,6 +1186,9 @@ transcribe_status run_one_shot_inner(ParakeetSession *             pc,
+         return mst;
+     }
+     pc->t_mel_us = ggml_time_us() - t_mel_start;
++    if (pc->poll_abort()) {
++        return TRANSCRIBE_ERR_ABORTED;
++    }
+
+     // Multitalker masked mode (NeMo mask_features): binarize the target
+     // speaker's per-diar-frame activity, expand 8x to feature frames from
+@@ -1416,14 +1442,24 @@ transcribe_status run_one_shot_inner(ParakeetSession *             pc,
+     transcribe::configure_sched_n_threads(pc->sched, pc->n_threads);
+
+     // ----- Compute -----
++    // An abort also stops the encoder between graph nodes (set_cpu_abort).
+     const int64_t t_enc_start = ggml_time_us();
+-    if (const ggml_status gs = ggml_backend_sched_graph_compute(pc->sched, eb.graph); gs != GGML_STATUS_SUCCESS) {
++    set_cpu_abort(pm->plan.scheduler_list, pc);
++    const ggml_status gs = ggml_backend_sched_graph_compute(pc->sched, eb.graph);
++    set_cpu_abort(pm->plan.scheduler_list, nullptr);
++    if (gs == GGML_STATUS_ABORTED && pc->was_aborted) {
++        return TRANSCRIBE_ERR_ABORTED;
++    }
++    if (gs != GGML_STATUS_SUCCESS) {
+         log_msg(TRANSCRIBE_LOG_LEVEL_ERROR, "parakeet run: ggml_backend_sched_graph_compute failed (%d)",
+                 static_cast<int>(gs));
+         return TRANSCRIBE_ERR_BACKEND;
+     }
+     pc->t_encode_us = ggml_time_us() - t_enc_start;
+     pc->t_decode_us = 0;
++    if (pc->poll_abort()) {
++        return TRANSCRIBE_ERR_ABORTED;
++    }
+
+     // ----- Dump intermediates (debug only; nullptr fields skipped) -----
+     auto try_dump = [](const char * name, ggml_tensor * t, const char * stage) {

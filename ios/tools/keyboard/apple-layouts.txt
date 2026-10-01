@@ -1,0 +1,26 @@
+# Apple's keyboard, read by tools/dump-apple-keyboard.sh on the iOS 26.5 Simulator (390 pt wide, portrait). Do not edit by hand.
+# kind<TAB>layer<TAB>each row: key:touch width in points
+text	letters	q:38 w:38 e:38 r:38 t:38 y:38 u:38 i:38 o:38 p:38	a:38 s:38 d:38 f:38 g:38 h:38 j:38 k:38 l:38	shift:50 z:38 x:38 c:38 v:38 b:38 n:38 m:38 delete:50	123:48 emoji:48 space:191 return:96
+text	numbers	1:38 2:38 3:38 4:38 5:38 6:38 7:38 8:38 9:38 0:38	-:38 /:38 ::38 ;:38 (:38 ):38 $:38 &:38 @:38 ":38	#+=:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:48 emoji:48 space:191 return:96
+text	symbols	[:38 ]:38 {:38 }:38 #:38 %:38 ^:38 *:38 +:38 =:38	_:38 \:38 |:38 ~:38 <:38 >:38 €:38 £:38 ¥:38 •:38	123:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:48 emoji:48 space:191 return:96
+ascii	letters	q:38 w:38 e:38 r:38 t:38 y:38 u:38 i:38 o:38 p:38	a:38 s:38 d:38 f:38 g:38 h:38 j:38 k:38 l:38	shift:50 z:38 x:38 c:38 v:38 b:38 n:38 m:38 delete:50	123:96 space:191 return:96
+ascii	numbers	1:38 2:38 3:38 4:38 5:38 6:38 7:38 8:38 9:38 0:38	-:38 /:38 ::38 ;:38 (:38 ):38 $:38 &:38 @:38 ":38	#+=:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:96 space:191 return:96
+ascii	symbols	[:38 ]:38 {:38 }:38 #:38 %:38 ^:38 *:38 +:38 =:38	_:38 \:38 |:38 ~:38 <:38 >:38 €:38 £:38 ¥:38 •:38	123:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:96 space:191 return:96
+numbersFirst	letters	q:38 w:38 e:38 r:38 t:38 y:38 u:38 i:38 o:38 p:38	a:38 s:38 d:38 f:38 g:38 h:38 j:38 k:38 l:38	shift:50 z:38 x:38 c:38 v:38 b:38 n:38 m:38 delete:50	123:96 space:191 return:96
+numbersFirst	numbers	1:38 2:38 3:38 4:38 5:38 6:38 7:38 8:38 9:38 0:38	-:38 /:38 ::38 ;:38 (:38 ):38 $:38 &:38 @:38 ":38	#+=:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:96 space:191 return:96
+numbersFirst	symbols	[:38 ]:38 {:38 }:38 #:38 %:38 ^:38 *:38 +:38 =:38	_:38 \:38 |:38 ~:38 <:38 >:38 €:38 £:38 ¥:38 •:38	123:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:96 space:191 return:96
+url	letters	q:38 w:38 e:38 r:38 t:38 y:38 u:38 i:38 o:38 p:38	a:38 s:38 d:38 f:38 g:38 h:38 j:38 k:38 l:38	shift:50 z:38 x:38 c:38 v:38 b:38 n:38 m:38 delete:50	123:48 emoji:48 .:64 /:64 .com:64 return:96
+url	numbers	1:38 2:38 3:38 4:38 5:38 6:38 7:38 8:38 9:38 0:38	-:38 /:38 ::38 ;:38 (:38 ):38 $:38 &:38 @:38 ":38	#+=:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:48 emoji:48 space:191 return:96
+url	symbols	[:38 ]:38 {:38 }:38 #:38 %:38 ^:38 *:38 +:38 =:38	_:38 \:38 |:38 ~:38 <:38 >:38 €:38 £:38 ¥:38 •:38	123:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:48 emoji:48 space:191 return:96
+numberPad	pad	1:128 2:129 3:128	4:128 5:129 6:128	7:128 8:129 9:128	blank:128 0:129 delete:128
+email	letters	q:38 w:38 e:38 r:38 t:38 y:38 u:38 i:38 o:38 p:38	a:38 s:38 d:38 f:38 g:38 h:38 j:38 k:38 l:38	shift:50 z:38 x:38 c:38 v:38 b:38 n:38 m:38 delete:50	123:48 emoji:48 space:96 @:48 .:48 return:96
+email	numbers	1:38 2:38 3:38 4:38 5:38 6:38 7:38 8:38 9:38 0:38	-:38 /:38 ::38 ;:38 (:38 ):38 $:38 &:38 @:38 ":38	#+=:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:48 emoji:48 space:191 return:96
+email	symbols	[:38 ]:38 {:38 }:38 #:38 %:38 ^:38 *:38 +:38 =:38	_:38 \:38 |:38 ~:38 <:38 >:38 €:38 £:38 ¥:38 •:38	123:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:48 emoji:48 space:191 return:96
+decimalPad	pad	1:128 2:129 3:128	4:128 5:129 6:128	7:128 8:129 9:128	.:128 0:129 delete:128
+twitter	letters	q:38 w:38 e:38 r:38 t:38 y:38 u:38 i:38 o:38 p:38	a:38 s:38 d:38 f:38 g:38 h:38 j:38 k:38 l:38	shift:50 z:38 x:38 c:38 v:38 b:38 n:38 m:38 delete:50	123:48 emoji:48 space:191 @:48 #:48
+twitter	numbers	1:38 2:38 3:38 4:38 5:38 6:38 7:38 8:38 9:38 0:38	-:38 /:38 ::38 ;:38 (:38 ):38 $:38 &:38 @:38 ":38	#+=:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:48 emoji:48 space:191 return:96
+twitter	symbols	[:38 ]:38 {:38 }:38 #:38 %:38 ^:38 *:38 +:38 =:38	_:38 \:38 |:38 ~:38 <:38 >:38 €:38 £:38 ¥:38 •:38	123:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:48 emoji:48 space:191 return:96
+webSearch	letters	q:38 w:38 e:38 r:38 t:38 y:38 u:38 i:38 o:38 p:38	a:38 s:38 d:38 f:38 g:38 h:38 j:38 k:38 l:38	shift:50 z:38 x:38 c:38 v:38 b:38 n:38 m:38 delete:50	123:48 emoji:48 space:182 .:38 return:67
+webSearch	numbers	1:38 2:38 3:38 4:38 5:38 6:38 7:38 8:38 9:38 0:38	-:38 /:38 ::38 ;:38 (:38 ):38 $:38 &:38 @:38 ":38	#+=:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:48 emoji:48 space:191 return:96
+webSearch	symbols	[:38 ]:38 {:38 }:38 #:38 %:38 ^:38 *:38 +:38 =:38	_:38 \:38 |:38 ~:38 <:38 >:38 €:38 £:38 ¥:38 •:38	123:50 .:54 ,:54 ?:53 !:54 ':54 delete:50	ABC:48 emoji:48 space:191 return:96
+asciiNumberPad	pad	1:128 2:129 3:128	4:128 5:129 6:128	7:128 8:129 9:128	blank:128 0:129 delete:128

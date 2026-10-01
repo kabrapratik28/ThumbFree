@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Live preview: the panel by the bubble (a11y.PreviewPanel) and no settings row: an experimental feature, off. -->
+<resources>
+    <string name="live_preview_label">Preview</string>
+</resources>

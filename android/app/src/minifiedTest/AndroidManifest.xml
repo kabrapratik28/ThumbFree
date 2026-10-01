@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- minifiedTest only: release's R8 code, debuggable at run time for run-as (android/tools/push-test-model.sh) and the
+     tests' debug-only switches. Set here, not with isDebuggable, which would give R8's debug mode (app/build.gradle.kts). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application android:debuggable="true" tools:ignore="HardcodedDebugMode" />
+</manifest>
