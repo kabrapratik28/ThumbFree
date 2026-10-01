@@ -142,7 +142,8 @@ assert.equal(await page.$eval('.hero .badge[data-store="ios"]', (e) => e.tagName
 assert.equal(await page.$eval('.hero .badge[data-store="android"]', (e) => e.tagName), 'A');
 await ctx.close();
 
-// 8. Device layout: Android gets Google Play and the App Store as a text link; iPad (a Mac with touch) gets the App Store.
+// 8. Device layout: Android gets Google Play and the App Store as a text link, an iPhone the App Store first. An iPad
+// (a Mac with touch) gets the desktop layout, both stores side by side: the app is made for iPhone only.
 ctx = await browser.createBrowserContext();
 ({ page } = await open({ live: true, ua: 'Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36' }, ctx));
 assert.equal(await page.evaluate(() => document.documentElement.dataset.device), 'android');
@@ -152,8 +153,12 @@ const ipad = await ctx.newPage();
 await ipad.evaluateOnNewDocument(() => Object.defineProperty(Navigator.prototype, 'maxTouchPoints', { get: () => 5 }));
 await ipad.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15');
 await ipad.goto(BASE, { waitUntil: 'networkidle0' });
-assert.equal(await ipad.evaluate(() => document.documentElement.dataset.device), 'ios');
-assert.equal(await ipad.evaluate(() => document.documentElement.dataset.platform), 'ios');
+assert.equal(await ipad.evaluate(() => document.documentElement.dataset.device), 'desktop');
+const iphone = await ctx.newPage();
+await iphone.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1');
+await iphone.goto(BASE, { waitUntil: 'networkidle0' });
+assert.equal(await iphone.evaluate(() => document.documentElement.dataset.device), 'ios');
+assert.equal(await iphone.evaluate(() => document.documentElement.dataset.platform), 'ios');
 await ctx.close();
 
 await browser.close();
