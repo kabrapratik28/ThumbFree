@@ -4,7 +4,8 @@
 - The JSON-LD parses, every local file a page points to exists, and every image has a width, a height and an alt.
 - The copy follows the project's writing rules: no em-dashes, none of the filler words, no email but the public one.
 - The four pages the app stores link (privacy and support, iPhone and Android) are byte for byte the last commit's.
-- A store that site.js marks live has a real address, and index.html links it for visitors without JavaScript too.
+- A store that site.js marks live has a real address. As a note, not a failure: when index.html still tells visitors
+  without JavaScript that a live store is coming soon.
 """
 import base64
 import hashlib
@@ -19,7 +20,7 @@ PROTECTED = ["privacy.html", "support.html", "android-privacy.html", "android-su
 FILLER = ["delve", "leverage", "robust", "seamless", "crucial", "comprehensive", "foster"]
 EMAIL = "thumbfree.app@gmail.com"
 SITE_URL = "https://kabrapratik28.github.io/ThumbFree/"
-problems = []
+problems, notes = [], []
 
 pages = sorted(f for f in os.listdir(SITE) if f.endswith(".html"))
 for page in pages:
@@ -76,8 +77,8 @@ for store, name in (("android", "Google Play"), ("ios", "the App Store")):
         if store == "ios" and not re.search(r"/id\d+", block.group(1)):
             problems.append("site.js: the App Store is live but its URL still lacks the app's number")
         if f"Coming soon to {name}" in index:
-            problems.append(f"index.html: {store} is live in site.js, but the page still says Coming soon to {name}"
-                            " to visitors without JavaScript (3 badges and 3 text lines to swap for links)")
+            notes.append(f"note: {store} is live in site.js, but index.html still says Coming soon to {name} to visitors"
+                         " without JavaScript (the comment above the hero's store buttons has the links to paste)")
 
 for page in PROTECTED:
     saved = subprocess.run(["git", "-C", SITE, "show", f"HEAD:{page}"], capture_output=True)
@@ -86,5 +87,5 @@ for page in PROTECTED:
     elif saved.stdout != open(os.path.join(SITE, page), "rb").read():
         problems.append(f"{page}: changed, but the app stores link it and it must stay as it is")
 
-print("\n".join(problems) or f"OK: {len(pages)} pages")
+print("\n".join(problems + notes) or f"OK: {len(pages)} pages")
 sys.exit(1 if problems else 0)

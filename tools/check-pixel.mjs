@@ -34,7 +34,7 @@ async function open({ pixel = false, live = false, gpc = false, query = '', ua }
       let js = SITE_JS;
       if (pixel) js = js.replace("const PIXEL_ID = '';", `const PIXEL_ID = '${pixel === true ? '1234567890' : pixel}';`);
       if (live) js = js.replaceAll('live: false', 'live: true');
-      if (live === true) js = js.replace('idAPP_STORE_ID', 'id1234567890');
+      if (live === 'placeholder') js = js.replace(/\/id\d+/, '/idAPP_STORE_ID');
       return req.respond({ status: 200, contentType: 'application/javascript', body: js });
     }
     req.continue();
@@ -135,7 +135,7 @@ assert.match(await page.$eval('.hero .badges', (e) => e.textContent), /Coming so
 const play = await page.$eval('.hero a.badge[data-store="android"]', (a) => a.href);
 assert.equal(play, 'https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree&referrer=utm_source%3Dfacebook%26utm_campaign%3Dlaunch%2Bweek');
 const apple = await page.$eval('.hero a.badge[data-store="ios"]', (a) => a.href);
-assert.equal(apple, 'https://apps.apple.com/app/id1234567890', 'no App Store campaign without a provider token');
+assert.equal(apple, 'https://apps.apple.com/app/id6817631006', 'no App Store campaign without a provider token');
 ({ page } = await open({ live: 'placeholder' }, ctx));
 assert.equal(await page.$eval('.hero .badge[data-store="ios"]', (e) => e.tagName + ' ' + e.textContent), 'SPAN Coming soon to the App Store',
   'a live flag with the placeholder App Store URL still says Coming soon');

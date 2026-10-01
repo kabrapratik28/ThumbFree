@@ -1,8 +1,8 @@
 // The ThumbFree website's script. The settings come first; the rest needs no changes.
 
-// The store pages. A store that isn't live shows "Coming soon to ..." instead of its badge. The page's own HTML says
-// "Coming soon" for both, which is what visitors without JavaScript see; this script rebuilds every store button from
-// these settings.
+// The store pages. Set a store's live to true when its listing is public; until then it shows "Coming soon to ..."
+// instead of its badge. The page's own HTML says "Coming soon" for both, which is what visitors without JavaScript
+// see; this script rebuilds every store button from these settings.
 const STORES = {
   android: {
     url: 'https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree',
@@ -51,7 +51,7 @@ const BADGES = {
 };
 const STORE_NAMES = { android: 'Google Play', ios: 'the App Store' };
 
-// A store counts as live only with a real address: the App Store one needs the app's number in place of APP_STORE_ID.
+// A store counts as live only with a real address: the App Store one ends in the app's number.
 const isLive = (store) => STORES[store].live && (store !== 'ios' || /\/id\d+/.test(STORES.ios.url));
 
 // Each store button is a badge (class "badge") or a line of text ("On iPhone? ..."), a link when the store is live.
