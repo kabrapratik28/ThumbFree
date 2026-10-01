@@ -1,13 +1,546 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ThumbFree</title>
-<style>body{font:17px/1.55 -apple-system,system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;color:#26264a;background:#fff8e7}a{color:#26264a}h1{font-size:30px}h2{margin-top:32px}</style>
-</head><body>
-<h1>ThumbFree</h1>
-<p>A private, offline voice keyboard for iPhone: talk, and it types where your cursor is. Free, with no account.</p>
-<ul>
-<li><a href="privacy.html">Privacy policy</a></li>
-<li><a href="support.html">Support</a></li>
-</ul>
-<p><a href="./">ThumbFree</a></p>
-</body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The sha256 below is the hash of the one-line script after it; change the script and the hash must change too. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-tmqeEq/d7r1TiXTywixbC5izdoWdskD/AuV6Q9wumJs=' https://connect.facebook.net; connect-src 'self' https://www.facebook.com https://connect.facebook.net; img-src 'self' data: https://www.facebook.com; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
+<script>(function(d,n){var r=d.documentElement,u=n.userAgent,p=(n.userAgentData&&n.userAgentData.platform==='Android')||/Android/i.test(u)?'android':/iPhone|iPad|iPod/.test(u)||(/Macintosh/.test(u)&&n.maxTouchPoints>1)?'ios':'desktop';r.className='js';r.setAttribute('data-device',p);r.setAttribute('data-platform',p==='ios'?'ios':'android');if(/FBAN|FBAV|FB_IAB|Instagram|Reddit/i.test(u))r.setAttribute('data-inapp','')})(document,navigator)</script>
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="color-scheme" content="light">
+<title>ThumbFree: free, offline dictation for Android and iPhone</title>
+<meta name="description" content="Talk instead of typing, in your apps. ThumbFree turns speech into text on your phone, even offline. Free and open source; the apps have no account, ads or tracking.">
+<link rel="canonical" href="https://kabrapratik28.github.io/ThumbFree/">
+<meta name="theme-color" content="#fff8e7">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" href="fonts/thumbfree-serif.woff2" as="font" type="font/woff2" crossorigin>
+<!-- Apple's Smart App Banner for Safari on iPhone: put the App Store ID in and uncomment it once the app is live.
+<meta name="apple-itunes-app" content="app-id=APP_STORE_ID">
+-->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ThumbFree">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://kabrapratik28.github.io/ThumbFree/">
+<meta property="og:title" content="ThumbFree: private dictation that stays on your phone">
+<meta property="og:description" content="Tap, speak, and your words are typed where you're typing. Free and open source, for Android and iPhone. The apps have no account, ads or tracking.">
+<meta property="og:image" content="https://kabrapratik28.github.io/ThumbFree/og-image.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The ThumbFree logo and the words Talk. It types., beside a drawing of a woman talking to her phone">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ThumbFree: private dictation that stays on your phone">
+<meta name="twitter:description" content="Tap, speak, and your words are typed where you're typing. Free and open source, for Android and iPhone. The apps have no account, ads or tracking.">
+<meta name="twitter:image" content="https://kabrapratik28.github.io/ThumbFree/og-image.jpg">
+<meta name="twitter:image:alt" content="The ThumbFree logo and the words Talk. It types., beside a drawing of a woman talking to her phone">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://kabrapratik28.github.io/ThumbFree/#website",
+      "url": "https://kabrapratik28.github.io/ThumbFree/",
+      "name": "ThumbFree"
+    },
+    {
+      "@type": "MobileApplication",
+      "@id": "https://kabrapratik28.github.io/ThumbFree/#app",
+      "name": "ThumbFree",
+      "description": "Free, open-source push-to-talk dictation for Android and iPhone. Speech becomes text on the phone, offline, where you type.",
+      "url": "https://kabrapratik28.github.io/ThumbFree/",
+      "image": "https://kabrapratik28.github.io/ThumbFree/og-image.jpg",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Android 13 or newer, iOS 26 or newer",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "sameAs": "https://github.com/kabrapratik28/ThumbFree"
+    }
+  ]
+}
+</script>
+<style>
+@font-face{font-family:"ThumbFree Serif";src:url(fonts/thumbfree-serif.woff2) format("woff2");font-display:swap}
+:root{--navy:#26264a;--cream:#fff8e7;--sun:#ffc83d;--sun-light:#ffe7a3;--muted:#4b4b6e;--line:#e8dcbc;--card:#fffdf7;
+  --serif:"ThumbFree Serif",Georgia,"Noto Serif",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;font:1.0625rem/1.6 var(--sans);color:var(--navy);background:var(--cream)}
+img{max-width:100%;height:auto;display:block}
+a{color:inherit;text-decoration-thickness:1px;text-underline-offset:.18em}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:3px solid var(--navy);outline-offset:3px;border-radius:4px}
+[id]{scroll-margin-top:1rem}
+h1,h2,h3{font-family:var(--serif);font-weight:400;line-height:1.1;margin:0 0 .5em;text-wrap:balance}
+h2{font-size:clamp(2rem,1.4rem + 2.6vw,3rem)}
+h3{font-size:1.5rem}
+p{margin:0 0 1em}
+.wrap{max-width:70rem;margin:0 auto;padding:0 1.25rem}
+.skip{position:absolute;left:1rem;top:-4rem;background:var(--navy);color:var(--cream);padding:.6rem 1rem;border-radius:.5rem;z-index:10}
+.skip:focus{top:1rem}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+section{padding:3rem 0}
+@media (min-width:60em){section{padding:4.5rem 0}}
+.center{text-align:center}
+.intro{max-width:40rem;margin:0 auto 2rem;color:var(--muted)}
+
+/* Header */
+.top{padding:.9rem 0}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.brand{display:flex;align-items:center;gap:.6rem;font-weight:600;font-size:1.2rem;text-decoration:none}
+.top nav{display:flex;gap:1.4rem;font-size:.95rem}
+.top nav a{text-decoration:none;padding:.6rem 0}
+.top nav a:hover{text-decoration:underline}
+.top nav .opt{display:none}
+@media (min-width:48em){.top nav .opt{display:inline}}
+@media (max-width:22em){.top .wrap{flex-wrap:wrap;row-gap:0}.top nav{gap:1rem;margin-left:auto}}
+
+/* Hero */
+.hero{padding:.75rem 0 2rem}
+.hero .wrap{display:grid;grid-template-columns:1fr auto;grid-template-areas:"eyebrow eyebrow" "title art" "lede lede" "cta cta" "fine fine";column-gap:1rem;align-items:center}
+.eyebrow{grid-area:eyebrow;font-size:.9rem;font-weight:700;letter-spacing:.04em;margin:0 0 .5rem}
+.eyebrow span{background:var(--sun);border-radius:999px;padding:.2rem .7rem}
+.hero h1{grid-area:title;font-size:clamp(3.25rem,2.2rem + 5vw,5.75rem);line-height:1.02;margin:0}
+.hero-art{grid-area:art;width:clamp(7.5rem,34vw,11rem)}
+@media (max-width:22em){.hero-art{width:5.75rem}}
+.lede{grid-area:lede;font-size:1.2rem;margin:1.25rem 0 1.5rem;max-width:34rem;text-wrap:pretty}
+.hero .cta{grid-area:cta}
+.fine{grid-area:fine;font-size:.95rem;color:var(--muted);margin:1.1rem 0 0;max-width:34rem;text-wrap:balance}
+@media (min-width:60em){
+  .hero{padding:2rem 0 4.5rem}
+  .hero .wrap{grid-template-columns:1fr 1fr;grid-template-areas:"eyebrow art" "title art" "lede art" "cta art" "fine art";column-gap:3rem;align-items:start}
+  .eyebrow{align-self:end}
+  .hero-art{width:100%;max-width:35rem;justify-self:end;align-self:center}
+}
+
+/* Store buttons. The official badges at one height, with a quarter of it clear around them; Google's file has that
+   clear space built in, so it is drawn larger and pulled back by the same amount. "Coming soon" while not live. */
+.badges{--h:3.25rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:center}
+.badge{display:inline-flex;align-items:center;height:var(--h);border-radius:.6rem}
+.badge img{height:100%;width:auto}
+.badge img.gp{height:calc(var(--h) * 250 / 168);margin:calc(var(--h) * -41 / 168)}
+.soon{padding:0 1.1rem;border:2px dashed var(--navy);font-weight:600;font-size:.95rem;background:var(--card)}
+.prelaunch{margin-top:1.25rem}
+.cta:has(a.badge) .prelaunch{display:none}
+.also,.inapp{display:none;margin:.9rem 0 0}
+[data-device=android] .badge[data-store=ios],[data-device=ios] .badge[data-store=android]{display:none}
+[data-device=android] .also-ios,[data-device=ios] .also-android{display:block}
+[data-device=android] .badges,[data-device=ios] .badges{--h:3.75rem}
+[data-inapp] .cta:has(a.badge) .inapp{display:block;font-size:.9rem;color:var(--muted)}
+.center .badges{justify-content:center}
+
+/* Platform switch: with JS one platform shows, without it both do */
+[data-platform=android] #how .only-ios,[data-platform=ios] #how .only-android{display:none}
+[data-device=android] .device-ios,[data-device=ios] .device-android{display:none}
+.switch{display:inline-flex;padding:.3rem;border-radius:999px;background:var(--card);border:1px solid var(--line);margin:0 auto 2rem}
+.switch button{font:inherit;font-weight:600;color:var(--navy);background:none;border:0;border-radius:999px;padding:.55rem 1.4rem;min-height:2.75rem;cursor:pointer}
+.switch button[aria-pressed=true]{background:var(--navy);color:var(--cream)}
+.js .platform-title{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* How it works */
+.steps{list-style:none;counter-reset:step;padding:0;margin:0 auto 1rem;display:grid;gap:1rem;max-width:62rem}
+.steps li{counter-increment:step;background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:1.1rem 1.2rem 1.1rem 4rem;position:relative;text-align:left}
+.steps li::before{content:counter(step);position:absolute;left:1.1rem;top:1rem;width:2rem;height:2rem;border-radius:50%;background:var(--sun);font-weight:700;display:grid;place-items:center}
+@media (min-width:48em){.steps{grid-template-columns:repeat(3,1fr)}}
+.note{max-width:42rem;margin:1.25rem auto 0;font-size:.95rem;color:var(--muted)}
+.shots{list-style:none;margin:2.5rem -1.25rem 0;padding:.5rem 1.25rem 1.25rem;display:grid;grid-auto-flow:column;grid-auto-columns:min(62vw,15rem);gap:1.25rem;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding:0 1.25rem;overscroll-behavior-x:contain}
+.shots:focus-visible{outline-offset:-3px}
+.shots li{scroll-snap-align:start;text-align:center}
+.shots figure{margin:0}
+.shots img{border:.5rem solid var(--navy);border-radius:1.75rem;background:#fff;width:100%}
+.shots figcaption{font-family:var(--serif);font-size:1.25rem;line-height:1.2;margin-top:.8rem}
+.how-cta{margin-top:2rem}
+
+/* Privacy */
+.dark{background:var(--navy);color:var(--cream)}
+.dark :focus-visible{outline-color:var(--sun)}
+.privacy .wrap{display:grid;gap:2rem;align-items:center}
+@media (min-width:60em){.privacy .wrap{grid-template-columns:3fr 2fr}}
+.ticks{list-style:none;padding:0;margin:0 0 1.5rem}
+.ticks li{position:relative;padding-left:2rem;margin-bottom:.8rem}
+.ticks li::before{content:"";position:absolute;left:.2rem;top:.45em;width:.7rem;height:.35rem;border-left:3px solid var(--sun);border-bottom:3px solid var(--sun);transform:rotate(-45deg)}
+.privacy-art{display:block;background:var(--cream);border-radius:50%;padding:3rem;max-width:20rem;margin:0 auto;aspect-ratio:1}
+.privacy-art img{width:100%;height:100%;object-fit:contain}
+
+/* Features: the drawings sit on the page's own cream, so no box shows around them; beside the text on phones */
+.features{display:grid;gap:1rem;list-style:none;padding:0;margin:0}
+.features li{border:1px solid var(--line);border-radius:1.25rem;padding:1.1rem;display:grid;grid-template-columns:5.5rem 1fr;column-gap:1rem;align-items:center}
+.features picture{grid-row:span 2}
+.features img{width:100%;max-height:6rem;object-fit:contain}
+.features h3{font-size:1.35rem;margin:0 0 .25rem;align-self:end}
+.features p{margin:0;align-self:start}
+@media (min-width:40em){.features{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:64em){
+  .features{grid-template-columns:repeat(3,1fr);gap:1.25rem}
+  .features li{display:block;padding:1.5rem;text-align:center}
+  .features img{height:9rem;max-height:none;width:auto;margin:0 auto 1rem}
+  .features h3{font-size:1.5rem;margin-bottom:.5rem}
+}
+
+/* Buttons */
+.buttons{display:flex;flex-wrap:wrap;gap:.75rem}
+.button{display:inline-flex;align-items:center;gap:.55rem;min-height:3rem;padding:.7rem 1.3rem;border-radius:999px;font-weight:600;text-decoration:none;border:2px solid var(--navy)}
+.button.solid{background:var(--navy);color:var(--cream)}
+.button:hover{text-decoration:underline}
+.button svg{width:1.3rem;height:1.3rem;flex:none}
+.dark .button{border-color:var(--cream)}
+
+/* Open source */
+.oss{display:grid;gap:2rem;align-items:center}
+@media (min-width:60em){.oss{grid-template-columns:1fr 1fr}}
+.code{display:none;font:.95rem/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--navy);color:var(--cream);border-radius:1rem;padding:1.25rem 1.4rem;overflow-x:auto;margin:0}
+.code span{color:var(--sun)}
+@media (min-width:40em){.code{display:block}}
+
+/* FAQ */
+.faq{max-width:46rem;margin:0 auto}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{cursor:pointer;font-weight:600;padding:1.1rem 2.5rem 1.1rem 0;position:relative;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";position:absolute;right:.5rem;top:.8rem;font-size:1.5rem;font-weight:400}
+.faq details[open] summary::after{content:"\2212"}
+.faq details p{margin:0 0 1.1rem}
+
+/* Closing call to action and support */
+.cta-band h2{margin-bottom:1.5rem}
+.support{background:var(--sun-light)}
+.support .buttons{justify-content:center}
+
+/* Footer */
+footer{background:var(--navy);color:var(--cream);padding:3rem 0 2rem;font-size:.95rem}
+footer .cols{display:grid;gap:1.5rem;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));margin-bottom:2rem}
+footer h2{font-family:var(--sans);font-size:.85rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:0 0 .6rem}
+footer ul{list-style:none;padding:0;margin:0}
+footer li{margin:.2rem 0}
+footer li a,footer li button{display:inline-block;padding:.3rem 0}
+footer .legal{font-size:.8rem;opacity:.85;border-top:1px solid rgba(255,248,231,.2);padding-top:1.25rem;margin:0}
+footer button{font:inherit;color:inherit;background:none;border:0;text-decoration:underline;cursor:pointer}
+footer :focus-visible{outline-color:var(--sun)}
+
+/* Consent banner, only when a Meta Pixel ID is set. Not a modal: the page stays usable behind it. */
+.consent{position:fixed;left:1rem;right:1rem;bottom:1rem;z-index:5;max-width:36rem;max-height:calc(100dvh - 2rem);overflow:auto;margin:0 auto;background:var(--card);color:var(--navy);border:2px solid var(--navy);border-radius:1rem;padding:1.1rem 1.25rem;box-shadow:0 .5rem 2rem rgba(38,38,74,.25)}
+.consent h2{font:700 1rem/1.3 var(--sans);margin:0 0 .4rem}
+.consent p{margin:0 0 .9rem;font-size:.95rem}
+.consent .choices{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.consent button{font:inherit;font-weight:700;min-height:2.75rem;border-radius:999px;border:2px solid var(--navy);background:var(--card);color:var(--navy);cursor:pointer}
+.consent button:disabled{opacity:.5;cursor:not-allowed}
+[hidden]{display:none!important}
+@media print{.top nav,.cta,.how-cta,.shots,.switch,.consent,.support,.cta-band{display:none!important}body{background:#fff}.dark,footer{background:#fff;color:#000}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<section class="consent" id="consent" aria-labelledby="consent-title" aria-describedby="consent-text" hidden>
+  <h2 id="consent-title">Ad measurement on this website</h2>
+  <p id="consent-text">May we load Meta's pixel to measure our Facebook and Instagram ads? It sets cookies, and Meta learns that you visited and which store button you tapped. The ThumbFree apps never send your audio or text anywhere. <a href="website-privacy.html#meta-pixel">Details</a></p>
+  <p class="gpc" hidden>Your browser sends Global Privacy Control, so the pixel stays off.</p>
+  <div class="choices">
+    <button type="button" data-consent="reject">Reject</button>
+    <button type="button" data-consent="accept">Accept</button>
+  </div>
+</section>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="img/logo.svg" width="36" height="36" alt="">ThumbFree</a>
+    <nav aria-label="Main">
+      <a class="opt" href="#how">How it works</a>
+      <a class="opt" href="#privacy">Privacy</a>
+      <a href="#faq">Questions</a>
+      <a href="https://github.com/kabrapratik28/ThumbFree">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<section class="hero" aria-labelledby="hero-title">
+  <div class="wrap">
+    <p class="eyebrow"><span>Free and open source</span></p>
+    <h1 id="hero-title">Talk.<br>It types.</h1>
+    <picture class="hero-art">
+      <source media="(min-width: 60em)" type="image/avif" srcset="img/hero-wide.avif" width="1120" height="1062">
+      <source media="(min-width: 60em)" type="image/webp" srcset="img/hero-wide.webp" width="1120" height="1062">
+      <source type="image/avif" srcset="img/hero-walk.avif">
+      <img src="img/hero-walk.webp" width="360" height="502" alt="" fetchpriority="high">
+    </picture>
+    <!-- Store buttons say "Coming soon" here, and site.js turns them into the official badges when a store is live in
+         its settings. When a store goes live, also swap its 3 badges and 3 "On iPhone? / On Android?" lines in this page
+         for links, which is what visitors without JavaScript see (python3 tools/check-site.py reminds you):
+         <a class="badge" data-store="android" href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree"><img class="gp" src="img/badge-google-play.png" width="646" height="250" alt="Get it on Google Play"></a>
+         <a data-store="android" href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree">Get ThumbFree on Google Play</a>
+         <a class="badge" data-store="ios" href="https://apps.apple.com/app/idAPP_STORE_ID"><img src="img/badge-app-store.svg" width="120" height="40" alt="Download on the App Store"></a>
+         <a data-store="ios" href="https://apps.apple.com/app/idAPP_STORE_ID">Get ThumbFree on the App Store</a> -->
+    <p class="lede">Talk instead of typing, in your apps. ThumbFree turns your speech into text on your phone, so your voice and your words never leave it. The apps have no account, no ads and no tracking.</p>
+    <div class="cta">
+      <div class="badges">
+        <span class="badge soon" data-store="ios">Coming soon to the App Store</span>
+        <span class="badge soon" data-store="android">Coming soon to Google Play</span>
+      </div>
+      <p class="also also-ios">On iPhone? <span data-store="ios">Coming soon to the App Store</span></p>
+      <p class="also also-android">On Android? <span data-store="android">Coming soon to Google Play</span></p>
+      <p class="inapp">If the store doesn't open, open this page in your browser from this app's menu.</p>
+      <div class="buttons prelaunch"><a class="button solid" href="#how">See how it works</a><a class="button" href="https://github.com/kabrapratik28/ThumbFree">View the code on GitHub</a></div>
+    </div>
+    <p class="fine">For Android 13 or newer, and iPhone with iOS 26 or newer. After a one-time download of the speech model, it works offline.</p>
+  </div>
+</section>
+
+<section id="how" class="center" aria-labelledby="how-title">
+  <div class="wrap">
+    <h2 id="how-title">How ThumbFree works</h2>
+    <p class="intro">On Android, a small yellow bubble floats next to the text field you're typing in. On iPhone, ThumbFree is a keyboard with a mic.</p>
+    <div class="switch" role="group" aria-label="Show the steps for" hidden>
+      <button type="button" data-show="android" aria-pressed="true">Android</button>
+      <button type="button" data-show="ios" aria-pressed="false">iPhone</button>
+    </div>
+
+    <div class="only-android">
+      <h3 class="platform-title">On Android</h3>
+      <ol class="steps">
+        <li><strong>Tap a text field.</strong> The yellow bubble appears next to it.</li>
+        <li><strong>Tap the bubble and speak.</strong> A red ring shows it's listening.</li>
+        <li><strong>Tap it again.</strong> Your words are typed where the cursor is.</li>
+      </ol>
+      <p class="note">Or hold the bubble while you talk, and let go when you're done. To set it up, ThumbFree downloads its English speech model (about 731 MB, so keep about 1.8 GB free), asks for the microphone, and asks you to turn on its bubble in Android's accessibility settings.</p>
+      <ul class="shots" aria-label="Android screenshots" tabindex="0">
+        <li><figure><picture><source type="image/avif" srcset="img/android-1-chat-listening.avif"><img src="img/android-1-chat-listening.webp" width="480" height="1077" loading="lazy" alt="A chat in a messaging app, with the ThumbFree bubble listening next to the keyboard"></picture><figcaption>Tap the bubble and talk</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/android-2-chat-text.avif"><img src="img/android-2-chat-text.webp" width="480" height="1077" loading="lazy" alt="The reply typed into the message box: Sure, I will pick it up on my way."></picture><figcaption>Your words, where you type</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/android-3-notes.avif"><img src="img/android-3-notes.webp" width="480" height="1077" loading="lazy" alt="A long note about a lake trip, typed by voice in a notes app"></picture><figcaption>Long notes, hands free</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/android-4-try.avif"><img src="img/android-4-try.webp" width="480" height="1077" loading="lazy" alt="ThumbFree's Try tab, marked Ready, works offline, with a practice box and the three steps"></picture><figcaption>Works offline</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/android-5-dictionary.avif"><img src="img/android-5-dictionary.webp" width="480" height="1077" loading="lazy" alt="The Dictionary tab with names such as Anika, Siobhan and Dr. Nakamura"></picture><figcaption>Names spelled your way</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/android-6-history.avif"><img src="img/android-6-history.webp" width="480" height="1077" loading="lazy" alt="The History tab: each take with its text, marked Typed, with Copy and Transcribe again"></picture><figcaption>Every take, saved on your phone</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/android-7-languages.avif"><img src="img/android-7-languages.webp" width="480" height="1077" loading="lazy" alt="Speech model settings: English, recommended, and Multilingual with its 25 languages"></picture><figcaption>Speak your language</figcaption></figure></li>
+      </ul>
+    </div>
+
+    <div class="only-ios">
+      <h3 class="platform-title">On iPhone</h3>
+      <ol class="steps">
+        <li><strong>Tap a text field</strong> and switch to the ThumbFree keyboard with the globe key.</li>
+        <li><strong>Tap the mic</strong> at the top right of the keyboard, and speak.</li>
+        <li><strong>Tap it again.</strong> Your words are typed where the cursor is.</li>
+      </ol>
+      <p class="note">iOS doesn't let keyboards use the microphone, so the first tap of a session opens the ThumbFree app to turn the mic on, and then you go back to your app. For the rest of the session (5 minutes unless you change it), each tap starts at once. To set it up, add the ThumbFree keyboard with Full Access, and download the English speech model (about 465 MB, so keep about 1.5 GB free).</p>
+      <ul class="shots" aria-label="iPhone screenshots" tabindex="0">
+        <li><figure><picture><source type="image/avif" srcset="img/iphone-1-talk.avif"><img src="img/iphone-1-talk.webp" width="480" height="1043" loading="lazy" alt="A chat on iPhone with the ThumbFree keyboard recording: Recording 0:03, Speak now"></picture><figcaption>Tap the mic and talk</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/iphone-2-typed.avif"><img src="img/iphone-2-typed.webp" width="480" height="1043" loading="lazy" alt="The message typed in: Running ten minutes late, save me a seat. Want me to grab you a coffee?"></picture><figcaption>Your words, right where you type</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/iphone-3-note.avif"><img src="img/iphone-3-note.webp" width="480" height="1043" loading="lazy" alt="A long reminder about a lake trip, typed by voice"></picture><figcaption>Long notes, hands free</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/iphone-4-private.avif"><img src="img/iphone-4-private.webp" width="480" height="1043" loading="lazy" alt="ThumbFree's Try tab, marked Ready, works offline, with text in the practice box"></picture><figcaption>Works offline</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/iphone-5-languages.avif"><img src="img/iphone-5-languages.webp" width="480" height="1043" loading="lazy" alt="A message dictated in Spanish: Llego en diez minutos, guárdame un asiento, por favor."></picture><figcaption>Speak your language</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/iphone-6-keyboard.avif"><img src="img/iphone-6-keyboard.webp" width="480" height="1043" loading="lazy" alt="The ThumbFree keyboard typing, with suggestions above the keys"></picture><figcaption>A full keyboard, too</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/iphone-7-dictionary.avif"><img src="img/iphone-7-dictionary.webp" width="480" height="1043" loading="lazy" alt="The Dictionary tab with names such as Anika, Siobhan and Dr. Nakamura"></picture><figcaption>Names spelled your way</figcaption></figure></li>
+        <li><figure><picture><source type="image/avif" srcset="img/iphone-8-history.avif"><img src="img/iphone-8-history.webp" width="480" height="1043" loading="lazy" alt="The History tab: each take with its text, marked Typed, with Copy and Transcribe again"></picture><figcaption>Every take, saved on your iPhone</figcaption></figure></li>
+      </ul>
+    </div>
+
+    <div class="cta how-cta">
+      <div class="badges">
+        <span class="badge soon" data-store="ios">Coming soon to the App Store</span>
+        <span class="badge soon" data-store="android">Coming soon to Google Play</span>
+      </div>
+      <p class="also also-ios">On iPhone? <span data-store="ios">Coming soon to the App Store</span></p>
+      <p class="also also-android">On Android? <span data-store="android">Coming soon to Google Play</span></p>
+    </div>
+  </div>
+</section>
+
+<section id="privacy" class="dark privacy" aria-labelledby="privacy-title">
+  <div class="wrap">
+    <div>
+      <h2 id="privacy-title">Your words stay on your phone</h2>
+      <p>ThumbFree has no account, no analytics, no ads and no tracking. Nothing you say is sent to us or to anyone else.</p>
+      <ul class="ticks">
+        <li>Speech is turned into text on your phone, by NVIDIA's Parakeet speech model.</li>
+        <li>The internet is used for one thing: downloading the speech model from Hugging Face, once. Every file is checked against a fixed fingerprint before use.</li>
+        <li>History stays on your phone, and you choose how long takes are kept.</li>
+        <li class="device-android">On Android, the accessibility service only shows the bubble and types your words. It reads only the field you're typing in, and never types into password fields.</li>
+        <li class="device-ios">On iPhone, Full Access lets the keyboard work with the ThumbFree app on your phone. The keyboard never goes online.</li>
+      </ul>
+      <div class="buttons">
+        <a class="button" href="android-privacy.html">Android privacy policy</a>
+        <a class="button" href="privacy.html">iPhone privacy policy</a>
+      </div>
+    </div>
+    <picture class="privacy-art"><source type="image/avif" srcset="img/art-privacy.avif"><img src="img/art-privacy.webp" width="400" height="447" loading="lazy" alt=""></picture>
+  </div>
+</section>
+
+<section id="features" aria-labelledby="features-title">
+  <div class="wrap">
+    <h2 id="features-title" class="center">What you get</h2>
+    <ul class="features">
+      <li>
+        <picture><source type="image/avif" srcset="img/art-any-app.avif"><img src="img/art-any-app.webp" width="400" height="417" loading="lazy" alt=""></picture>
+        <h3>Works where you type</h3>
+        <p>Messages, email, notes, search boxes: your words go where your cursor is.</p>
+      </li>
+      <li>
+        <picture><source type="image/avif" srcset="img/art-private.avif"><img src="img/art-private.webp" width="400" height="517" loading="lazy" alt=""></picture>
+        <h3>Offline and private</h3>
+        <p>Speech becomes text on your phone. Your audio and your words never leave it.</p>
+      </li>
+      <li>
+        <picture><source type="image/avif" srcset="img/art-fast.avif"><img src="img/art-fast.webp" width="400" height="416" loading="lazy" alt=""></picture>
+        <h3>Fast, even for long notes</h3>
+        <p><span class="device-android">On a Pixel 10, text appears about 0.7 to 0.9 seconds after you stop talking, whether you spoke for 4 seconds or 30.</span> <span class="device-ios">On an iPhone 16 with iOS 26, text is ready about 0.1 seconds after you tap stop at the end of a sentence.</span></p>
+      </li>
+      <li>
+        <picture><source type="image/avif" srcset="img/art-dictionary.avif"><img src="img/art-dictionary.webp" width="400" height="357" loading="lazy" alt=""></picture>
+        <h3>Your Dictionary</h3>
+        <p>Add names, brands and work terms, and ThumbFree spells them your way.</p>
+      </li>
+      <li>
+        <picture><source type="image/avif" srcset="img/art-languages.avif"><img src="img/art-languages.webp" width="400" height="371" loading="lazy" alt=""></picture>
+        <h3>25 languages</h3>
+        <p>English by default. The Multilingual model understands 25 European languages.</p>
+      </li>
+      <li>
+        <picture><source type="image/avif" srcset="img/art-history.avif"><img src="img/art-history.webp" width="400" height="330" loading="lazy" alt=""></picture>
+        <h3>History</h3>
+        <p>Every take is kept on your phone, to search, copy or transcribe again. You choose how long.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section id="open-source" aria-labelledby="oss-title">
+  <div class="wrap oss">
+    <div>
+      <h2 id="oss-title">Open source</h2>
+      <p>ThumbFree is open source under the Apache License 2.0. Read the code, build it yourself, report a bug or suggest a feature on GitHub.</p>
+      <p>It runs NVIDIA's open Parakeet speech models on your phone. The credits for every model and library are in the app, under Settings, About.</p>
+      <div class="buttons">
+        <a class="button solid" href="https://github.com/kabrapratik28/ThumbFree"><svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>View the code on GitHub</a>
+      </div>
+    </div>
+    <pre class="code" aria-label="How to get the code"><span>$</span> git clone --recursive \
+    https://github.com/kabrapratik28/ThumbFree
+<span>$</span> cd ThumbFree</pre>
+  </div>
+</section>
+
+<section id="faq" aria-labelledby="faq-title">
+  <div class="wrap">
+    <h2 id="faq-title" class="center">Questions and answers</h2>
+    <div class="faq">
+      <details>
+        <summary>Is ThumbFree really free?</summary>
+        <p>Yes. There are no ads, no subscriptions, no in-app purchases and no word limits. ThumbFree is an open-source project; if you'd like to help it along, see <a href="#support">Support ThumbFree</a>.</p>
+      </details>
+      <details>
+        <summary>Does it work without the internet?</summary>
+        <p>Yes. Once the speech model is on your phone, ThumbFree works in airplane mode.</p>
+      </details>
+      <details>
+        <summary>Which phones does it work on?</summary>
+        <p>Android phones with Android 13 or newer, and iPhones with iOS 26 or newer. On iPhone, password and phone number fields always use Apple's keyboard, and some apps, including some work apps, allow only Apple's keyboard. On Android, ThumbFree never types into password fields.</p>
+      </details>
+      <details>
+        <summary>How big is the download?</summary>
+        <p>The English speech model is about 731 MB on Android and about 465 MB on iPhone. It downloads over Wi-Fi unless you allow mobile data. You need some room while it downloads: about 1.8 GB free on Android and about 1.5 GB on iPhone.</p>
+      </details>
+      <details>
+        <summary>Why does the Android app use an accessibility service?</summary>
+        <p>It's how an Android app can show a bubble next to the text field you're in and type into it. ThumbFree uses it only for that. It reads only the field you're typing in and the text around the cursor, so your words and spacing land in the right place. It doesn't read the rest of your screen, never types into password fields, and nothing it reads leaves your phone.</p>
+      </details>
+      <details>
+        <summary>Why does the iPhone keyboard need Full Access?</summary>
+        <p>iOS asks for Full Access before a keyboard can work with its own app. ThumbFree's keyboard uses it to start the mic in the ThumbFree app and to get your words back. The keyboard never goes online. Without Full Access you can still type with suggestions and emoji; dictation, and your Dictionary's words in the suggestions, need Full Access.</p>
+      </details>
+      <details>
+        <summary>Why does the ThumbFree app open when I tap the mic on iPhone?</summary>
+        <p>iOS doesn't let keyboards use the microphone. So the first tap of a session opens ThumbFree to turn the mic on, and then you go back to your app. For the rest of the session, each tap starts at once. iOS shows an orange dot while the mic is on, and you can end the session in ThumbFree at any time.</p>
+      </details>
+      <details>
+        <summary>Which languages does it understand?</summary>
+        <p>The English model is the most accurate for English and is the one we recommend. The Multilingual model understands 25 European languages: Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Russian, Slovak, Slovenian, Spanish, Swedish and Ukrainian.</p>
+      </details>
+      <details>
+        <summary>How accurate is it?</summary>
+        <p>ThumbFree uses NVIDIA's Parakeet speech models. On <a href="https://github.com/kabrapratik28/ThumbFree#speed-and-accuracy">our public English test clips</a>, the English model gets 3.5% of words wrong. If it keeps getting a name wrong, add it to the Dictionary.</p>
+      </details>
+      <details>
+        <summary>How was the speed measured?</summary>
+        <p>On a Pixel 10 in airplane mode, from the tap that stops a take to the text appearing: 0.69 seconds for 3.7 seconds of speech, up to 0.90 seconds for 29 seconds, the median of 3 runs each. On an iPhone 16 with iOS 26, a tap at the end of a sentence gave text in 121 to 124 milliseconds. Long takes stay fast because ThumbFree transcribes them in pieces while you talk. The method and every number for the Pixel 10 are in <a href="https://github.com/kabrapratik28/ThumbFree/blob/main/docs/benchmarks/2026-09-26-speed.md">the speed report on GitHub</a>.</p>
+      </details>
+      <details>
+        <summary>Are my recordings kept?</summary>
+        <p>Each take's recording and text are kept in History, on your phone only, so you can transcribe it again. You choose how long takes are kept (7, 30 or 90 days, or forever) and how many, and you can delete any take or clear them all. They are never uploaded.</p>
+      </details>
+      <details>
+        <summary>Does this website track me?</summary>
+        <p>The apps have no analytics or ad tracking. This website has none either, unless you accept Meta's pixel, which it may ask about when we run ads on Facebook or Instagram. Saying no changes nothing on the site or in the apps. See <a href="website-privacy.html">Website privacy</a>.</p>
+      </details>
+      <details>
+        <summary>Where can I get help?</summary>
+        <p>See the help pages for <a href="android-support.html">Android</a> and <a href="support.html">iPhone</a>, or email <a href="mailto:thumbfree.app@gmail.com">thumbfree.app@gmail.com</a>.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section class="cta-band center" aria-labelledby="get-title">
+  <div class="wrap">
+    <h2 id="get-title">Get ThumbFree</h2>
+    <div class="cta">
+      <div class="badges">
+        <span class="badge soon" data-store="ios">Coming soon to the App Store</span>
+        <span class="badge soon" data-store="android">Coming soon to Google Play</span>
+      </div>
+      <p class="also also-ios">On iPhone? <span data-store="ios">Coming soon to the App Store</span></p>
+      <p class="also also-android">On Android? <span data-store="android">Coming soon to Google Play</span></p>
+      <p class="inapp">If the store doesn't open, open this page in your browser from this app's menu.</p>
+    </div>
+  </div>
+</section>
+
+<section id="support" class="support center" aria-labelledby="support-title">
+  <div class="wrap">
+    <h2 id="support-title">Support ThumbFree</h2>
+    <p class="intro">ThumbFree is free and has no ads. If it saves you time, you can help pay for its development.</p>
+    <div class="buttons">
+      <a class="button solid" href="https://www.buymeacoffee.com/kabrapratik28"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13v5a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6V8Z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 2v3M12 2v3"/></svg>Buy me a coffee</a>
+      <a class="button" href="https://github.com/sponsors/kabrapratik28"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>Sponsor on GitHub</a>
+    </div>
+    <p class="note">You can also help by starring the project on GitHub, reporting a bug, or telling a friend.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <h2>Android</h2>
+        <ul><li><a href="android-support.html">Help</a></li><li><a href="android-privacy.html">Privacy policy</a></li></ul>
+      </div>
+      <div>
+        <h2>iPhone</h2>
+        <ul><li><a href="support.html">Help</a></li><li><a href="privacy.html">Privacy policy</a></li></ul>
+      </div>
+      <div>
+        <h2>Project</h2>
+        <ul>
+          <li><a href="https://github.com/kabrapratik28/ThumbFree">Source code on GitHub</a></li>
+          <li><a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a></li>
+          <li><a href="website-privacy.html">Website privacy</a></li>
+          <li><button type="button" id="privacy-choices" hidden>Privacy choices</button></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Contact</h2>
+        <ul><li><a href="mailto:thumbfree.app@gmail.com">thumbfree.app@gmail.com</a></li></ul>
+      </div>
+    </div>
+    <p class="legal">Apple, the Apple logo and iPhone are trademarks of Apple Inc., registered in the U.S. and other countries and regions. App Store is a service mark of Apple Inc. Google Play and the Google Play logo are trademarks of Google LLC.</p>
+  </div>
+</footer>
+
+<p class="sr" id="consent-status" aria-live="polite"></p>
+<script src="site.js" defer></script>
+</body>
+</html>
