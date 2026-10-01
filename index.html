@@ -16,9 +16,8 @@
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preload" href="fonts/thumbfree-serif.woff2" as="font" type="font/woff2" crossorigin>
-<!-- Apple's Smart App Banner for Safari on iPhone: put the App Store ID in and uncomment it once the app is live.
-<meta name="apple-itunes-app" content="app-id=APP_STORE_ID">
--->
+<!-- Apple's Smart App Banner in Safari on iPhone. Safari shows it only once the app is on the App Store. -->
+<meta name="apple-itunes-app" content="app-id=6817631006">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ThumbFree">
 <meta property="og:locale" content="en_US">
@@ -267,13 +266,14 @@ footer :focus-visible{outline-color:var(--sun)}
       <source type="image/avif" srcset="img/hero-walk.avif">
       <img src="img/hero-walk.webp" width="360" height="502" alt="" fetchpriority="high">
     </picture>
-    <!-- Store buttons say "Coming soon" here, and site.js turns them into the official badges when a store is live in
-         its settings. When a store goes live, also swap its 3 badges and 3 "On iPhone? / On Android?" lines in this page
-         for links, which is what visitors without JavaScript see (python3 tools/check-site.py reminds you):
+    <!-- Store buttons say "Coming soon" here, and site.js turns them into the official badges when a store's live flag
+         is true: that one line is the switch. Visitors without JavaScript see this page as it is, so once a store is
+         live you can also swap its 3 badges and 3 "On iPhone? / On Android?" lines for links (tools/check-site.py
+         reminds you):
          <a class="badge" data-store="android" href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree"><img class="gp" src="img/badge-google-play.png" width="646" height="250" alt="Get it on Google Play"></a>
          <a data-store="android" href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree">Get ThumbFree on Google Play</a>
-         <a class="badge" data-store="ios" href="https://apps.apple.com/app/idAPP_STORE_ID"><img src="img/badge-app-store.svg" width="120" height="40" alt="Download on the App Store"></a>
-         <a data-store="ios" href="https://apps.apple.com/app/idAPP_STORE_ID">Get ThumbFree on the App Store</a> -->
+         <a class="badge" data-store="ios" href="https://apps.apple.com/app/id6817631006"><img src="img/badge-app-store.svg" width="120" height="40" alt="Download on the App Store"></a>
+         <a data-store="ios" href="https://apps.apple.com/app/id6817631006">Get ThumbFree on the App Store</a> -->
     <p class="lede">Talk instead of typing, in your apps. ThumbFree turns your speech into text on your phone, so your voice and your words never leave it. The apps have no account, no ads and no tracking.</p>
     <div class="cta">
       <div class="badges">

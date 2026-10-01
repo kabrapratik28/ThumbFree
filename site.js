@@ -9,7 +9,7 @@ const STORES = {
     live: false,
   },
   ios: {
-    url: 'https://apps.apple.com/app/idAPP_STORE_ID', // APP_STORE_ID: the app's number in App Store Connect
+    url: 'https://apps.apple.com/app/id6817631006', // the app's number in App Store Connect
     live: false,
   },
 };
