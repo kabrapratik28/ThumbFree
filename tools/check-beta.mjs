@@ -66,11 +66,11 @@ assert.equal(await shown(page, '.iphone'), false);
 assert.equal(await shown(page, '[data-step="1"] .opened'), false);
 assert.equal(await said(page), '');
 assert.deepEqual(away, [], 'the page itself asks nothing of other servers');
-// In each card the button comes before its picture of Google's page, and the heading starts with "Step N of 2" for
-// screen readers only.
-assert.deepEqual(await page.$$eval('[data-step]', (cards) => cards.map((c) =>
-  Boolean(c.querySelector('a.button').compareDocumentPosition(c.querySelector('.peek')) & Node.DOCUMENT_POSITION_FOLLOWING))), [true, true]);
-assert.deepEqual(await page.$$eval('[data-step] h2', (headings) => headings.map((h) => {
+// Each card has one button, before the card's small print, and the heading starts with "Step N of 2" for screen
+// readers only.
+assert.deepEqual(await page.$$eval('[data-step]', (cards) => cards.map((c) => c.querySelectorAll('a.button').length === 1 &&
+  [...c.querySelectorAll('.small')].every((s) => c.querySelector('a.button').compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING))), [true, true]);
+assert.deepEqual(await page.$$eval('[data-step] h3', (headings) => headings.map((h) => {
   const sr = h.querySelector('.sr');
   return sr && [sr.textContent, sr.getBoundingClientRect().width];
 })), [['Step 1 of 2: ', 1], ['Step 2 of 2: ', 1]]);

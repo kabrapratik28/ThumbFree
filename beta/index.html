@@ -10,7 +10,7 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="color-scheme" content="light">
 <title>Help test ThumbFree on Android</title>
-<meta name="description" content="Help test ThumbFree, free offline dictation for Android. Join the tester group, then join the test on Google Play and install. It takes about a minute.">
+<meta name="description" content="Help test ThumbFree, free offline voice typing for Android: tap the bubble, talk, and your words are typed. Join the test in about 2 minutes.">
 <link rel="canonical" href="https://kabrapratik28.github.io/ThumbFree/beta/">
 <meta name="theme-color" content="#fff8e7">
 <link rel="icon" href="../favicon.ico" sizes="48x48">
@@ -22,7 +22,7 @@
 <meta property="og:locale" content="en_US">
 <meta property="og:url" content="https://kabrapratik28.github.io/ThumbFree/beta/">
 <meta property="og:title" content="Help test ThumbFree on Android">
-<meta property="og:description" content="Join the Android test in about a minute: join the tester group, then install from Google Play. ThumbFree is free dictation that works offline.">
+<meta property="og:description" content="Join the Android test in about 2 minutes: join the tester group, then install from Google Play. ThumbFree is free voice typing that works offline.">
 <meta property="og:image" content="https://kabrapratik28.github.io/ThumbFree/og-image.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
@@ -30,7 +30,7 @@
 <meta property="og:image:alt" content="The ThumbFree logo and the words Talk. It types., beside a drawing of a woman talking to her phone">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Help test ThumbFree on Android">
-<meta name="twitter:description" content="Join the Android test in about a minute: join the tester group, then install from Google Play. ThumbFree is free dictation that works offline.">
+<meta name="twitter:description" content="Join the Android test in about 2 minutes: join the tester group, then install from Google Play. ThumbFree is free voice typing that works offline.">
 <meta name="twitter:image" content="https://kabrapratik28.github.io/ThumbFree/og-image.jpg">
 <meta name="twitter:image:alt" content="The ThumbFree logo and the words Talk. It types., beside a drawing of a woman talking to her phone">
 <style>
@@ -45,103 +45,110 @@ img{max-width:100%;height:auto;display:block}
 a{color:inherit;text-decoration-thickness:1px;text-underline-offset:.18em}
 a:hover{text-decoration-thickness:2px}
 :focus-visible{outline:3px solid var(--navy);outline-offset:3px;border-radius:4px}
-h1,h2{font-family:var(--serif);font-weight:400;line-height:1.1;margin:0 0 .5em;text-wrap:balance}
+h1,h2,h3{font-family:var(--serif);font-weight:400;line-height:1.1;margin:0 0 .5em;text-wrap:balance}
+h2{font-size:clamp(2rem,1.4rem + 2.6vw,3rem)}
 p{margin:0 0 1em}
 .wrap{max-width:70rem;margin:0 auto;padding:0 1.25rem}
 .skip{position:absolute;left:1rem;top:-4rem;background:var(--navy);color:var(--cream);padding:.6rem 1rem;border-radius:.5rem;z-index:10}
 .skip:focus{top:1rem}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-/* Header, as on the home page */
+/* Header and buttons, as on the home page */
 .top{padding:.9rem 0}
 .top .wrap{display:flex;align-items:center;justify-content:space-between;gap:1rem}
-.brand{display:flex;align-items:center;gap:.6rem;font-weight:600;font-size:1.2rem;text-decoration:none}
+.brand{display:flex;align-items:center;gap:.6rem;min-height:44px;font-weight:600;font-size:1.2rem;text-decoration:none}
 .top nav{display:flex;gap:1.4rem;font-size:.95rem}
 .top nav a{text-decoration:none;padding:.6rem 0}
 .top nav a:hover{text-decoration:underline}
 @media (max-width:22em){.top .wrap{flex-wrap:wrap;row-gap:0}.top nav{gap:1rem;margin-left:auto}}
-
-/* Buttons, as on the home page */
-.button{display:inline-flex;align-items:center;gap:.55rem;min-height:3rem;padding:.7rem 1.3rem;border-radius:999px;font-weight:600;text-decoration:none;border:2px solid var(--navy)}
+.button{display:inline-flex;align-items:center;justify-content:center;gap:.55rem;min-height:3rem;padding:.7rem 1.3rem;border-radius:999px;font-weight:600;text-decoration:none;border:2px solid var(--navy)}
 .button.solid{background:var(--navy);color:var(--cream)}
 .button:hover{text-decoration:underline}
 button.button{font:inherit;font-weight:600;background:none;cursor:pointer}
 
-/* The top: what to know before the two steps */
-.beta{padding:1.5rem 0 1rem}
+/* What ThumbFree is: the title, two pictures of the bubble and four facts. On a computer the pictures sit on the right. */
+.hero{padding:.75rem 0 2.5rem}
 .eyebrow{font-size:.9rem;font-weight:700;letter-spacing:.04em;margin:0 0 .5rem}
 .eyebrow span{background:var(--sun);border-radius:999px;padding:.2rem .7rem}
-.beta h1{font-size:clamp(2.1rem,7vw,3rem);margin:.6rem 0 .5rem}
-.lede{font-size:1.1rem;color:var(--muted);margin:0 0 .4rem;max-width:36rem;text-wrap:pretty}
-.facts{display:grid;gap:.45rem;margin:1rem 0 0;padding:0;list-style:none;font-size:.98rem}
-.facts li{display:flex;gap:.55rem;align-items:flex-start}
-.ic{flex:none;width:1.4rem;height:1.4rem;border-radius:50%;background:var(--sun-light);display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700}
-.accounts{display:flex;gap:.6rem;align-items:flex-start;font-size:.95rem;margin:1rem 0 0;padding:.75rem .9rem;border-radius:14px;background:var(--sun-light)}
+.hero h1{font-size:clamp(3rem,2.2rem + 5vw,5rem);line-height:1.02;margin:0}
+.lede{font-size:1.2rem;margin:1rem 0 0;max-width:34rem;text-wrap:pretty}
+.demo{list-style:none;margin:1.75rem 0 0;padding:0;display:grid;gap:1.25rem;max-width:30rem}
+.demo img{border:1px solid var(--line);border-radius:1rem;padding:0 .5rem;background:#f3f5f7}
+.demo p{font-family:var(--serif);font-size:1.25rem;line-height:1.25;margin:.55rem 0 0;text-wrap:balance}
+.ticks{list-style:none;padding:0;margin:1.75rem 0 0}
+.ticks li{position:relative;padding-left:1.9rem;margin-top:.5rem}
+.ticks li::before{content:"";position:absolute;left:.2rem;top:.5em;width:.7rem;height:.35rem;border-left:3px solid;border-bottom:3px solid;transform:rotate(-45deg)}
+@media (min-width:60em){
+  .hero{padding:2rem 0 3.5rem}
+  .hero .wrap{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(5,auto) 1fr;column-gap:4rem}
+  .hero .wrap>*{grid-column:1}
+  .hero .demo{grid-column:2;grid-row:1/-1;margin:0;justify-self:end;align-self:center;width:100%}
+}
 
 /* Only on a computer: the QR code. Only on an iPhone: the one line. */
 .desk,.iphone{display:none}
-[data-device=desktop] .desk{display:grid;grid-template-columns:auto 1fr;gap:1.2rem;align-items:center;background:var(--card);border:2px solid var(--navy);border-radius:24px;padding:1rem 1.2rem;margin:1.2rem 0 0}
-.desk img{width:132px;height:132px}
-.desk h2{font-size:1.6rem;margin:0 0 .3rem}
-.desk p{margin:0;color:var(--muted)}
-[data-device=ios] .iphone{display:block;background:var(--card);border:2px solid var(--navy);border-radius:24px;padding:1rem 1.2rem;margin:1.2rem 0 0}
+[data-device=desktop] .desk{display:flex;gap:1.25rem;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:1rem 1.25rem;margin:2rem 0 0;max-width:34rem}
+.desk img{width:112px;height:112px;flex:none}
+.desk h2{font-size:1.5rem;margin:0 0 .25rem}
+.desk p{margin:0;font-size:.95rem;color:var(--muted)}
+[data-device=ios] .iphone{display:block;background:var(--sun-light);border-radius:1rem;padding:.9rem 1.1rem;margin:1.25rem 0 0;max-width:34rem}
 
-/* The two steps, side by side from 60em */
-.bsteps{list-style:none;margin:1.4rem 0 0;padding:0;display:grid;gap:1rem}
-@media (min-width:60em){.bsteps{grid-template-columns:repeat(2,1fr)}}
-.bstep{background:var(--card);border:2px solid var(--line);border-radius:24px;padding:1.1rem 1.1rem 1.2rem;display:grid;grid-template-columns:2.75rem 1fr;gap:.2rem 1rem;align-items:start;align-content:start}
-.bstep .num{grid-row:span 2;width:2.75rem;height:2.75rem;border-radius:50%;background:var(--sun);font-weight:700;font-size:1.2rem;display:flex;align-items:center;justify-content:center}
-.bstep h2{font-family:var(--sans);font-weight:700;font-size:1.2rem;margin:.35rem 0 0}
-.bstep p{margin:.2rem 0 0;color:var(--muted);font-size:.98rem}
-.bstep .button{grid-column:1/-1;justify-self:stretch;justify-content:center;text-align:center;margin-top:.8rem}
-.bstep .peek,.bstep .opened,.bstep .more{grid-column:1/-1}
-
-/* The pictures of Google's pages, in Google's own look */
-.peek{margin:.8rem 0 0;background:#fff;border:1.5px solid #ddd8cc;border-radius:16px;padding:.7rem .9rem;font:14px/1.35 Roboto,Arial,sans-serif;color:#1f1f1f}
-.peek .lbl{font:700 12px/1.3 var(--sans);color:var(--navy);margin:0 0 .5rem;letter-spacing:.02em}
-.peek .bar{display:flex;align-items:center;gap:.4rem;font-size:12px;color:#5f6368;margin-bottom:.5rem}
-.peek .dot{width:14px;height:14px;border-radius:4px;background:var(--sun)}
-.peek .t{font-size:16px;font-weight:500}
-.peek .two{display:flex;flex-direction:column;gap:.45rem;align-items:flex-start}
-.peek .gbtn{display:inline-block;border-radius:999px;padding:.45rem 1rem;font-weight:600;font-size:13.5px;background:#0b57d0;color:#fff;box-shadow:0 0 0 4px var(--sun)}
-.peek .gbtn.green{background:#01875f}
-.peek .n1{display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font:700 11px/20px var(--sans);justify-content:center;margin-right:.45rem;vertical-align:middle}
+/* The two steps, side by side from 48em */
+.join{padding:0 0 1rem}
+.join-intro{max-width:34rem;margin:0}
+.bsteps{list-style:none;margin:1.5rem 0 0;padding:0;display:grid;gap:1rem}
+@media (min-width:48em){.bsteps{grid-template-columns:1fr 1fr}}
+.bstep{background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:1.25rem 1.25rem 1.1rem;display:grid;grid-template-columns:2.25rem 1fr;column-gap:.8rem;align-content:start}
+.bstep .num{width:2.25rem;height:2.25rem;border-radius:50%;background:var(--sun);font-weight:700;display:grid;place-items:center}
+.bstep h3{font-size:1.45rem;margin:0;align-self:center}
+.bstep>p,.bstep .button{grid-column:1/-1}
+.bstep>p{margin:.75rem 0 0}
+.bstep .button{margin-top:1rem}
+.bstep .small{font-size:.95rem;color:var(--muted)}
+.bstep .small a{display:inline-block;padding:.6rem 0}
 
 /* With JavaScript, the card after the last link opened is highlighted and holds the solid button, a card whose link was
    opened says so (never that its step is done), and "After you install" waits for step 2's link. Without it, both
    cards are plain and everything shows. */
 .opened{display:none}
 .js .bstep .button{background:none;color:var(--navy)}
-[data-next="1"] [data-step="1"],[data-next="2"] [data-step="2"]{border-color:var(--navy);box-shadow:0 0 0 5px var(--sun-light)}
+[data-next="1"] [data-step="1"],[data-next="2"] [data-step="2"]{border-color:var(--navy);box-shadow:0 0 0 4px var(--sun-light)}
 [data-next="1"] [data-step="1"] .button,[data-next="2"] [data-step="2"] .button{background:var(--navy);color:var(--cream)}
 [data-opened~="1"] [data-step="1"] .opened,[data-opened~="2"] [data-step="2"] .opened{display:block}
 .js:not([data-opened~="2"]) .after{display:none}
 
-/* After you install */
-.after{background:var(--navy);color:var(--cream);border-radius:24px;padding:1.3rem 1.2rem;margin-top:1rem}
-.after h2{font-size:1.8rem;margin:0 0 .3rem}
-.after p{margin:0;color:var(--line)}
-.after .task{background:var(--cream);color:var(--navy);border-radius:16px;padding:.8rem .9rem;margin:.9rem 0 .2rem}
-.after .task b{display:block;font-size:.85rem;letter-spacing:.04em;text-transform:uppercase;color:#7a5a00}
-.after .acts{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-top:.9rem}
-.after .button{border-color:var(--cream);color:var(--cream)}
-.after .button.solid{background:var(--sun);border-color:var(--sun);color:var(--navy)}
-.after :focus-visible{outline-color:var(--sun)}
+/* After you install: navy, as the home page's privacy section */
+.after{padding:.5rem 0 1rem}
+.panel{background:var(--navy);color:var(--cream);border-radius:1.25rem;padding:1.6rem 1.25rem}
+.panel h2{margin:0 0 .4rem}
+.panel>p{margin:0}
+.panel h3{font:700 .85rem/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--sun);margin:1.6rem 0 .5rem}
+.panel ul{margin:0;padding-left:1.2rem}
+.panel li{margin-top:.3rem}
+.panel li::marker{color:var(--sun)}
+.panel .cols p{margin:0}
+.acts{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;margin-top:1.75rem}
+.panel .button{border-color:var(--cream);color:var(--cream)}
+.panel .button.solid{background:var(--sun);border-color:var(--sun);color:var(--navy)}
+.panel :focus-visible{outline-color:var(--sun)}
+@media (min-width:48em){.panel{padding:2.25rem 2.5rem}.panel .cols{display:grid;grid-template-columns:1fr 1fr;column-gap:3rem}}
 .invite{display:none}
 .js .invite{display:inline-flex}
 #copied{overflow-wrap:anywhere}
 
-/* Help */
-.qa{margin-top:2rem}
-.qa h2{font-size:1.6rem}
-.qa details{border-top:1.5px solid var(--line);padding:.75rem 0}
-.qa summary{font-weight:700;cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
-.qa summary::-webkit-details-marker{display:none}
-.qa summary::after{content:"+";margin-left:auto;padding-left:1rem;font-size:1.5rem;font-weight:400}
-.qa details[open] summary::after{content:"\2212"}
-.qa p{margin:0;color:var(--muted)}
+/* Questions, as on the home page */
+.faq{padding:2.5rem 0 3.5rem}
+.faq h2{margin-bottom:.3em}
+.faq details{max-width:46rem;border-bottom:1px solid var(--line)}
+.faq summary{cursor:pointer;font-weight:600;padding:1rem 2.5rem 1rem 0;position:relative;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";position:absolute;right:.5rem;top:.7rem;font-size:1.5rem;font-weight:400}
+.faq details[open] summary::after{content:"\2212"}
+.faq details p{margin:0 0 1.1rem;color:var(--muted)}
 
-footer{background:var(--navy);color:var(--cream);padding:1.5rem 0;font-size:.85rem}
+footer{background:var(--navy);color:var(--cream);padding:1.25rem 0;font-size:.9rem}
+footer .wrap{display:flex;flex-wrap:wrap;align-items:center;column-gap:1.5rem}
+footer a{padding:.7rem 0}
 footer :focus-visible{outline-color:var(--sun)}
 </style>
 </head>
@@ -158,70 +165,104 @@ footer :focus-visible{outline-color:var(--sun)}
 </header>
 
 <main id="main">
-<section class="beta" aria-labelledby="beta-title">
+<section class="hero" aria-labelledby="beta-title">
   <div class="wrap">
     <p class="eyebrow"><span>Android test</span></p>
     <h1 id="beta-title">Help test ThumbFree</h1>
-    <p class="lede">Join in about a minute.</p>
-    <ul class="facts">
-      <li><span class="ic" aria-hidden="true">↓</span><span>First setup downloads <b>731 MB</b>. Use Wi-Fi.</span></li>
-      <li><span class="ic" aria-hidden="true">14</span><span><b>Stay opted in for 14 days.</b> Google Play requires this test.</span></li>
+    <p class="lede">ThumbFree is free voice typing for Android. Before it comes to Google Play, we need people to try it and tell us how it went.</p>
+    <p class="iphone">This test is for Android. <span id="ios-store">ThumbFree for iPhone is coming to the App Store.</span></p>
+    <ol class="demo">
+      <li><picture><source type="image/avif" srcset="../img/beta-talk.avif"><img src="../img/beta-talk.webp" width="480" height="164" alt="A message box in a chat app, with the yellow ThumbFree bubble above it, ringed in red while it listens"></picture><p>Tap the yellow bubble and talk.</p></li>
+      <li><picture><source type="image/avif" srcset="../img/beta-typed.avif"><img src="../img/beta-typed.webp" width="480" height="164" alt="The same message box with the words typed in: Sure, I will pick it up on my way."></picture><p>Tap it again. Your words are typed where the cursor is.</p></li>
+    </ol>
+    <ul class="ticks">
+      <li><b>Free.</b> No account, no ads, no tracking.</li>
+      <li><b>Private.</b> Speech becomes text on your phone and never leaves it.</li>
+      <li><b>Works offline</b> after setup downloads the speech model (731 MB, so use Wi-Fi).</li>
+      <li><b>English</b> or 25 European languages. Android 13 or newer.</li>
     </ul>
     <div class="desk">
-      <img src="../img/beta-qr.svg" width="132" height="132" alt="QR code for this page">
+      <img src="../img/beta-qr.svg" width="112" height="112" alt="QR code for this page">
       <div>
         <h2>Continue on your Android phone</h2>
-        <p>Open your camera and scan this code, or visit <b>kabrapratik28.github.io/ThumbFree/beta</b> on your phone.</p>
+        <p>Scan the code with your phone’s camera, or type this address:<br><b>kabrapratik28.github.io/ThumbFree/beta</b></p>
       </div>
     </div>
-    <p class="iphone">This test is for Android. <span id="ios-store">ThumbFree for iPhone is coming to the App Store.</span></p>
-    <p class="accounts"><span aria-hidden="true">👤</span><span><b>More than one Google account?</b> On both Google pages, choose the account used in your phone’s Play Store.</span></p>
+  </div>
+</section>
+
+<section class="join" aria-labelledby="join-title">
+  <div class="wrap">
+    <h2 id="join-title">Join in 2 steps</h2>
+    <p class="join-intro">It takes about 2 minutes. Then <b>stay opted in for 14 days</b>: Google Play requires it.</p>
     <p class="sr" id="next-step" role="status" aria-live="polite"></p>
 
-    <!-- The three links, each here once: the tester group (step 1), the Play test (step 2) and the Play listing. -->
+    <!-- The three links, each here once: the tester group (step 1), the Play test (step 2) and the Play listing. Steps 1
+         and 2 go through Google's account chooser: without it, a phone with more than one Google account opens both
+         pages in its first account, and switching accounts on Google Groups loses the group. -->
     <ol class="bsteps">
       <li class="bstep" data-step="1">
         <span class="num" aria-hidden="true">1</span>
-        <h2><span class="sr">Step 1 of 2: </span>Join the tester group</h2>
-        <p>Open Google Groups. Tap <b>Join group</b>. If asked, confirm.</p>
-        <a class="button solid" href="https://groups.google.com/g/thumbfree-testers">Open Google Groups</a>
-        <div class="peek" aria-hidden="true"><div class="lbl">On Google Groups, tap:</div><div class="bar"><span class="dot"></span>groups.google.com</div><div class="t">ThumbFree testers</div><span class="gbtn">Join group</span></div>
-        <p class="opened">Google Groups link opened</p>
-        <p class="more">The group lets Google Play give you test access. Other testers can’t see who joined.</p>
+        <h3><span class="sr">Step 1 of 2: </span>Join the tester group</h3>
+        <p>Google asks which account to use: pick the one your phone’s Play Store uses. Tap <b>Join group</b>, then <b>Join group</b> again in the box that opens.</p>
+        <a class="button solid" href="https://accounts.google.com/AccountChooser?continue=https%3A%2F%2Fgroups.google.com%2Fg%2Fthumbfree-testers">Open Google Groups</a>
+        <p class="small opened">Google Groups link opened</p>
+        <p class="small">Other testers can’t see who joined.</p>
       </li>
       <li class="bstep" data-step="2">
         <span class="num" aria-hidden="true">2</span>
-        <h2><span class="sr">Step 2 of 2: </span>Join the Play test and install</h2>
-        <p>Tap <b>Become a tester</b>, <b>Download it on Google Play</b>, then <b>Install</b>.</p>
-        <a class="button solid" href="https://play.google.com/apps/testing/io.github.kabrapratik28.thumbfree">Open the Play test</a>
-        <div class="peek" aria-hidden="true"><div class="lbl">On Google Play, tap:</div><div class="bar"><span class="dot"></span>Google Play · App testing</div><div class="t">ThumbFree test</div><div class="two"><div><span class="n1">1</span><span class="gbtn">Become a tester</span></div><div><span class="n1">2</span><span class="gbtn green">Download it on Google Play</span></div><div><span class="n1">3</span><span class="gbtn green">Install</span></div></div></div>
-        <p class="opened">Google Play link opened</p>
-        <p class="more">Already a tester? <a href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree">Install from Google Play</a></p>
+        <h3><span class="sr">Step 2 of 2: </span>Join the Play test and install</h3>
+        <p>Pick the same account. Tap <b>Become a tester</b>, then <b>Download it on Google Play</b>, then <b>Install</b>.</p>
+        <a class="button solid" href="https://accounts.google.com/AccountChooser?continue=https%3A%2F%2Fplay.google.com%2Fapps%2Ftesting%2Fio.github.kabrapratik28.thumbfree">Open the Play test</a>
+        <p class="small opened">Google Play link opened</p>
+        <p class="small"><b>App not available?</b> Wait 2 minutes, then open it again.</p>
+        <p class="small">Already a tester? <a href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree">Install from Google Play</a></p>
       </li>
     </ol>
+  </div>
+</section>
 
-    <div class="after">
-      <h2>After you install</h2>
+<section class="after" aria-labelledby="after-title">
+  <div class="wrap">
+    <div class="panel">
+      <h2 id="after-title">After you install</h2>
       <p>Open ThumbFree. Choose a language and follow setup.</p>
-      <div class="task"><b>One thing to try</b>Turn on airplane mode and dictate one message. It still works.</div>
+      <div class="cols">
+        <div>
+          <h3>What to try</h3>
+          <ul>
+            <li>Reply to a chat with your voice.</li>
+            <li>Dictate a long note, 30 seconds or more.</li>
+            <li>Turn on airplane mode and dictate a message. It still works.</li>
+            <li>Use it for a few days, wherever you type.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>What to tell us</h3>
+          <p>Was setup clear? Did the bubble show up where you type? Were your words right? What was slow or confusing? Tell us your phone model too.</p>
+        </div>
+      </div>
       <div class="acts">
-        <a class="button solid" href="mailto:thumbfree.app@gmail.com?subject=ThumbFree%20test%20feedback&amp;body=What%20worked%3F%0A%0AWhere%20did%20you%20stop%3F%0A%0AYour%20phone%3A%20">Send feedback</a>
+        <a class="button solid" href="mailto:thumbfree.app@gmail.com?subject=ThumbFree%20test%20feedback&amp;body=What%20worked%3F%0A%0AWhat%20was%20confusing%20or%20wrong%3F%0A%0AYour%20phone%3A%20">Send feedback</a>
         <button class="button invite" type="button" id="invite">Invite an Android friend</button>
         <span id="copied" role="status"></span>
       </div>
     </div>
+  </div>
+</section>
 
-    <div class="qa">
-      <h2>Help</h2>
-      <details><summary>Play says it isn’t available</summary><p>You may be early: joining the group can take a few minutes to reach Google Play. Try step 2 again shortly, with the same account.</p></details>
-      <details><summary>How do I leave?</summary><p>On the Play test page (step 2), tap Leave the program. Uninstall ThumbFree like any app.</p></details>
-    </div>
+<section class="faq" aria-labelledby="faq-title">
+  <div class="wrap">
+    <h2 id="faq-title">Questions</h2>
+    <details><summary>Why does it need accessibility?</summary><p>It’s how an Android app can show a bubble next to the text field you’re in and type into it. ThumbFree uses it only for that. It reads only the field you’re typing in, never types into password fields, and nothing it reads leaves your phone.</p></details>
+    <details><summary>Google Play says data is shared with the developer</summary><p>That’s Google Play’s standard text for every test. ThumbFree itself has no account, no analytics and no tracking. It uses the internet for one thing: downloading the speech model, once.</p></details>
+    <details><summary>How do I leave?</summary><p>On the Play test page (step 2), tap Leave the program. Uninstall ThumbFree like any app.</p></details>
   </div>
 </section>
 </main>
 
 <footer>
-  <div class="wrap">Google Play is a trademark of Google LLC. · <a href="../website-privacy.html">Website privacy</a></div>
+  <div class="wrap"><span>Google Play is a trademark of Google LLC.</span> <a href="../website-privacy.html">Website privacy</a></div>
 </footer>
 </body>
 </html>
