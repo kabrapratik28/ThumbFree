@@ -38,7 +38,7 @@ android {
         resValue("string", "app_name", brand.getProperty("appName"))
         minSdk = 33
         targetSdk = 37
-        versionCode = 3
+        versionCode = 4
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
