@@ -52,7 +52,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         // wins over it.
         if (!withContext(Dispatchers.IO) { ModelDownloads.stillWanted(applicationContext, model, start) }) return stopped()
         val modelsDir = File(applicationContext.filesDir, "models")
-        // Started again for a model that is already here (the welcome flow and the Try tab may both ask): done.
+        // Started again for a model that is already here (the welcome flow and the Home tab may both ask): done.
         val verified = withContext(Dispatchers.IO) {
             try { AppGraph.modelStore.status(model) == ModelStatus.VERIFIED } catch (e: Exception) { false }
         }

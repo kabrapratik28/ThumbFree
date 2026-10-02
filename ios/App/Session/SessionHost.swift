@@ -43,21 +43,25 @@ import TFCore
             resolveIfOpened()
         }
     }
-    /// Types an in-app take's text (the Try tab). Without it, in-app takes are held back.
+    /// Types the text of a take started with `pressInApp`. Without it, such takes are held back.
     var deliverInApp: ((String) -> Void)?
     let history: HistoryStore
     /// Grows with every history write, so the History tab can follow along.
     private(set) var historyChanges = 0
-    /// The last take's time from the stop to its text, for the Try tab's small print: a phone run compares it with the
-    /// Mac's numbers. It counts from the stop effect here, so the hop to the transcriber's actor is in it.
-    private(set) var lastStopToTextMs: Int?
+    static let textTakesKey = "TFTextTakes"
+    /// How many takes gave text, ever, kept in the app's defaults: Home offers a first try until one has, and the try
+    /// screen sees its take work when this grows.
+    private(set) var textTakes: Int {
+        didSet { defaults.set(textTakes, forKey: Self.textTakesKey) }
+    }
+    @ObservationIgnored private let defaults: UserDefaults
     /// Milliseconds since this host started, from a monotonic clock: feeds the stop tail (`stop(nowMs:)` and
     /// `check(nowMs:)`, StopTailPolicy's 350 ms cap) so a wall-clock change (a call answered, DST, an NTP sync) can
     /// never shorten or stretch it. Tests set their own to drive the tail without a real wait.
     @ObservationIgnored var tailClockMs: () -> Int = SessionHost.monotonicClock()
     let launchedAt = Date()
     /// The take whose press opened the app (the dictate link). Its text goes to the field where the user stops it.
-    private var coldTake: UUID?
+    private(set) var coldTake: UUID?
     /// The Dictionary's entries (the app keeps them in step with `DictionaryStore`): every take's text goes through them.
     var dictionary: [String] = []
 
@@ -142,8 +146,6 @@ import TFCore
     private var live: LiveFeed?
     /// The live take's chunk texts already in history's partial text.
     private var partialCount = 0
-    /// When the live take's stop effect ran: where lastStopToTextMs starts.
-    private var stoppedAt: ContinuousClock.Instant?
     /// The live take's transcription, dropped when the take ends first (a cancel).
     private var work: Task<Void, Never>?
     /// The next take's order. nextOrder() decodes every take, so it runs at startup, not on each press.
@@ -151,12 +153,24 @@ import TFCore
     /// A model change that came during a take or a Transcribe again: it applies once neither runs (a new choice applies
     /// from your next take).
     private var pendingModel: URL??
+    /// Screenshots (Debug builds) hold the engine's phase (`holdEngine(_:)`): it never loads then. Nil otherwise.
+    @ObservationIgnored private var heldEngine: EnginePhase?
 
     init(history: HistoryStore, shared: SharedStore, engine: EngineSource, idleTimeout: TimeInterval = 300,
          deliveryTimeoutMs: Int = DeliveryTable.timeoutMs, interruptionSource: AnyObject = AVAudioSession.sharedInstance(),
-         returnDelayMs: Int = 0, fallbackDelayMs: Int = 1_500, makeSource: @escaping @MainActor () -> AudioSource) {
+         returnDelayMs: Int = 0, fallbackDelayMs: Int = 1_500, defaults: UserDefaults = .standard,
+         makeSource: @escaping @MainActor () -> AudioSource) {
         self.history = history
         self.shared = shared
+        self.defaults = defaults
+        // No count yet: an update from a version that kept none, or a first launch. A take in History means ThumbFree has
+        // worked here before, so the count starts at 1 and Home offers no first try. Saved either way, so it is decided
+        // once. Never from the welcome being done: UI tests launch with it done after a reset and expect Try it.
+        if defaults.object(forKey: Self.textTakesKey) == nil {
+            let earlier = (try? history.all()) ?? []
+            defaults.set(earlier.isEmpty ? 0 : 1, forKey: Self.textTakesKey)
+        }
+        textTakes = defaults.integer(forKey: Self.textTakesKey)
         self.transcriber = Transcriber(engine)
         self.idleTimeout = idleTimeout
         self.deliveryTimeoutMs = deliveryTimeoutMs
@@ -167,10 +181,17 @@ import TFCore
         if !transcriber.hasModel { status.engine = .noModel }
         cachedOrder = try? history.nextOrder()
         transcriber.onPhase = { [weak self] phase in
-            self?.status.engine = phase
-            self?.publish()
+            guard let self, heldEngine == nil else { return }
+            status.engine = phase
+            publish()
+            // The folder that loaded, which a choice made during a take does not change until the take ends.
+            if phase == .readyNeuralEngine || phase == .readyCPU { onEngineReady(transcriber.folder) }
         }
     }
+
+    /// Runs each time the engine finishes loading, with the model folder it loaded (nil for a fixed engine): the model with
+    /// that folder remembers it was loaded (`SpeechModels.engineLoaded`).
+    var onEngineReady: (URL?) -> Void = { _ in }
 
     /// The live take's length so far, in milliseconds; it keeps the last take's length after a take ends.
     var recordedMs: Int { capture.recordedMs }
@@ -197,8 +218,21 @@ import TFCore
     /// them, so the model in use may be the one no longer chosen.
     var modelInUse: Bool { status.take != .idle || !retranscribing.isEmpty }
 
-    /// Loads and warms up the engine now: the welcome flow's "Getting ready for this iPhone". Does nothing once loaded.
-    func prepareEngine() { transcriber.loadIfNeeded() }
+    /// Loads and warms up the engine now: the try's "Getting ThumbFree ready". Does nothing once loaded, nor while a
+    /// screenshot holds the engine's phase.
+    func prepareEngine() {
+        guard heldEngine == nil else { return }
+        transcriber.loadIfNeeded()
+    }
+
+    #if DEBUG
+    /// Screenshots (Debug builds): the engine shows held at `phase` (loading, or failed) and never loads.
+    func holdEngine(_ phase: EnginePhase) {
+        heldEngine = phase
+        status.engine = phase
+        publish()
+    }
+    #endif
 
     /// The engine has a model, or needs none. Without one, keyboard takes never start (they could only fail); the app
     /// shows where to get the model instead.
@@ -292,7 +326,9 @@ import TFCore
         try shared.write(items.filter { !ids.contains($0.takeID) })
     }
 
-    // MARK: The Try tab's mic key
+    // MARK: A take with no keyboard
+
+    // A mic key in the app itself would use these and `deliverInApp`; the unit tests drive the take pipeline through them.
 
     /// Key down. `take` names a new take; while a take is live the press acts on it (a stop tap).
     func pressInApp(_ take: UUID) {
@@ -379,7 +415,6 @@ import TFCore
             case .startTakeCapture(let id):
                 startTakeCapture(id)
             case .startStopTail:
-                stoppedAt = .now
                 live?.stop(nowMs: tailClockMs()) // the tail's end comes back through endTail
             case .transcribeChunk:
                 break // the live transcriber closes and runs chunks itself
@@ -483,24 +518,20 @@ import TFCore
     /// never lost.
     private func finish(_ id: UUID) {
         guard let live else { return send(.transcriptFailed(id, .audioMissing)) }
-        let stoppedAt = stoppedAt
         work = Task {
             let result: Transcription
-            var stopToTextMs: Int?
             do {
                 let done = try await live.finish()
-                // From the stop effect; a take a call or End session ended has none and counts from finish().
-                stopToTextMs = stoppedAt.map { Int((ContinuousClock.now - $0) / .milliseconds(1)) }
-                    ?? Int(done.stopToResultMs.rounded())
                 result = Transcriber.transcription(done, dictionary: dictionary, language: language)
             } catch {
                 result = .failed(Transcriber.message(for: error)) // CancellationError is dropped just below
             }
             guard !Task.isCancelled, reducer.state.takeID == id else { return } // the take ended meanwhile: drop its text
-            if let stopToTextMs { lastStopToTextMs = stopToTextMs } // only now: a cancelled or superseded take must not overwrite it
             switch result {
             case .text(let raw, let text, let speech):
-                send(.transcriptReady(id, Transcript(text), saved: stage(id, raw: raw, text: text), speech: speech))
+                let saved = stage(id, raw: raw, text: text)
+                if saved { textTakes += 1 }
+                send(.transcriptReady(id, Transcript(text), saved: saved, speech: speech))
             case .failed(let message):
                 send(.transcriptFailed(id, message))
             }
@@ -553,7 +584,6 @@ import TFCore
         work = nil
         live?.cancel() // nothing more of this take reaches the engine
         live = nil
-        stoppedAt = nil
         createdTake = nil
         pins[id] = nil
         inApp.remove(id)

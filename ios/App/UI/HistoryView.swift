@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// Transcribe again and Delete, and Clear all, which asks first. Text nobody confirmed as speech is never shown or searched.
 struct HistoryView: View {
     let host: SessionHost
-    /// The empty page's Try it: back to the Try tab.
+    /// The empty page's Try it: to the Home tab, which shows how.
     var onTry: () -> Void = {}
     @State private var records: [TakeRecord] = []
     @State private var query = ""

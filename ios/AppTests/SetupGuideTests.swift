@@ -1,19 +1,30 @@
 import Testing
 @testable import ThumbFree
 
-/// The setup guide's beats are the taps in Settings, in order; "Put ThumbFree first" has its own beats, then its tip.
+/// The keyboard step's list is the taps in Settings; a tap in a picture takes its beat; "Put ThumbFree first" has its own
+/// beats, then its tip.
 @MainActor @Suite struct SetupGuideTests {
-    // Only the taps in Settings, in order, and the one-line path under the drawing names the same four steps.
-    @Test func theSetupBeatsAreTheTapsInSettings() {
-        #expect(SetupGuideView.beats.map(\.caption) == [
-            "Tap Keyboards.",
-            "Turn on ThumbFree.",
-            "Turn on Allow Full Access. The mic needs it.",
-            "Tap Allow.",
-        ])
-        #expect(SetupGuideView.beats.map(\.scene) == SetupGuideView.Scene.allCases)
-        #expect(SetupGuideView.path == ["Keyboards", "ThumbFree", "Allow Full Access", "Allow"])
-        #expect(SetupGuideView.path.count == SetupGuideView.beats.count)
+    // With Reduce Motion or VoiceOver, the keyboard step lists the rows to tap in Settings, in order, and VoiceOver hears
+    // the picture once. iOS's Allow question is named in words, never drawn.
+    @Test func theKeyboardStepsListIsTheTapsInSettings() {
+        #expect(SetupGuideView.names == ["Keyboards", "ThumbFree", "Allow Full Access", "Allow", "Return to ThumbFree"])
+        #expect(SetupGuideView.description
+            == "In Settings, open Keyboards, turn on ThumbFree, turn on Allow Full Access, tap Allow, then return to ThumbFree.")
+    }
+
+    // A tap in a picture takes 1.3 s: the cue holds 0.25 s, its ripple grows over 0.35 s, the control changes over
+    // 0.25 s, then the result holds 0.45 s. A still picture shows the result.
+    @Test func aTapTakesItsBeat() {
+        #expect(TapTimeline.length == 1.3)
+        #expect(TapTimeline.ripple(at: 0.2) == nil)
+        #expect(TapTimeline.ripple(at: 0.25) == 0)
+        #expect(abs((TapTimeline.ripple(at: 0.425) ?? -1) - 0.5) < 0.001)
+        #expect(TapTimeline.ripple(at: 0.6) == nil)
+        #expect(TapTimeline.change(at: 0.5) == 0)
+        #expect(abs(TapTimeline.change(at: 0.725) - 0.5) < 0.001)
+        #expect(TapTimeline.change(at: 0.85) == 1)
+        #expect(TapTimeline.change(at: TapTimeline.length) == 1)
+        #expect(TapTimeline.ripple(at: TapTimeline.length) == nil)
     }
 
     @Test func puttingThumbFreeFirstGoesInOrderThenTheTip() {

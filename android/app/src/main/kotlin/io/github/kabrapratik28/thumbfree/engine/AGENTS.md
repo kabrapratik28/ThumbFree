@@ -17,6 +17,7 @@ live preview.
 - The queue runs one job at a time, in arrival order. A take reads its model path, thread count and language once, at
   its first job, and keeps them for all its chunks.
 - After the last take the model stays loaded for 5 minutes, then unloads, which ends `:engine` and returns its memory.
+  The welcome's preload loads the chosen model with no take, so the try answers at once, and starts the same 5 minutes.
 - The speech check fails open: no Silero model, or a failed run, counts as speech. It never changes the audio the engine
   hears, and the text of a chunk Silero hears no speech in is dropped.
 - The Silero asset is pinned by size and SHA-256 (`VadModel`) and checked before each load.

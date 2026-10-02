@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -89,16 +90,23 @@ class ModelDownloadsTest {
     }
 
     private fun work(state: WorkInfo.State, bytes: Long? = null, total: Long? = null, reason: String? = null,
-                     offline: Boolean = false, network: NetworkType = NetworkType.UNMETERED) = WorkInfo(
+                     offline: Boolean = false, network: NetworkType = NetworkType.UNMETERED, attempts: Int = 0,
+                     nextRun: Long = 0L, stopReason: Int = WorkInfo.STOP_REASON_NOT_STOPPED) = WorkInfo(
         UUID.randomUUID(), state, emptySet(),
         outputData = if (reason != null) workDataOf(DownloadWorker.KEY_REASON to reason, DownloadWorker.KEY_OFFLINE to offline) else Data.EMPTY,
         progress = if (bytes != null) workDataOf(DownloadWorker.KEY_BYTES to bytes, DownloadWorker.KEY_TOTAL to total) else Data.EMPTY,
+        runAttemptCount = attempts,
         constraints = Constraints.Builder().setRequiredNetworkType(network).build(),
+        nextScheduleTimeMillis = nextRun,
+        stopReason = stopReason,
     )
+
+    /** The clock the state is read at, for a retry's backoff ahead of it. */
+    private val now = 1_000_000L
 
     private fun state(vararg infos: WorkInfo, refused: Boolean = false, deletePending: Boolean = false,
                       status: ModelStatus = ModelStatus.MISSING) =
-        downloadState(model, infos.toList(), refused, deletePending) { status }
+        downloadState(model, infos.toList(), refused, deletePending, now) { status }
 
     private suspend fun awaitState(until: (DownloadState) -> Boolean): DownloadState =
         withTimeout(5_000) { ModelDownloads.state(context, model).first(until) }
@@ -138,6 +146,42 @@ class ModelDownloadsTest {
         assertThat(state(work(RUNNING, 0, 0))).isEqualTo(DownloadState.Downloading(0, 0)) // no total, no check yet
     }
 
+    // After a stop WorkManager waits out a pause (its backoff) before it starts the download again by itself, network or
+    // not: with its next run still ahead, that is retrying, never a wait for Wi-Fi. A plain wait for a network has its
+    // next run behind it (it could run now), the first attempt included.
+    @Test
+    fun aRetrysPauseIsNotAWaitForWifi() {
+        assertThat(state(work(ENQUEUED, attempts = 1, nextRun = now + 30_000))).isEqualTo(DownloadState.Queued(wifiOnly = true, retrying = true))
+        assertThat(state(work(ENQUEUED, network = NetworkType.CONNECTED, attempts = 2, nextRun = now + 60_000)))
+            .isEqualTo(DownloadState.Queued(wifiOnly = false, retrying = true))
+        assertThat(state(work(ENQUEUED, attempts = 1, nextRun = now - 1))).isEqualTo(DownloadState.Queued(wifiOnly = true))
+        assertThat(state(work(ENQUEUED, attempts = 0, nextRun = now + 30_000))).isEqualTo(DownloadState.Queued(wifiOnly = true))
+        // Stopped by the system (Wi-Fi went away), WorkManager keeps the old schedule: a plain wait for Wi-Fi.
+        assertThat(state(work(ENQUEUED, attempts = 1, nextRun = now + 30_000, stopReason = WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY)))
+            .isEqualTo(DownloadState.Queued(wifiOnly = true))
+    }
+
+    // A retry's pause is read again when it ends, since nothing else would: still queued then, it is a plain wait (for
+    // Wi-Fi here), so the screens say so and offer mobile data. A plain wait is read once.
+    @Test
+    fun aRetrysPauseIsReadAgainWhenItEnds() = kotlinx.coroutines.test.runTest {
+        val paused = work(ENQUEUED, attempts = 1, nextRun = now + 30_000)
+        fun reads(infos: List<WorkInfo>) = readAgainAt({ now + testScheduler.currentTime }) { at ->
+            downloadState(model, infos, false, false, at) { ModelStatus.MISSING } to currentWork(infos)?.takeIf { inRetryPause(it, at) }?.nextScheduleTimeMillis
+        }
+        val seen = mutableListOf<DownloadState>()
+        val collecting = launch { reads(listOf(paused)).collect { seen += it } }
+        testScheduler.advanceTimeBy(29_000)
+        testScheduler.runCurrent()
+        assertThat(seen).containsExactly(DownloadState.Queued(wifiOnly = true, retrying = true))
+        testScheduler.advanceTimeBy(2_000)
+        testScheduler.runCurrent()
+        assertThat(seen).containsExactly(DownloadState.Queued(wifiOnly = true, retrying = true), DownloadState.Queued(wifiOnly = true)).inOrder()
+        assertThat(collecting.isCompleted).isTrue() // nothing more to read again
+
+        assertThat(reads(listOf(work(ENQUEUED))).toList()).containsExactly(DownloadState.Queued(wifiOnly = true))
+    }
+
     // Every reason the downloader gives becomes one the screens can say in plain words.
     @Test
     fun failuresCarryAReasonToShow() {
@@ -168,7 +212,7 @@ class ModelDownloadsTest {
         assertThat(state(work(FAILED, reason = "CANCELLED"))).isEqualTo(DownloadState.NotDownloaded) // a stop, not a failure
         // A delete still pending on disk reads as gone, whatever the file and the work say.
         assertThat(state(work(RUNNING, 500, 1_000), deletePending = true, status = ModelStatus.VERIFIED)).isEqualTo(DownloadState.NotDownloaded)
-        assertThat(downloadState(model, emptyList(), false, false) { error("unreadable") })
+        assertThat(downloadState(model, emptyList(), false, false, now) { error("unreadable") })
             .isEqualTo(DownloadState.Failed(FailReason.FILE_CHECK_FAILED))
     }
 

@@ -10,8 +10,8 @@ import XCTest
         guard let out = ProcessInfo.processInfo.environment["TF_APPLE_EMOJI_OUT"], !out.isEmpty else {
             throw XCTSkip("not a test: tools/dump-apple-emoji.sh runs it")
         }
-        let app = ThumbFreeUI.launch()
-        ThumbFreeUI.element("try.field", in: app).tap()
+        let (app, field) = ThumbFreeUI.launchTry()
+        field.tap()
         // To Apple's letters with the system's globe (the Emoji keyboard's ABC has the same label, so the first match), then
         // Apple's emoji key; unless iOS brought back the Emoji keyboard itself.
         let emojiKeyboard = app.keyboards.collectionViews.firstMatch

@@ -10,17 +10,25 @@ import TFCore
     let history: HistoryStore
     let shared: SharedStore
     let target = InsertTarget(documentID: UUID(), contextHash: InsertTarget.contextHash(before: nil, after: nil))
+    /// The hosts' defaults (the count of takes that gave text), kept out of the test app's own.
+    let suite = TestFiles.defaultsSuite("HostKeyboardTests", test: "host")
+    let defaults: UserDefaults
 
     init() throws {
         root = try TestFiles.folder()
         history = HistoryStore(root: root.appendingPathComponent("History"))
         shared = SharedStore(directory: root.appendingPathComponent("IPC"))
+        defaults = try #require(UserDefaults(suiteName: suite))
     }
 
-    deinit { try? FileManager.default.removeItem(at: root) }
+    deinit {
+        try? FileManager.default.removeItem(at: root)
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+    }
 
     func host(deliveryTimeoutMs: Int = 3_000) -> SessionHost {
-        let host = SessionHost(history: history, shared: shared, engine: .fixed("hello world"), deliveryTimeoutMs: deliveryTimeoutMs) {
+        let host = SessionHost(history: history, shared: shared, engine: .fixed("hello world"), deliveryTimeoutMs: deliveryTimeoutMs,
+                               defaults: defaults) {
             if let file = try? FileAudioSource(url: TestFiles.url("jfk.wav"), realTime: false) { return file }
             return MuteSource()
         }
@@ -136,7 +144,7 @@ import TFCore
     // The link's tap is timed before the press's work runs (take folder, WAV file, making the mic source). A slow
     // start must not make the tap a hold, which ends a take that has no audio yet ("Microphone was not ready.").
     @Test func theLinksTapSurvivesASlowStart() async throws {
-        let host = SessionHost(history: history, shared: shared, engine: .fixed("hello world")) {
+        let host = SessionHost(history: history, shared: shared, engine: .fixed("hello world"), defaults: defaults) {
             Thread.sleep(forTimeInterval: 0.4) // making the source takes 400 ms
             if let file = try? FileAudioSource(url: TestFiles.url("jfk.wav"), realTime: false) { return file }
             return MuteSource()
@@ -156,7 +164,7 @@ import TFCore
     // already started.
     @Test func aPressIsRemovedBeforeItsWorkRuns() throws {
         var pressesOnDisk: [Int] = []
-        let host = SessionHost(history: history, shared: shared, engine: .fixed("hello world")) { [shared] in
+        let host = SessionHost(history: history, shared: shared, engine: .fixed("hello world"), defaults: defaults) { [shared] in
             pressesOnDisk.append((try? shared.pendingCommands().count) ?? -1)
             return MuteSource()
         }
@@ -205,7 +213,7 @@ import TFCore
     // transcribing when the stop press has been handled.
     @Test func theColdTakeGoesToTheFieldWhereTheUserStopped() async throws {
         let quietEnd = try TestFiles.wav([Float](repeating: 0.1, count: 32_000) + [Float](repeating: 0, count: 16_000), in: root)
-        let host = SessionHost(history: history, shared: shared, engine: .fixed("hello world")) {
+        let host = SessionHost(history: history, shared: shared, engine: .fixed("hello world"), defaults: defaults) {
             if let file = try? FileAudioSource(url: quietEnd, realTime: false) { return file }
             return MuteSource()
         }

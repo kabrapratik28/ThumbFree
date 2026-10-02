@@ -6,9 +6,9 @@ import UIKit
 
 /// Builds the app's SessionHost, SpeechModels and Dictionary. Launch arguments for tests and the Simulator: `-TFAudioFile <path>`
 /// replays that WAV in real time instead of the microphone; `-TFFakeEngine YES` uses a fixed text instead of Parakeet,
-/// which needs no model (`-TFFakeText <text>` picks the text); `-TFResetState YES` starts with no history, no IPC files,
-/// no downloaded model and the welcome flow not begun (`-TFWelcomeDone YES` or `NO` then decides whether it shows), and an
-/// empty Dictionary;
+/// which needs no model (`-TFFakeText <text>` picks the text); `-TFResetState YES` starts with no history (and no take
+/// counted as having given text), no IPC files, no downloaded model and the welcome flow not begun (`-TFWelcomeDone YES`
+/// or `NO` then decides whether it shows), and an empty Dictionary;
 /// `-TFModelFixture <file>` makes that one file the model to download, read from disk, so UI tests stay offline. On a
 /// phone the engine uses the downloaded model; on the Simulator the Mac's cached model (FluidAudio folder) comes first.
 /// `-TFKeepSetup YES` (Debug builds) keeps this launch's audio file, engine and welcome answer for the next launch only:
@@ -53,7 +53,9 @@ enum AppEnvironment {
             defaults.removeObject(forKey: WelcomeView.doneKey)
             defaults.removeObject(forKey: DictionaryStore.key)
             defaults.removeObject(forKey: SpeechModels.choiceKey)
+            defaults.removeObject(forKey: SpeechModel.loadedKey)
             defaults.removeObject(forKey: SpeechModel.wifiOnlyKey)
+            defaults.removeObject(forKey: SessionHost.textTakesKey)
             for key in [AppSettings.sessionMinutesKey, AppSettings.keepDaysKey, AppSettings.keepCountKey] { defaults.removeObject(forKey: key) }
             #if DEBUG
             UserDefaults(suiteName: Brand.appGroupID)?.set(UUID().uuidString, forKey: LearnedWords.resetKey) // the keyboard's words too
@@ -82,7 +84,8 @@ enum AppEnvironment {
         let audioFile: URL? = nil
         let engine = EngineSource.parakeet(models.active.usableFolder)
         #endif
-        let host = SessionHost(history: history, shared: shared, engine: engine, returnDelayMs: returnDelayMs(defaults)) {
+        let host = SessionHost(history: history, shared: shared, engine: engine, returnDelayMs: returnDelayMs(defaults),
+                               defaults: defaults) {
             if let audioFile, let file = try? FileAudioSource(url: audioFile, realTime: true) { return file }
             return MicAudioSource()
         }
@@ -91,9 +94,17 @@ enum AppEnvironment {
         host.openHost = { url, completion in UIApplication.shared.open(url, options: [:]) { completion($0) } }
         host.onReturned = { AutoReturn.markReturned(to: $0) }
         host.hasReturned = { AutoReturn.hasReturned(to: $0) }
-        models.onChange = { host.useModel($0) }
+        connect(models, to: host)
         routeStart(to: host)
         for model in models.all { model.resumeIfStarted() }
+        #if DEBUG
+        // `-TFHoldDownload <percent>`: the model's download shows held at that point (`SpeechModel.holdDownload`).
+        if defaults.object(forKey: "TFHoldDownload") != nil { models.active.holdDownload(at: defaults.integer(forKey: "TFHoldDownload")) }
+        // `-TFHoldSpeech wifi|connection|checking|paused|noSpace|checkFailed|missing`: the model shows held so
+        // (`SpeechModel.hold`); `-TFHoldEngine loading|failed`: the engine's phase, which then never loads.
+        if let state = defaults.string(forKey: "TFHoldSpeech") { models.active.hold(state) }
+        if let phase = defaults.string(forKey: "TFHoldEngine").flatMap(EnginePhase.init(rawValue:)) { host.holdEngine(phase) }
+        #endif
         let dictionary = DictionaryStore(defaults: defaults, shared: UserDefaults(suiteName: Brand.appGroupID))
         host.dictionary = dictionary.entries
         dictionary.onChange = { host.dictionary = $0 }
@@ -105,8 +116,14 @@ enum AppEnvironment {
         return (host, models, dictionary, settings)
     }
 
+    /// The model in use drives the engine, and each finished load marks the model whose folder loaded.
+    @MainActor static func connect(_ models: SpeechModels, to host: SessionHost) {
+        models.onChange = { host.useModel($0) }
+        host.onEngineReady = { [weak models] folder in models?.engineLoaded(folder) }
+    }
+
     /// Start ThumbFree (Control Center, the Action Button, Shortcuts) acts on this host: it starts the host's session, or
-    /// with no model opens the model's offer on the Try tab.
+    /// with no model opens the model's offer on Home.
     @MainActor static func routeStart(to host: SessionHost) {
         StartSessionIntent.start = { await host.startIdleSession() }
         StartSessionIntent.modelOffer = { host.hasModel ? nil : DictateLink.model }

@@ -47,7 +47,7 @@ import XCTest
     // turned autocorrection off, where Apple's bar still suggests but lights nothing.
     func testNoCorrectionWhereTheFieldTurnsItOff() throws {
         var (app, field) = tryField(["-TFFieldType", "3"]) // UIKeyboardType.URL
-        type("teh", in: app) // the practice box capitalizes a sentence's first letter, whatever the keyboard type
+        type("teh", in: app) // the try box capitalizes a sentence's first letter, whatever the keyboard type
         ThumbFreeUI.element("keyboard.key.period", in: app).tap()
         XCTAssertTrue(ThumbFreeUI.wait(until: 5) { field.value as? String == "Teh." }, "corrected in a web address: \(field.value ?? "")")
         app.terminate()
@@ -110,14 +110,14 @@ import XCTest
 
     // After the delivery chip's Copy or Dismiss the places come back lit where the word's end will correct them: behind
     // the chip nothing was lit or corrected, and the places made there must not stay unlit while the next space corrects.
-    // The chip comes up for a take pinned before the keyboard came back on screen (a switch away and back mid-take). The
-    // session ends first: a live one rewrites its status every second, which refreshes the places anyway.
+    // The chip comes up for a take pinned before the keyboard came back on screen (a switch away and back mid-take). Each
+    // session ends with its take (`-TFEndSessions`): a live one rewrites its status every second, which refreshes the
+    // places anyway.
     func testThePlacesComeBackLitAfterTheChip() throws {
-        let (app, field) = tryField()
+        let (app, field) = tryField(["-TFEndSessions", "YES"])
         let middle = ThumbFreeUI.element("keyboard.suggestion.1", in: app)
         for button in ["Copy", "Dismiss"] {
             showChip(in: app)
-            endSession(in: app, field: field)
             type("teh", in: app)
             app.buttons[button].tap()
             XCTAssertTrue(ThumbFreeUI.wait(for: middle, toContain: "the", timeout: 5), "no places after \(button)")
@@ -203,10 +203,7 @@ import XCTest
         app.buttons["dictionary.add"].tap()
         XCTAssertTrue(app.staticTexts["1 word"].waitForExistence(timeout: 5))
         app.terminate() // the keyboard covers the tab bar; a launch without -TFResetState keeps the Dictionary
-        let again = XCUIApplication()
-        again.launchArguments = ["-TFWelcomeDone", "YES"]
-        again.launch()
-        let field = ThumbFreeUI.element("try.field", in: again)
+        let (again, field) = ThumbFreeUI.launchTry(reset: false)
         field.tap()
         KeyboardSetup.switchToThumbFree(in: again)
         type("kubernets ", in: again)
@@ -226,29 +223,14 @@ import XCTest
         XCTAssertTrue(app.buttons["keyboard.insertHere"].waitForExistence(timeout: 20), "no chip")
     }
 
-    /// The Try tab's End session, which the page's scroll to the field leaves under the status bar while the keyboard is
-    /// up (a tap there reaches the status bar): the page is dragged down to it first, slowly and from below the field (a
-    /// drag that starts on the field moves its caret instead). If the drag hid the keyboard, a tap in the field brings it
-    /// back.
-    private func endSession(in app: XCUIApplication, field: XCUIElement) {
-        let end = app.buttons["try.endSession"]
-        let below = app.staticTexts["Only for practice. Nothing here is sent anywhere."].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        below.press(forDuration: 0.1, thenDragTo: below.withOffset(CGVector(dx: 0, dy: 300)), withVelocity: .slow, thenHoldForDuration: 0.5)
-        end.tap()
-        XCTAssertTrue(ThumbFreeUI.wait(until: 5) { !end.exists }, "the session did not end")
-        if !app.buttons["keyboard.mic"].exists { field.tap() }
-        XCTAssertTrue(app.buttons["keyboard.insertHere"].waitForExistence(timeout: 5), "the chip went away")
-    }
-
     private func type(_ letters: String, in app: XCUIApplication) {
         for letter in letters { ThumbFreeUI.element(letter == " " ? "keyboard.space" : "keyboard.key.\(letter)", in: app).tap() }
     }
 
-    /// The Try tab's field with the ThumbFree keyboard up.
+    /// The try screen's box with the ThumbFree keyboard up.
     private func tryField(_ arguments: [String] = []) -> (XCUIApplication, XCUIElement) {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch(arguments: arguments)
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry(arguments: arguments)
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         return (app, field)

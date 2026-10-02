@@ -322,12 +322,14 @@ class DownloaderTest {
     }
 
     // The screens check the space before they queue a download, with the same 1 GiB margin, counting a part that is
-    // already on disk.
+    // already on disk; the finish says that much.
     @Test
     fun hasSpaceForCountsThePartAndTheMargin() {
+        assertThat(downloader().spaceNeeded(model)).isEqualTo(BODY.size + 1_073_741_824L)
         seedPart(BODY.copyOfRange(0, 300_000))
         val needed = BODY.size - 300_000L + 1_073_741_824L
 
+        assertThat(downloader().spaceNeeded(model)).isEqualTo(needed)
         assertThat(downloader(usableSpace = { needed }).hasSpaceFor(model)).isTrue()
         assertThat(downloader(usableSpace = { needed - 1 }).hasSpaceFor(model)).isFalse()
     }

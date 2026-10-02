@@ -691,6 +691,77 @@ class TranscriptionQueueTest {
             .inOrder()
     }
 
+    // The welcome's first step loads the chosen model before the first take, so the try answers at once: it says
+    // whether the model is loaded, the take that follows needs no load of its own, and a second preload loads nothing.
+    // Without a verified model, or when the load fails, it says no. The idle unload follows as after a take.
+    @Test
+    fun preloadLoadsTheModelBeforeTheFirstTake() = runTest {
+        val engine = FakeEngine(Reply("a"))
+        val queue = idleQueue(engine)
+        val answers = mutableListOf<Boolean>()
+
+        queue.preload { answers += it }
+        advanceTo(0)
+        assertThat(answers).containsExactly(true)
+        assertThat(engine.calls).containsExactly("load m 4")
+        assertThat(events).isEmpty() // no take's: the controller hears nothing
+
+        queue.preload { answers += it }
+        queue.take("s")
+        advanceTo(1)
+        assertThat(answers).containsExactly(true, true)
+        assertThat(engine.calls).containsExactly("load m 4", "transcribe 0-16000").inOrder()
+
+        advanceTo(300_001)
+        assertThat(engine.calls.last()).isEqualTo("unload")
+    }
+
+    @Test
+    fun preloadSaysNoWithoutAModelOrWhenTheLoadFails() = runTest {
+        val answers = mutableListOf<Boolean>()
+        model = null
+        queue(FakeEngine()).preload { answers += it }
+        advanceUntilIdle()
+        model = "m"
+        queue(FakeEngine(loadStatus = 7)).preload { answers += it }
+        advanceUntilIdle()
+        assertThat(answers).containsExactly(false, false).inOrder()
+    }
+
+    // A model changed between two preloads: the second frees the first model and loads the new one; the take after it
+    // needs no load of its own.
+    @Test
+    fun aPreloadAfterAModelChangeLoadsTheNewModel() = runTest {
+        val engine = FakeEngine(Reply("a"))
+        val queue = queue(engine)
+        val answers = mutableListOf<Boolean>()
+
+        queue.preload { answers += it }
+        advanceUntilIdle()
+        model = "other"
+        queue.preload { answers += it }
+        queue.take("s")
+        advanceUntilIdle()
+        assertThat(answers).containsExactly(true, true)
+        assertThat(engine.calls).containsExactly("load m 4", "unload", "load other 4", "transcribe 0-16000").inOrder()
+    }
+
+    // :engine dying during a preload says no, with nothing loaded: the next take loads the model itself and runs.
+    @Test
+    fun anEngineDeathDuringAPreloadSaysNoAndTheTakeLoadsAgain() = runTest {
+        val engine = FakeEngine(Reply("a"), loadDeaths = 1)
+        val queue = queue(engine)
+        val answers = mutableListOf<Boolean>()
+
+        queue.preload { answers += it }
+        advanceUntilIdle()
+        assertThat(answers).containsExactly(false)
+        queue.take("s")
+        advanceUntilIdle()
+        assertThat(engine.calls).containsExactly("load m 4", "load m 4", "transcribe 0-16000").inOrder()
+        assertThat(events.last()).isEqualTo("done s [a] [a]")
+    }
+
     @Test
     fun unloadsAfterFiveIdleMinutes() = runTest {
         val engine = FakeEngine(Reply("a"))

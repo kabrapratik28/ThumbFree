@@ -227,6 +227,7 @@ class DictationController(
             CANCEL -> onEvent(Event.Cancel)
             // Every chip is shown with an id, so a drawn chip without one is inert: its own timer must not take it down.
             DISMISS -> if (id != null && machine.state == State.Idle) show(BubbleUi.Idle)
+            OPEN_SPEECH -> Unit // the not-ready panel's, outside any take: the ports open the app (AndroidPorts)
         }
     }
 

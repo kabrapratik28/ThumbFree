@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Bubble labels and chip buttons (a11y.BubbleView). -->
 <resources>
-    <string name="bubble_start">Start dictation</string>
-    <string name="bubble_stop">Stop dictation</string>
+    <!-- What TalkBack hears for the bubble before, during and after a take: one label, so nothing new is read into the open
+         microphone. -->
+    <string name="bubble_label">Dictation, double tap to start or stop</string>
     <string name="bubble_transcribing">Transcribing</string>
     <string name="bubble_loading_model">Loading model</string>
     <string name="bubble_progress">%1$d of %2$d</string>
@@ -13,4 +14,27 @@
     <string name="bubble_undo">Undo</string>
     <string name="bubble_retry">Retry</string>
     <string name="bubble_dismiss">Dismiss</string>
+    <!-- The panel a tap shows before the speech model is usable, in place of listening, in plain sentences, and its
+         button, which opens the app's speech models. %1$s in the button and in what TalkBack reads is the app name; %1$d
+         and %2$d a percentage. -->
+    <string name="bubble_speech_downloading">Your speech model is still downloading (%1$d%%).</string>
+    <string name="bubble_speech_wifi">Your speech model is waiting for Wi-Fi.</string>
+    <string name="bubble_speech_connection">Your speech model is waiting for a connection.</string>
+    <string name="bubble_speech_preparing">Your speech model is almost ready.</string>
+    <string name="bubble_speech_paused">Your speech model\'s download is paused.</string>
+    <string name="bubble_speech_stopped">Your speech model\'s download stopped.</string>
+    <string name="bubble_speech_attention">Your speech model needs attention.</string>
+    <string name="bubble_open_app">Open %1$s</string>
+    <string name="bubble_speech_downloading_read">%1$s. Your speech model is still downloading, %2$d percent.</string>
+    <string name="bubble_speech_read">%1$s. %2$s</string>
+    <!-- What TalkBack hears for the grey bubble, which can't listen yet; %1$d is a percentage in steps of 10. -->
+    <string name="bubble_grey_downloading">Speech is downloading, %1$d percent</string>
+    <string name="bubble_grey_wifi">Speech is waiting for Wi-Fi</string>
+    <string name="bubble_grey_connection">Speech is waiting for a connection</string>
+    <string name="bubble_grey_not_started">Speech is not downloaded</string>
+    <string name="bubble_grey_retrying">Speech download paused</string>
+    <string name="bubble_grey_stopped">Speech download stopped</string>
+    <string name="bubble_grey_load_failed">Speech couldn\'t be prepared</string>
+    <string name="bubble_grey_preparing">Speech is almost ready</string>
+    <string name="bubble_grey_mic_off">Microphone is off</string>
 </resources>

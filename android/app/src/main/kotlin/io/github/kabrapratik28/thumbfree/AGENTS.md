@@ -26,7 +26,10 @@ and the thin packages `app/`, `data/` and `models/`.
   thread. A failed write throws `HistoryWriteException`, so a lost row never reads as saved text.
 - `Recovery` runs once per process before the first take and never retries: a take that died recording or
   transcribing becomes INTERRUPTED with its unconfirmed text cleared, STAGED becomes NOT_INSERTED, INSERTING becomes
-  NEEDS_REVIEW, and WAVs no row names are deleted.
+  NEEDS_REVIEW, and WAVs no row names are deleted, with whatever the welcome's try left in `filesDir/trial/`.
+- A take started from the welcome's try (`AndroidPorts.trialTouch`) runs the same machine, microphone and model as
+  any other but keeps nothing: no History row, its WAV in `filesDir/trial/` only until it ends, no text after its
+  screen. Until the chosen model is known to be usable, a tap on the floating bubble never listens (the not-ready panel).
 - A schema change raises `user_version` with a migration and a test in `HistoryDbTest`.
 - Settings keys keep their names across releases; a value a later build no longer knows reads as the default.
 - The transcription queue reads the model path once per take, so a finished download or a model switch applies from
@@ -38,9 +41,10 @@ and the thin packages `app/`, `data/` and `models/`.
 ## Testing
 
 - Host: `AppGraphTest`, `DictationControllerTest` (ports faked in `FakePorts`), `DbThreadTest`, `HistoryDbTest`,
-  `RecoveryTest`, `SettingsTest`, `DownloadWorkerTest`, `ModelDownloadsTest`.
+  `RecoveryTest`, `SettingsTest`, `DownloadWorkerTest`, `ModelDownloadsTest`, `ReadinessTest`.
 - Guards for the whole app, in `android/app/src/test/.../build/`: `CorePurityTest`, `EngineIsolationTest`,
-  `ManifestContractTest`, `NetworkRegressionGuardTest`, `CmakeFlagsTest`, `TranscribePatchesTest`.
+  `ManifestContractTest`, `NetworkRegressionGuardTest`, `CmakeFlagsTest`, `TranscribePatchesTest`, `BubbleArtGuardTest`
+  (no screen draws the bubble's art but the bubble itself, its settings' preview and About's logo).
 - Device: `WiringSmokeTest`, and `DictationE2ETest` for the whole path. `RealDownloadTest` downloads a real model and
   runs only with `-e real_download 1`.
 

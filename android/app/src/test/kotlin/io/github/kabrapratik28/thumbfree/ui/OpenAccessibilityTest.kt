@@ -10,8 +10,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Where "Agree and open settings" and the Try tab's Turn on go: Android's accessibility list, scrolled to the service on
- * Pixel, else App info. HomeScreenTest checks both from the real screen on the emulator.
+ * Where "Agree and open settings" goes (a setup row's Turn on shows that step first): Android's accessibility list,
+ * scrolled to the service on Pixel, else App info. HomeScreenTest checks both from the real screen on the emulator.
  */
 @RunWith(RobolectricTestRunner::class)
 class OpenAccessibilityTest {

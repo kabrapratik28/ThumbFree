@@ -39,10 +39,35 @@ class Settings(private val prefs: SharedPreferences) {
         get() = Retention(prefs.getInt("keep_days", 7).takeIf { it > 0 }, prefs.getInt("keep_takes", 200).takeIf { it > 0 })
         set(value) = prefs.edit().putInt("keep_days", value.maxDays ?: 0).putInt("keep_takes", value.maxTakes ?: 0).apply()
 
-    /** Key "welcome_step": the welcome screen to show next, so a flow left midway resumes there. */
-    var welcomeStep: Int
-        get() = prefs.getInt("welcome_step", 0)
-        set(value) = prefs.edit().putInt("welcome_step", value).apply()
+    /**
+     * Key "welcome_screen": the welcome screen to show next, by its name, so a flow left midway resumes there; null until
+     * one is left. A name from an earlier order is mapped onto this one (ui.resumeAt); earlier builds kept an index in
+     * their own order instead ([welcomeStepBefore]).
+     */
+    var welcomeScreen: String?
+        get() = prefs.getString("welcome_screen", null)
+        set(value) = prefs.edit().putString("welcome_screen", value).apply()
+
+    /** Key "welcome_step", only read: where an earlier build's welcome screens were left, as an index in its order. */
+    val welcomeStepBefore: Int get() = prefs.getInt("welcome_step", 0)
+
+    /**
+     * Key "accessibility_wait": when the owner tapped Agree and open settings on the bubble step (wall clock, ms), until
+     * the app is back on screen (MainActivity ends it on its next resume); null otherwise. Kept here rather than in
+     * memory, so the return still counts when Android ends the process while the owner is in its settings.
+     */
+    var accessibilityWait: Long?
+        get() = prefs.getLong("accessibility_wait", 0L).takeIf { it > 0L }
+        set(value) = prefs.edit().apply { if (value == null) remove("accessibility_wait") else putLong("accessibility_wait", value) }.apply()
+
+    /**
+     * Key "mic_asked": Android answered a microphone request before (any answer). After that, a refusal Android gives
+     * without asking (no rationale) is final, "don't ask again" or a device policy, and only App info can grant it; the
+     * first one may be a question dismissed with a tap outside, which can be asked again.
+     */
+    var micAsked: Boolean
+        get() = prefs.getBoolean("mic_asked", false)
+        set(value) = prefs.edit().putBoolean("mic_asked", value).apply()
 
     /** Key "welcome_done": the welcome screens were finished; they never open by themselves again. */
     var welcomeDone: Boolean
@@ -51,7 +76,7 @@ class Settings(private val prefs: SharedPreferences) {
 
     /**
      * Keys "bubble_size" (a BubbleStyle.Size name) and "bubble_opacity" (percent while idle), BubbleStyle.RECOMMENDED
-     * until the owner picks. A size a later build dropped reads as medium; an opacity is kept between 30 and 100.
+     * until the owner picks. A size a later build dropped reads as the recommended one; an opacity is kept between 30 and 100.
      */
     var bubbleStyle: BubbleStyle
         get() = BubbleStyle(
@@ -76,7 +101,7 @@ class Settings(private val prefs: SharedPreferences) {
             if (value == null) remove("bubble_x").remove("bubble_y") else putFloat("bubble_x", value.x).putFloat("bubble_y", value.y)
         }.apply()
 
-    /** Key "dictionary_hint_done": the Try tab's one-time card about the Dictionary was dismissed or used. */
+    /** Key "dictionary_hint_done": Home's one-time card about the Dictionary was dismissed or used. */
     var dictionaryHintDone: Boolean
         get() = prefs.getBoolean("dictionary_hint_done", false)
         set(value) = prefs.edit().putBoolean("dictionary_hint_done", value).apply()
@@ -111,5 +136,14 @@ class Settings(private val prefs: SharedPreferences) {
          * (android/tools/live-phone-check.sh).
          */
         const val LIVE_PREVIEW_DEFAULT = false
+
+        /** How long after Agree and open settings the service still brings the app back: 10 minutes. */
+        const val ACCESSIBILITY_WAIT_MS = 10 * 60_000L
+
+        /**
+         * Whether an [accessibilityWait] set at [since] is still recent at [now]: at most [ACCESSIBILITY_WAIT_MS] old.
+         * A later connect is not that trip's (a reboot, say), and a clock set back reads as stale.
+         */
+        fun recentWait(since: Long, now: Long): Boolean = now - since in 0..ACCESSIBILITY_WAIT_MS
     }
 }

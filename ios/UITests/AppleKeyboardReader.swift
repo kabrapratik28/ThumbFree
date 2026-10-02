@@ -239,10 +239,9 @@ import XCTest
 
     // MARK: the field
 
-    /// The Try tab's field as `type` (`-TFFieldType`), with Apple's keyboard up.
+    /// The try screen's box as `type` (`-TFFieldType`), with Apple's keyboard up.
     private func appleField(type: Int) -> (XCUIApplication, XCUIElement) {
-        let app = ThumbFreeUI.launch(arguments: ["-TFFieldType", String(type)])
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry(arguments: ["-TFFieldType", String(type)])
         field.tap()
         // Away from ThumbFree's keyboard (its mic) and Apple's Emoji keyboard (its grid), to Apple's letters.
         for _ in 0..<6 {
@@ -260,6 +259,6 @@ import XCTest
 
     private func value(_ field: XCUIElement) -> String {
         let text = field.value as? String ?? ""
-        return text == "Try it here" ? "" : text // an empty field's value is its placeholder
+        return text == field.placeholderValue ? "" : text // an empty field's value is its placeholder
     }
 }

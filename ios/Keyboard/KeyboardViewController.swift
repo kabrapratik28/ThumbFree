@@ -210,7 +210,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     /// The caret moved without the text changing: taken as a text change. On iOS 26.5 such a move comes as `textDidChange`
-    /// (a tap in the text box, in the Try tab and in a Safari text area alike); a host that tells this instead still ends
+    /// (a tap in a text box, in ThumbFree's own and in a Safari text area alike); a host that tells this instead still ends
     /// the search and a double space.
     override func selectionDidChange(_ textInput: (any UITextInput)?) {
         super.selectionDidChange(textInput)

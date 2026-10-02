@@ -72,6 +72,8 @@ class TranscriptionQueue(
     private class Finish(session: Session) : SessionJob(session)
     // Sent by the idle timer, so it runs between jobs, never during a load or a transcribe.
     private class IdleUnload(val epoch: Long, val since: Long) : Job()
+    /** A load ahead of the first take (preload), no take's own; [done] hears whether the model is loaded. */
+    private class Preload(val done: (Boolean) -> Unit) : Job()
 
     private val lock = Any() // guards sessions, running, the tokens, Session.submitted and Session.total
     private val sessions = HashMap<String, Session>()
@@ -96,6 +98,7 @@ class TranscriptionQueue(
                 try {
                     when (job) {
                         is IdleUnload -> unloadIfIdle(job)
+                        is Preload -> preload(job)
                         is SessionJob -> run(job)
                     }
                 } catch (e: CancellationException) {
@@ -111,7 +114,7 @@ class TranscriptionQueue(
                     }
                 }
                 // After the last take's last job :engine stays up for unloadAfterIdleMs, unless another job comes.
-                if (job is SessionJob && engineUp) {
+                if ((job is SessionJob || job is Preload) && engineUp) {
                     synchronized(lock) { if (sessions.isEmpty()) startIdleTimer() }
                 }
             }
@@ -119,6 +122,18 @@ class TranscriptionQueue(
     }
 
     fun ensureLoaded(sessionId: String) = enqueue(sessionId) { Load(it) }
+
+    /**
+     * Loads the chosen model now, ahead of the first take, so that take answers at once: the welcome's first step waits
+     * for it. [done] says, on the worker, whether the model is loaded; one already loaded answers at once. The idle unload
+     * follows as after a take.
+     */
+    fun preload(done: (Boolean) -> Unit) {
+        synchronized(lock) {
+            epoch++ // an idle timer started before this unloads nothing
+            jobs.trySend(Preload(done))
+        }
+    }
 
     fun submit(sessionId: String, wavPath: String, chunk: Chunk) =
         enqueue(sessionId) { Transcribe(it, it.submitted++, wavPath, chunk) }
@@ -174,6 +189,38 @@ class TranscriptionQueue(
         engine.unload()
         idleUnloaded = true
         log("engine_unload idle_ms=${clock() - job.since}")
+    }
+
+    private suspend fun preload(job: Preload) {
+        val loadedNow = try {
+            val path = modelPath(PRELOAD_ID)
+            if (!engine.isAlive) loaded = null
+            when {
+                path == null -> false
+                loaded == path -> true
+                else -> {
+                    if (loaded != null) engine.unload()
+                    loaded = null
+                    engineUp = true // a failed load can leave :engine up without a model
+                    val start = clock()
+                    val status = engine.load(path, threads())
+                    if (status == 0) {
+                        loaded = path
+                        idleUnloaded = false
+                        log("engine_load ms=${clock() - start} reason=welcome")
+                    } else {
+                        log("engine_load_failed status=$status ms=${clock() - start}")
+                    }
+                    status == 0
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) { // a death or a Binder error: the first take loads it again
+            loaded = null
+            false
+        }
+        job.done(loadedNow)
     }
 
     private suspend fun run(job: SessionJob) {
@@ -309,6 +356,9 @@ class TranscriptionQueue(
         // ponytail: fixed at 5 min; a model_unload_timeout setting (never, immediately, 2, 5, 10, 15 or 60 min) is the
         // upgrade path.
         const val UNLOAD_AFTER_IDLE_MS = 300_000L
+
+        /** The id [preload] asks modelPath with: no take's, so the chosen model's. */
+        const val PRELOAD_ID = "preload"
 
         // Gate speech frames a chunk needs before an empty Canary run may be retried without PnC, which invents words on
         // noise (8.8% of non-speech clips against 4.4% with PnC). Measured through this gate and planner: the 5 public

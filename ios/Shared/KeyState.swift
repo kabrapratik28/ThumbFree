@@ -21,7 +21,7 @@ enum KeyState: Equatable {
     var text: String {
         switch self {
         case .needsFullAccess: "Full Access is off. Turn it on to dictate."
-        case .needsModel: "No speech model yet. Tap the mic to get it."
+        case .needsModel: "Speech isn't ready. Tap the mic to open ThumbFree."
         case .startDictation: "Tap the mic. ThumbFree opens and listens."
         case .opening: "Opening ThumbFree"
         case .openFailed: "Open ThumbFree to start."

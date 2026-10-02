@@ -1,9 +1,12 @@
 package io.github.kabrapratik28.thumbfree.ui
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import io.github.kabrapratik28.thumbfree.core.models.Catalog
@@ -60,6 +63,54 @@ class ModelScreenTest {
         compose.onNodeWithText("Wait for Wi-Fi").performClick()
 
         compose.runOnIdle { assertThat(downloaded).isEqualTo(model to true) }
+    }
+
+    // The speech models name the one takes use (In use), so the bubble's Open lands on a screen that says which; another
+    // one already on the phone offers Use this model, and a download with no room offers Open storage beside Try again.
+    @Test
+    fun namesTheModelInUseAndOffersEveryRemedy() {
+        val picked = mutableListOf<ModelFile>()
+        var storage = 0
+        compose.setContent {
+            ModelScreen(
+                rows = listOf(
+                    ModelRow(model, DownloadState.Failed(FailReason.NOT_ENOUGH_SPACE)), ModelRow(Catalog.PARAKEET_TDT_V3_Q8, DownloadState.Ready),
+                ),
+                metered = false, onDownload = { _, _ -> }, onCancel = {}, onDelete = {},
+                chosen = model, onChoose = { picked += it }, onOpenStorage = { storage++ },
+            )
+        }
+
+        compose.onNodeWithText("In use").assertIsDisplayed()
+        compose.onNodeWithText("Try again").assertIsDisplayed()
+        compose.onNodeWithText("Open storage").performClick()
+        compose.onNodeWithText("Use this model").performClick()
+        compose.runOnIdle {
+            assertThat(picked).containsExactly(Catalog.PARAKEET_TDT_V3_Q8)
+            assertThat(storage).isEqualTo(1)
+        }
+    }
+
+    // Every model but the one in use offers Use this model, downloading or not yet on the phone too; the one in use never.
+    @Test
+    fun everyModelNotInUseOffersUseThisModel() {
+        val picked = mutableListOf<ModelFile>()
+        compose.setContent {
+            ModelScreen(
+                rows = listOf(
+                    ModelRow(model, DownloadState.Downloading(310_000_000, 731_357_568)),
+                    ModelRow(Catalog.PARAKEET_TDT_V3_Q8, DownloadState.NotDownloaded),
+                    ModelRow(Catalog.CANARY_180M_FLASH_Q8, DownloadState.Downloading(100_000_000, 218_447_552)),
+                ),
+                metered = false, onDownload = { _, _ -> }, onCancel = {}, onDelete = {},
+                chosen = model, onChoose = { picked += it },
+            )
+        }
+
+        compose.onAllNodesWithText("Use this model").assertCountEquals(2)
+        compose.onAllNodesWithText("Use this model")[0].performClick()
+        compose.onAllNodesWithText("Use this model")[1].performScrollTo().performClick()
+        compose.runOnIdle { assertThat(picked).containsExactly(Catalog.PARAKEET_TDT_V3_Q8, Catalog.CANARY_180M_FLASH_Q8).inOrder() }
     }
 
     @Test

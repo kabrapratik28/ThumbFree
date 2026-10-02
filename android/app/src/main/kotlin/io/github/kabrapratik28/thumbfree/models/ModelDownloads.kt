@@ -7,6 +7,7 @@ import androidx.work.NetworkType
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import io.github.kabrapratik28.thumbfree.app.AppGraph
+import io.github.kabrapratik28.thumbfree.core.models.Catalog
 import io.github.kabrapratik28.thumbfree.core.models.DownloadResult
 import io.github.kabrapratik28.thumbfree.core.models.ModelFile
 import io.github.kabrapratik28.thumbfree.core.models.ModelStatus
@@ -20,20 +21,31 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** One model's download, as the welcome flow, the Try tab and the Models screen show it. */
+/** One model's download, as the welcome flow, the Home tab and the Models screen show it. */
 sealed interface DownloadState {
     data object NotDownloaded : DownloadState
-    /** Waiting to start: for Wi-Fi when [wifiOnly], else for any connection. */
-    data class Queued(val wifiOnly: Boolean) : DownloadState
+    /**
+     * Waiting to start: for Wi-Fi when [wifiOnly], else for any connection; or, [retrying], waiting out the pause
+     * WorkManager takes before it starts a stopped download again by itself, from where it stopped, network or not.
+     */
+    data class Queued(val wifiOnly: Boolean, val retrying: Boolean = false) : DownloadState
     data class Downloading(val bytes: Long, val total: Long) : DownloadState
     /** Every byte is in; the file's SHA-256 is being checked before it can be used. */
     data object Verifying : DownloadState
@@ -64,16 +76,35 @@ object ModelDownloads {
     private val refused = MutableStateFlow(emptySet<String>()) // model ids whose last start found too little space
     private val changed = MutableStateFlow(0) // bumped by each tombstone change and each cleanup's result
 
-    /** The live state. The first value can take seconds when a file already on disk has not been checked yet. */
+    @Volatile private var all: StateFlow<Map<ModelFile, DownloadState>>? = null
+
+    /**
+     * Every catalog model's live state, one flow for the process, so the screens and the bubble read the same states.
+     * Empty until each model's first state is known; it follows WorkManager while anything collects it.
+     */
+    fun states(context: Context): StateFlow<Map<ModelFile, DownloadState>> = all ?: synchronized(this) {
+        all ?: combine(Catalog.all.map { model -> state(context, model).map { model to it } }) { it.toMap() }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap()).also { all = it }
+    }
+
+    /**
+     * The live state. The first value can take seconds when a file already on disk has not been checked yet. A retry's
+     * pause is read again once it ends: if the download then waits for Wi-Fi, nothing else would say so.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun state(context: Context, model: ModelFile): Flow<DownloadState> {
         val app = context.applicationContext
         return combine(
             WorkManager.getInstance(app).getWorkInfosForUniqueWorkFlow(DownloadWorker.workName(model)),
             refused,
             changed,
-        ) { infos, refusedIds, _ ->
-            downloadState(model, infos, model.id in refusedIds, deletePending(app, model)) { AppGraph.modelStore.status(model) }
-        }
+        ) { infos, refusedIds, _ -> infos to (model.id in refusedIds) }
+            .flatMapLatest { (infos, isRefused) ->
+                readAgainAt(System::currentTimeMillis) { now ->
+                    downloadState(model, infos, isRefused, deletePending(app, model), now) { AppGraph.modelStore.status(model) } to
+                        currentWork(infos)?.takeIf { inRetryPause(it, now) }?.nextScheduleTimeMillis
+                }
+            }
             .distinctUntilChanged()
             .flowOn(Dispatchers.IO)
     }
@@ -268,6 +299,13 @@ object ModelDownloads {
 
     private fun modelsDir(app: Context) = File(app.filesDir, "models")
 
+    /** Reads every model's state again, for a change its flow can't see: a device test that swaps the model folder. */
+    internal fun refresh() = changed.update { it + 1 }
+
+    /** The space [model]'s download needs, as its own check counts it, for the finish to say. Reads the disk: off main. */
+    fun spaceNeeded(context: Context, model: ModelFile): Long =
+        DownloadWorker.downloaderFactory(modelsDir(context.applicationContext)).spaceNeeded(model)
+
     private fun tombstone(app: Context, model: ModelFile) = File(modelsDir(app), "${model.fileName}.tombstone")
 
     private fun readOrNull(file: File): String? = try { file.readText() } catch (e: IOException) { null }
@@ -278,17 +316,48 @@ object ModelDownloads {
 }
 
 /**
+ * A model's work as the screens follow it: the unfinished one, else the newest. A new request (REPLACE) deletes the older
+ * records of its unique name, so there is one.
+ */
+internal fun currentWork(infos: List<WorkInfo>): WorkInfo? = infos.firstOrNull { !it.state.isFinished } ?: infos.firstOrNull()
+
+/**
+ * Whether [work] waits out WorkManager's pause before it runs again a download that asked for a retry: queued after a
+ * run, stopped by nothing but itself (a system stop, such as a lost connection, records its reason and is a plain wait
+ * again), its next run still ahead of [now].
+ */
+internal fun inRetryPause(work: WorkInfo, now: Long): Boolean = work.state == WorkInfo.State.ENQUEUED && work.runAttemptCount > 0 &&
+    work.stopReason == WorkInfo.STOP_REASON_NOT_STOPPED && work.nextScheduleTimeMillis > now
+
+/**
+ * [read] at [clock]'s time, and again whenever the time it names (a retry pause's end) has passed, since nothing else
+ * would read the state again then; done once a read names none.
+ */
+internal fun <T> readAgainAt(clock: () -> Long, read: (now: Long) -> Pair<T, Long?>): Flow<T> = flow {
+    while (true) {
+        val now = clock()
+        val (value, again) = read(now)
+        emit(value)
+        if (again == null) break
+        delay(maxOf(1L, again - now + 1))
+    }
+}
+
+/**
  * A delete still pending on disk decides first ([deletePending]), then unfinished work. After those the
  * file does: ready once verified, else the newest failure, a refused start or a file that fails its check. [status] may
- * hash the whole file, so it runs only when nothing before it decided.
+ * hash the whole file, so it runs only when nothing before it decided. Work waiting to run again after a stop, its next
+ * run still ahead of [now] (WorkManager's backoff), is retrying: it starts by itself then, whatever the network, so it
+ * is never a wait for Wi-Fi.
  */
-internal fun downloadState(model: ModelFile, infos: List<WorkInfo>, refused: Boolean, deletePending: Boolean, status: () -> ModelStatus): DownloadState {
+internal fun downloadState(
+    model: ModelFile, infos: List<WorkInfo>, refused: Boolean, deletePending: Boolean, now: Long, status: () -> ModelStatus,
+): DownloadState {
     if (deletePending) return DownloadState.NotDownloaded
-    // A new request (REPLACE) deletes the older records of its unique name, so there is one.
-    val work = infos.firstOrNull { !it.state.isFinished } ?: infos.firstOrNull()
+    val work = currentWork(infos)
     when (work?.state) {
         WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED ->
-            return DownloadState.Queued(work.constraints.requiredNetworkType == NetworkType.UNMETERED)
+            return DownloadState.Queued(work.constraints.requiredNetworkType == NetworkType.UNMETERED, inRetryPause(work, now))
         WorkInfo.State.RUNNING -> {
             val bytes = work.progress.getLong(DownloadWorker.KEY_BYTES, 0)
             val total = work.progress.getLong(DownloadWorker.KEY_TOTAL, model.sizeBytes)

@@ -4,12 +4,16 @@ import io.github.kabrapratik28.thumbfree.core.audio.WavWriter
 import io.github.kabrapratik28.thumbfree.core.session.Code
 import java.io.File
 
+/** Where a take of the welcome's try records, until it ends (AndroidPorts). */
+const val TRIAL_DIR = "trial"
+
 object Recovery {
     /**
      * RECORDING, TRANSCRIBING -> INTERRUPTED (WAV repaired, duration set); STAGED -> NOT_INSERTED; INSERTING -> NEEDS_REVIEW; missing WAV -> FAILED("AUDIO_MISSING"). Never retries.
      * A RECORDING or TRANSCRIBING row died before its speech decision: its text, which no one confirmed, is cleared in the
      * write that ends the row. STAGED and INSERTING rows keep theirs: the user's transcript, saved before insertion for this.
-     * Also deletes the WAVs in recordings that no row names.
+     * Also deletes the WAVs in recordings that no row names, and what the welcome's try left in trial (its takes keep
+     * nothing; one the process died in left its recording there).
      * Run once per process on the same serial thread as create(), before the first take.
      * A row that fails is left as it was for the next start; the other rows are still recovered, then the first failure is rethrown.
      */
@@ -18,6 +22,7 @@ object Recovery {
         // such a WAV is an orphan. A WAV with a row stays, whatever the row's status.
         val named = db.list(Int.MAX_VALUE).map { File(filesDir, it.audioFile) }.toSet()
         File(filesDir, "recordings").listFiles { f -> f.name.endsWith(".wav") && f !in named }?.forEach { it.delete() }
+        File(filesDir, TRIAL_DIR).deleteRecursively()
         val recovered = mutableListOf<Dictation>()
         var failure: Exception? = null
         for (row in db.nonTerminal()) {

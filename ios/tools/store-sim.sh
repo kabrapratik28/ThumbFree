@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Gets a Simulator ready for tools/store-screenshots.sh and tools/store-video.sh and prints its UDID: the ThumbFree
-# keyboard (tools/sim-enable-keyboard.sh), a 9:41 status bar with full bars and battery, the microphone permission the
-# Try tab reads (the tests play a file instead), no unsent draft in Messages, and Maya, a made-up contact. The Simulator's
-# Messages shows two sample conversations; the one with +1 (888) 555-1212 (the sample contact John Appleseed's number)
-# becomes hers when the number moves to her card, so it shows her picture. ThumbFree's old Core ML copies go too, as in
-# tools/test-app.sh.
+# keyboard (tools/sim-enable-keyboard.sh), a 9:41 status bar with full bars and battery, the microphone permission
+# Home's setup card reads (the tests play a file instead), no unsent draft in Messages, and Maya, a made-up contact. The
+# Simulator's Messages shows two sample conversations; the one with +1 (888) 555-1212 (the sample contact John
+# Appleseed's number) becomes hers when the number moves to her card, so it shows her picture. ThumbFree's old Core ML
+# copies go too, as in tools/test-app.sh.
 # Usage: tools/store-sim.sh ["<Simulator name>"]   (default "iPhone 17 Pro Max (store)", iOS 26.5)
 set -euo pipefail
 cd "$(dirname "$0")/.."

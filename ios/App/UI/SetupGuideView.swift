@@ -1,67 +1,61 @@
 import SwiftUI
 
-/// The keyboard step's setup guide: a drawn iPhone shows the taps in Settings, one beat every 1.2 s, each target ringed
-/// and the rest of the page quieter: Keyboards, the ThumbFree switch, the Allow Full Access switch, and Allow in iOS's
-/// alert. Under it, the same path in one line to keep in mind while in Settings, its step lit in time with the drawing.
-/// Drawn in the brand colors, never pictures of Apple's screens. It runs on the walkthrough's `GuidePlayer`.
+/// The keyboard step's picture of Settings in its IN SETTINGS frame: the floating guide's video on a loop, the same
+/// one that floats over Settings once you go there (`FloatingGuide`), or one still frame while paused for screenshots.
+/// With Reduce Motion or VoiceOver, or when the page leaves too little room for the video to read (large text on a small
+/// iPhone), a short numbered list of the rows, with nothing moving; with less room still, nothing, and the step's words
+/// say what to do. VoiceOver reads it once. While the app is away it keeps the look it had as the app left, so the video
+/// floating over Settings stays.
 struct SetupGuideView: View {
-    enum Scene: CaseIterable { case keyboards, turnOn, fullAccess, allow }
+    /// The rows of the short list, in order.
+    static let names = ["Keyboards", "ThumbFree", "Allow Full Access", "Allow", "Return to ThumbFree"]
+    /// What VoiceOver reads for the picture, once.
+    static let description = "In Settings, open Keyboards, turn on ThumbFree, turn on Allow Full Access, tap Allow, then return to ThumbFree."
+    /// The least height the video shows at; its frame is then 250 points, and at most 340 (the video's own 274).
+    static let videoMinHeight: CGFloat = 184
 
-    typealias Beat = GuideBeat<Scene>
-
-    static let beats: [Beat] = [
-        Beat(scene: .keyboards, caption: "Tap Keyboards."),
-        Beat(scene: .turnOn, caption: "Turn on ThumbFree."),
-        Beat(scene: .fullAccess, caption: "Turn on Allow Full Access. The mic needs it."),
-        Beat(scene: .allow, caption: "Tap Allow."),
-    ]
-
-    /// The path under the drawing, one step per beat.
-    static let path = ["Keyboards", "ThumbFree", "Allow Full Access", "Allow"]
-
-    @State private var beat: Int
-
-    /// `fromFullAccess`: the keyboard is added already, so the guide starts where it is still needed.
-    init(fromFullAccess: Bool = false) {
-        _beat = State(initialValue: fromFullAccess ? 2 : 0)
-    }
+    let guide: FloatingGuide
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @Environment(\.scenePhase) private var scenePhase
+    /// The look while the app was last in front, which holds while it is away (`FloatingGuide.shown`).
+    @State private var heldLook: FloatingGuide.Look?
 
     var body: some View {
-        VStack(spacing: 12) {
-            GuidePlayer(beats: Self.beats, id: "setupGuide", interval: 1.2, index: $beat) { scene, moving in
-                SetupPhone(scene: scene, moving: moving)
-            }
-            ViewThatFits(in: .horizontal) { // large text: two lines
-                HStack(spacing: 3) { steps(0..<4) }
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 3) { steps(0..<2) }
-                    HStack(spacing: 3) { steps(2..<4) }
+        let live = FloatingGuide.look(reduceMotion: reduceMotion, voiceOver: voiceOver, paused: GuideView.pausedForTests)
+        let look = FloatingGuide.shown(live: live, held: heldLook, active: scenePhase == .active)
+        ViewThatFits(in: .vertical) {
+            if look != .cards {
+                IllustrationFrame(label: "IN SETTINGS", description: Self.description,
+                                  id: look == .still ? "welcome.guideStill" : "welcome.guide") {
+                    FloatingGuideView(guide: guide).frame(minHeight: Self.videoMinHeight, idealHeight: Self.videoMinHeight)
                 }
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("In Settings: Keyboards, ThumbFree, Allow Full Access, then Allow.")
-            .accessibilityIdentifier("setupGuide.path")
+            IllustrationFrame(label: "IN SETTINGS", description: Self.description, id: "welcome.guideList") { SetupGuideList() }
+            Color.clear.frame(height: 0)
         }
+        .onChange(of: scenePhase == .active ? live : nil, initial: true) { _, now in if let now { heldLook = now } }
     }
+}
 
-    /// The path's steps in `range` as chips, the current beat's lit, with a chevron before each but the first.
-    private func steps(_ range: Range<Int>) -> some View {
-        ForEach(range, id: \.self) { step in
-            if step > 0 { Image(systemName: "chevron.forward").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.inkSoft) }
-            Text(Self.path[step])
-                .font(.caption2.weight(.semibold))
-                .lineLimit(1)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 4)
-                .foregroundStyle(step == beat ? Theme.onSunflower : Theme.inkSoft)
-                .background(step == beat ? Theme.sunflower : Theme.chip, in: .capsule)
+/// The keyboard step's rows as a short numbered list, for Reduce Motion and VoiceOver: what to tap, in order.
+private struct SetupGuideList: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(SetupGuideView.names.indices, id: \.self) { index in
+                HStack(spacing: 12) {
+                    Text("\(index + 1)").font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(Theme.inkSoft)
+                        .frame(width: 18, alignment: .trailing)
+                    Text(SetupGuideView.names[index]).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                }
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 /// "Put ThumbFree first": iOS has no default-keyboard setting for other keyboards, so this shows the closest thing,
-/// moving ThumbFree to the top of the keyboard list, then a tip. The Try tab's "How to use it in other apps" shows it
-/// after the walkthrough.
+/// moving ThumbFree to the top of the keyboard list, then a tip. The Home tab links to it under the walkthrough.
 struct PutFirstView: View {
     enum Scene: CaseIterable { case keyboards, edit, drag, done }
 
@@ -76,7 +70,7 @@ struct PutFirstView: View {
 
     static let tip = "Touch and hold the globe key to jump straight to ThumbFree."
 
-    @State private var beat = 0
+    @State private var beat = GuideView.heldBeat(count: PutFirstView.beats.count)
 
     /// Where the rows are, in rows from the top (English (US), Emoji, ThumbFree), while ThumbFree is dragged `t` of
     /// the way from the bottom to the top. A row ThumbFree passes moves down a slot in one step, as ThumbFree's middle
@@ -93,190 +87,91 @@ struct PutFirstView: View {
             Text("iOS has no setting for a default keyboard. The closest is putting ThumbFree at the top of your keyboards.")
                 .font(.subheadline)
                 .foregroundStyle(Theme.inkSoft)
-            GuidePlayer(beats: Self.beats, id: "putFirst", index: $beat) { scene, moving in KeyboardListPhone(scene: scene, moving: moving) }
+            GuidePlayer(beats: Self.beats, id: "putFirst", label: "IN SETTINGS",
+                        description: "Settings' list of keyboards, with ThumbFree dragged to the top.", index: $beat) { scene, moving in
+                Shrinks { KeyboardListDiagram(scene: scene, moving: moving) }
+            }
             Label(Self.tip, systemImage: "lightbulb").font(.subheadline)
         }
     }
 }
 
-/// The setup guide's drawing, only what the beat taps and about the size Settings draws it: where you are in Settings,
-/// then the page's two rows, the one to tap ringed in sunflower and the other quieter; for Allow, iOS's alert card alone.
-/// One size for every beat, so nothing under it moves.
-private struct SetupPhone: View {
-    let scene: SetupGuideView.Scene
-    let moving: Bool
-
-    private static let rowHeight: CGFloat = 46
-
-    var body: some View {
-        // A switch slides on within its 1.2 s beat, then holds past the beat's end, so it never starts over first; still
-        // frames show it on.
-        if moving, scene == .turnOn || scene == .fullAccess {
-            KeyframeAnimator(initialValue: 0.0, repeating: true) { rows($0) } keyframes: { _ in
-                LinearKeyframe(0.0, duration: 0.3)
-                LinearKeyframe(1.0, duration: 0.15)
-                LinearKeyframe(1.0, duration: 1.1)
-            }
-            .id(scene) // each beat starts its switch from off
-        } else {
-            rows(1)
-        }
-    }
-
-    /// The beat with its switch `on` of the way on.
-    private func rows(_ on: Double) -> some View {
-        Group {
-            if scene == .allow { // the question iOS asks when Allow Full Access is turned on
-                GuideAlert(title: "Allow Full Access?", cancel: "Don't Allow", confirm: "Allow", moving: moving)
-            } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(scene == .keyboards ? "Settings › ThumbFree" : "Settings › ThumbFree › Keyboards")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Theme.inkSoft)
-                        .padding(.leading, 4)
-                    if scene == .keyboards {
-                        SettingsGroup {
-                            row("Microphone") { SwitchArt(on: 1) }.opacity(0.4)
-                            row("Keyboards") { Image(systemName: "chevron.forward").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.inkSoft) }
-                                .overlay(alignment: .trailing) { finger.padding(.trailing, 4) }
-                        }
-                        .overlay(alignment: .bottom) { ring }
-                    } else {
-                        SettingsGroup {
-                            row("ThumbFree") { SwitchArt(on: scene == .turnOn ? on : 1).overlay { if scene == .turnOn { finger } } }
-                                .opacity(scene == .turnOn ? 1 : 0.4)
-                            row("Allow Full Access") {
-                                SwitchArt(on: scene == .turnOn ? 0 : on).overlay { if scene == .fullAccess { finger } }
-                            }
-                            .opacity(scene == .fullAccess ? 1 : 0.4)
-                        }
-                        .overlay(alignment: scene == .turnOn ? .top : .bottom) { ring }
-                    }
-                }
-                .padding(12)
-                .background(Theme.card, in: .rect(cornerRadius: 20))
-            }
-        }
-        .frame(width: 300, height: 150)
-    }
-
-    private func row(_ title: String, @ViewBuilder accessory: @escaping () -> some View) -> some View {
-        SettingsRow(title: title, font: .body, height: Self.rowHeight, accessory: accessory)
-    }
-
-    /// Around the one row of a two-row group that this beat taps.
-    private var ring: some View {
-        GuideRing(outline: RoundedRectangle(cornerRadius: 12)).frame(height: Self.rowHeight).padding(-2)
-    }
-
-    private var finger: some View { GuideFinger(pulsing: moving) }
-}
-
-/// "Put ThumbFree first"'s drawing: the keyboard list in Settings on a panel, its Edit, ThumbFree dragged to the top,
-/// and Done.
-private struct KeyboardListPhone: View {
+/// "Put ThumbFree first"'s drawing: the keyboard list in Settings, its Edit, ThumbFree dragged to the top, and Done.
+private struct KeyboardListDiagram: View {
     let scene: PutFirstView.Scene
     let moving: Bool
 
     private static let keyboards = ["English (US)", "Emoji", "ThumbFree"]
-    private static let row: CGFloat = 39 // a row and the line under it
+    private static let row: CGFloat = 44
 
     var body: some View {
-        if moving, scene == .drag {
+        if moving, scene != .keyboards {
             KeyframeAnimator(initialValue: 0.0, repeating: true) { screen($0) } keyframes: { _ in
-                LinearKeyframe(0.0, duration: 0.6)
-                CubicKeyframe(1.0, duration: 1.2)
-                LinearKeyframe(1.0, duration: 1.4) // past the 2.8 s beat's end, so it never starts over first
+                LinearKeyframe(2.8, duration: 2.8)
+                LinearKeyframe(2.8, duration: 1.4) // past the 2.8 s beat's end, so it never starts over first
             }
         } else {
-            screen(1)
+            screen(2.8)
         }
     }
 
-    /// The beat with ThumbFree `t` of the way from the bottom of the list (0) to the top (1) while it is dragged.
-    private func screen(_ t: Double) -> some View {
+    /// The beat `time` seconds in: Edit and Done get a tap, and the drag moves ThumbFree up after its hold.
+    private func screen(_ time: Double) -> some View {
         let editing = scene == .drag || scene == .done
-        let slots = PutFirstView.slots(dragged: scene == .done ? 1 : scene == .drag ? t : 0)
-        return VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("◀ Keyboard")
-                    Spacer()
-                    Text(editing ? "Done" : "Edit").overlay { if scene == .edit || scene == .done { finger } }
+        let dragged = scene == .done ? 1 : scene == .drag ? min(max((time - 0.6) / 1.2, 0), 1) : 0
+        let slots = PutFirstView.slots(dragged: dragged)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.backward").font(.system(size: 13, weight: .semibold))
+                    Text("Keyboard")
                 }
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Theme.primary)
-                .padding(.horizontal, 6)
-                Text("Keyboards").font(.title3.bold())
-                ZStack(alignment: .top) {
-                    ForEach(Array(Self.keyboards.enumerated()), id: \.offset) { index, name in
-                        let dragged = index == 2
-                        SettingsRow(title: name, editing: editing) {
-                            if editing {
-                                Image(systemName: "line.3.horizontal")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Theme.inkSoft)
-                                    .overlay { if dragged, scene == .drag { GuideFinger(pulsing: false) } }
-                            }
+                Spacer()
+                Text(editing ? "Done" : "Edit")
+                    .padding(.horizontal, 8)
+                    .frame(height: 30)
+                    .overlay {
+                        if scene == .edit || scene == .done {
+                            TapCue(outline: Capsule(), ripple: moving ? TapTimeline.ripple(at: time) : nil)
                         }
-                        .shadow(color: .black.opacity(dragged && scene == .drag ? 0.2 : 0), radius: 4)
-                        .offset(y: Self.row * slots[index])
                     }
-                }
-                .frame(height: 3 * Self.row - 1, alignment: .top)
-                .clipShape(.rect(cornerRadius: 12))
-                SettingsGroup { SettingsRow(title: "Add New Keyboard…") {} }
             }
-            .padding(12)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(Theme.primary)
+            .padding(.top, 26) // room for the cue's pill
+            Text("Keyboards").font(.system(size: 22, weight: .bold)).foregroundStyle(Theme.ink)
+            ZStack(alignment: .top) {
+                ForEach(Array(Self.keyboards.enumerated()), id: \.offset) { index, name in
+                    let thumbFree = index == 2
+                    HStack(spacing: 10) {
+                        if editing { Image(systemName: "minus.circle.fill").font(.system(size: 15)).foregroundStyle(Theme.error) }
+                        Text(name).font(.system(size: 16)).foregroundStyle(Theme.ink)
+                        Spacer(minLength: 0)
+                        if editing {
+                            Image(systemName: "line.3.horizontal").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.inkSoft)
+                                .frame(width: 30, height: 30)
+                                .overlay {
+                                    if thumbFree, scene == .drag {
+                                        TapCue(outline: Circle(), gesture: "Hold", showsPill: dragged == 0).frame(width: 34, height: 34)
+                                    }
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: Self.row)
+                    .background(Theme.surface)
+                    .overlay(alignment: .bottom) {
+                        if !thumbFree || scene != .drag { Rectangle().fill(Theme.line).frame(height: 0.75) }
+                    }
+                    .shadow(color: Theme.shadow.opacity(thumbFree && scene == .drag ? 0.15 : 0), radius: 4)
+                    .offset(y: Self.row * slots[index])
+                    .zIndex(thumbFree ? 1 : 0)
+                }
+            }
+            .frame(height: 3 * Self.row, alignment: .top)
+            .clipShape(.rect(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.75))
         }
-        .frame(width: 260)
-        .background(Theme.card, in: .rect(cornerRadius: 20))
-    }
-
-    private var finger: some View { GuideFinger(pulsing: moving) }
-}
-
-/// A rounded group of rows, drawn like Settings: the thin gaps between rows show the page through.
-private struct SettingsGroup<Rows: View>: View {
-    @ViewBuilder let rows: () -> Rows
-
-    var body: some View {
-        VStack(spacing: 1) { rows() }.clipShape(.rect(cornerRadius: 12))
-    }
-}
-
-/// One row in a drawn Settings page: its title and what sits at its end; while editing, a remove mark before it.
-private struct SettingsRow<Accessory: View>: View {
-    let title: String
-    var editing = false
-    var font = Font.caption
-    var height: CGFloat = 38
-    @ViewBuilder let accessory: () -> Accessory
-
-    var body: some View {
-        HStack(spacing: 8) {
-            if editing { Image(systemName: "minus.circle.fill").font(.caption).foregroundStyle(Theme.error) }
-            Text(title).font(font)
-            Spacer(minLength: 0)
-            accessory()
-        }
-        .padding(.horizontal, 12)
-        .frame(height: height)
-        .background(Theme.paper)
-    }
-}
-
-/// A switch, `on` from 0 (off) to 1 (on); in between, it is sliding. On, it is iOS's own green, as the user will see
-/// it in Settings, at iOS's size.
-private struct SwitchArt: View {
-    let on: Double
-
-    var body: some View {
-        Capsule()
-            .fill(Theme.chip)
-            .overlay(Capsule().fill(Color.green).opacity(on))
-            .overlay(Capsule().stroke(Theme.inkSoft.opacity(0.3), lineWidth: 1))
-            .overlay(alignment: .leading) { Circle().fill(Color.white).frame(width: 27, height: 27).padding(2).offset(x: 20 * on) }
-            .frame(width: 51, height: 31) // iOS's own switch size
+        .frame(width: 280)
     }
 }

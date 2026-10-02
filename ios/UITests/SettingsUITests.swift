@@ -31,7 +31,8 @@ import XCTest
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(find("settings.credits", in: app).exists)
         find("settings.welcome", in: app, above: true).tap()
-        XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("welcome.title", in: app), toContain: "Talk. It types.", timeout: 5))
+        XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("welcome.title", in: app),
+                                       toContain: "Your voice becomes text in any app.", timeout: 5))
     }
 
     // Automatic return: on by default, and a plain switch to turn it off.

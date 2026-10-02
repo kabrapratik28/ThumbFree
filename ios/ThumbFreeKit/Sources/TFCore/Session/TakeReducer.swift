@@ -80,7 +80,7 @@ public enum TakeState: Sendable, Equatable {
 }
 
 public enum TakeEvent: Sendable, Equatable {
-    /// Mic key down, in a keyboard or the Try tab, timed by the keyboard's clock. Acts on the live take; `id` names the
+    /// Mic key down, in a keyboard or in the app, timed by the keyboard's clock. Acts on the live take; `id` names the
     /// new take (a fresh UUID) and is only used when no take is live. A press naming a take this machine ended changes
     /// nothing: a tap that still names it must not start it again.
     case press(UUID, atMs: Int)

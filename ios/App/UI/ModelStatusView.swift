@@ -1,7 +1,8 @@
 import SwiftUI
 import TFCore
 
-/// The speech model's state in words, with a bar while it downloads: the welcome flow's last step and Settings.
+/// The speech model's state in words, with a bar while it downloads, in Settings; the welcome flow's slim line and its
+/// last step use its words.
 /// The Android app's words and colors (red for a problem, green once ready), and no model names.
 struct ModelStatusView: View {
     enum Tone { case plain, busy, problem, done }
@@ -16,7 +17,8 @@ struct ModelStatusView: View {
         let tone = Self.tone(phase, engine: engine)
         VStack(alignment: .leading, spacing: 8) {
             if case .downloading(let done, let total) = phase, done < total {
-                ProgressView(value: Double(done), total: Double(total)).tint(Theme.primary)
+                // VoiceOver skips the bar: the title already says how far it is.
+                ProgressView(value: Double(done), total: Double(total)).tint(Theme.primary).accessibilityHidden(true)
             }
             HStack(alignment: .top, spacing: 10) {
                 switch tone {

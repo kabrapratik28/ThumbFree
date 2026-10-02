@@ -773,11 +773,10 @@ import XCTest
         XCTAssertLessThan(right4.frame.maxX + 8, mic.minX, "the two-person picker covers the mic") // its edge, 8 pt past its last tone
     }
 
-    /// The Try tab's field with the ThumbFree keyboard up.
+    /// The try screen's box with the ThumbFree keyboard up.
     private func tryFieldWithThumbFree() -> (XCUIApplication, XCUIElement) {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry()
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         return (app, field)

@@ -15,10 +15,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 // The brand palette (docs/brand/common/README.md): sunflower yellows, the key's ink, recording red.
 internal val SunflowerLight = Color(0xFFFFD35A)
-internal val SunflowerDeep = Color(0xFFFFB61E)
 internal val Sunflower = Color(0xFFFFC83D)
 internal val Ink = Color(0xFF1F1B3A)
 private val InkFace = Color(0xFF39335F)
@@ -70,7 +70,7 @@ private val DarkColors = darkColorScheme(
 
 private val TypeScale = Typography().run {
     copy(
-        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.SemiBold, lineHeight = 34.sp), // 28/34: titles and headings
         headlineSmall = headlineSmall.copy(fontWeight = FontWeight.SemiBold),
         titleLarge = titleLarge.copy(fontWeight = FontWeight.SemiBold),
         titleMedium = titleMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -86,12 +86,24 @@ private val ShapeScale = Shapes(
     extraLarge = RoundedCornerShape(28.dp),
 )
 
-/** Follows the system's dark theme setting. */
+/** Follows the system's dark theme setting, and its animator scale for every animation below (LocalMotionPolicy). */
 @Composable
 fun AppTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) =
-    MaterialTheme(if (dark) DarkColors else LightColors, ShapeScale, TypeScale, content)
+    MaterialTheme(if (dark) DarkColors else LightColors, ShapeScale, TypeScale) { ProvideMotion(content) }
 
 private val ColorScheme.dark get() = background.luminance() < 0.5f
+
+/** Whether this is the dark scheme, for the illustrations' lines and surfaces. */
+internal val ColorScheme.isDark: Boolean get() = dark
+
+/** An illustration's 2 dp line: ink at 20% on light, the full outline variant on dark, never a bright rectangle. */
+internal val ColorScheme.artLine: Color get() = if (dark) outlineVariant else Ink.copy(alpha = 0.2f)
+
+/** The 3 dp line of an illustration's one target: ink on light, sunflower on dark. */
+internal val ColorScheme.artTarget: Color get() = if (dark) primary else Ink
+
+/** An illustration card's surface. */
+internal val ColorScheme.artSurface: Color get() = if (dark) surfaceContainerLow else surfaceContainerLowest
 
 /** Done, ready: Material 3 has no success role, so a green that reads on both schemes. */
 val ColorScheme.success: Color get() = if (dark) Color(0xFF7DDBA3) else Color(0xFF1B7A4A)

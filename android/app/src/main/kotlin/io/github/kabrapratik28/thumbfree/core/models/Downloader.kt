@@ -67,12 +67,15 @@ open class Downloader(
         File(modelsDir, "${model.fileName}.part.etag").delete()
     }
 
-    /** Whether [model] fits: what is left to fetch, counting a partial file already here, plus the 1 GiB margin. */
+    /** Whether [model] fits ([spaceNeeded]). */
     fun hasSpaceFor(model: ModelFile): Boolean {
         modelsDir.mkdirs() // a folder that does not exist has no usable space
-        val part = File(modelsDir, "${model.fileName}.part").length().takeIf { it <= model.sizeBytes } ?: 0L
-        return usableSpace() >= spaceNeeded(model, part)
+        return usableSpace() >= spaceNeeded(model)
     }
+
+    /** The space [model] needs: what is left to fetch, counting a partial file already here, plus the 1 GiB margin. */
+    fun spaceNeeded(model: ModelFile): Long =
+        spaceNeeded(model, File(modelsDir, "${model.fileName}.part").length().takeIf { it <= model.sizeBytes } ?: 0L)
 
     private fun spaceNeeded(model: ModelFile, resumeLength: Long) = model.sizeBytes - resumeLength + EXTRA_FREE_BYTES
 
@@ -452,14 +455,15 @@ open class Downloader(
         DownloadResult.Failed(DownloadResult.Reason.NETWORK, e.message ?: "rename failed")
     }
 
-    private companion object {
-        const val HTTP_RANGE_NOT_SATISFIABLE = 416
-        const val HTTP_TOO_MANY_REQUESTS = 429
-        const val EXTRA_FREE_BYTES = 1_073_741_824L // 1 GiB
-        const val BLOCK_BYTES = 256 * 1024
-        const val MAX_RETRY_AFTER_MS = 60_000L
-        val RETRY_DELAYS_MS = longArrayOf(2_000, 4_000, 8_000)
-        val LOCKS = ConcurrentHashMap<String, Any>() // by target path
+    companion object {
+        /** The free space a download must leave beyond its own bytes, 1 GiB; the screens say what a download needs. */
+        const val EXTRA_FREE_BYTES = 1_073_741_824L
+        private const val HTTP_RANGE_NOT_SATISFIABLE = 416
+        private const val HTTP_TOO_MANY_REQUESTS = 429
+        private const val BLOCK_BYTES = 256 * 1024
+        private const val MAX_RETRY_AFTER_MS = 60_000L
+        private val RETRY_DELAYS_MS = longArrayOf(2_000, 4_000, 8_000)
+        private val LOCKS = ConcurrentHashMap<String, Any>() // by target path
     }
 }
 

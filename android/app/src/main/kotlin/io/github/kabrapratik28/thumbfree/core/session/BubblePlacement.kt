@@ -55,7 +55,7 @@ object BubblePlacement {
     /**
      * The top-left y that keeps a sizePx bubble at [x], [y] marginPx clear of [line], the text cursor's line: just below it
      * when that stays above [bottom], else just above it when that stays below [top]. Below first: above a field sits what
-     * came before it (the Try tab's "Ready" line, an app's header), and a chat box on the keyboard leaves no room below
+     * came before it (the Home tab's "Ready" line, an app's header), and a chat box on the keyboard leaves no room below
      * anyway. [y] when the bubble doesn't cover the line, or neither fits.
      */
     fun clear(x: Int, y: Int, sizePx: Int, line: Box, top: Int, bottom: Int, marginPx: Int): Int {

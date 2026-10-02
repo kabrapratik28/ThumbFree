@@ -1,59 +1,128 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The first-run welcome screens (ui.WelcomeScreen). %1$s is the app name (BrandTest keeps it out of these files). -->
 <resources>
-    <string name="welcome_step">Step %1$d of %2$d</string>
+    <!-- What TalkBack reads for the progress bar: "Step 2 of 4, Try it". -->
+    <string name="welcome_step">Step %1$d of %2$d, %3$s</string>
+    <string name="welcome_step_ready">Get ready</string>
+    <string name="welcome_step_try">Try it</string>
+    <string name="welcome_step_service">Turn on the bubble</string>
+    <string name="welcome_step_finish">All set</string>
     <string name="welcome_back">Back</string>
     <string name="welcome_close">Close</string>
     <string name="welcome_continue">Continue</string>
     <string name="welcome_not_now">Not now</string>
+    <string name="welcome_done">Done</string>
 
-    <string name="welcome_title">Talk instead of typing</string>
-    <string name="welcome_body">Tap the bubble in any app, speak, and your words appear. Everything stays on your phone.</string>
-    <string name="welcome_start">Get started</string>
-    <!-- The speech model Get started downloads. %1$s is its size, such as "731 MB". -->
-    <string name="welcome_model_english">English model · %1$s · on Wi-Fi</string>
-    <string name="welcome_model_multilingual">Multilingual model · %1$s · on Wi-Fi</string>
-    <string name="welcome_model_english_any_network">English model · %1$s</string>
-    <string name="welcome_model_multilingual_any_network">Multilingual model · %1$s</string>
-    <string name="welcome_model_english_ready">English model · ready</string>
-    <string name="welcome_model_multilingual_ready">Multilingual model · ready</string>
-    <string name="welcome_model_other_language">Other language?</string>
-    <string name="welcome_model_use_english">Use English</string>
-    <!-- The welcome picture: a reply being dictated into a message box. -->
-    <string name="welcome_scene_reply">Running ten minutes late, save me a seat</string>
-    <string name="welcome_scene_read">Picture: the bubble beside a message box is tapped, turns red while it listens, and the words appear in the box.</string>
+    <!-- Step 1: what it does, then the language, whose tap starts the speech model's download. %1$d is how many more
+         languages the multilingual model knows. -->
+    <string name="welcome_title">Your voice becomes text in any app.</string>
+    <string name="welcome_body">Offline after setup. Private on your phone.</string>
+    <string name="welcome_language_question">Which language do you speak?</string>
+    <string name="welcome_language_english">English</string>
+    <string name="welcome_language_english_note">Best for English</string>
+    <string name="welcome_language_other">Other languages</string>
+    <string name="welcome_language_other_note">Spanish, French, German and %1$d more</string>
+    <!-- Step 1 then waits on the same screen: the download (%1$d is its percentage), the file's check and the engine's
+         load. The speech model's line: "Speech model: English · 731 MB", %1$s its name and %2$s its size; %1$d is how
+         many languages the multilingual model knows. -->
+    <string name="welcome_getting_ready">Getting your bubble ready</string>
+    <string name="welcome_percent">%1$d%%</string>
+    <string name="welcome_downloads_once">It downloads once. Then %1$s works offline.</string>
+    <string name="welcome_almost">Almost ready</string>
+    <string name="welcome_loading_body">Loading the speech model so it answers at once.</string>
+    <string name="welcome_model_row">Speech model: %1$s · %2$s</string>
+    <string name="welcome_model_english">English</string>
+    <string name="welcome_model_languages">%1$d languages</string>
+    <string name="welcome_model_change">Change</string>
+    <!-- If the download stops: what holds it and the one remedy. %1$s is a size, such as "731 MB". -->
+    <string name="welcome_wifi_title">Waiting for Wi-Fi</string>
+    <string name="welcome_wifi_body_english">The English download is %1$s. Connect to Wi-Fi, or use mobile data.</string>
+    <string name="welcome_wifi_body">The download is %1$s. Connect to Wi-Fi, or use mobile data.</string>
+    <!-- A download WorkManager starts again by itself after a pause, whatever the network. -->
+    <string name="welcome_retrying_title">Download paused</string>
+    <string name="welcome_retrying_body">It picks up where it stopped, by itself.</string>
+    <string name="welcome_stopped_title">Download stopped</string>
+    <string name="welcome_stopped_body">Check your connection. It picks up where it stopped.</string>
+    <!-- A download whose file was damaged: it was deleted, so Try again starts it over. -->
+    <string name="welcome_failed_title">Download failed</string>
+    <string name="welcome_failed_body">The download was damaged. Try again to start it over.</string>
+    <!-- The speech model is on the phone but the engine couldn't load it: Try again loads it again. -->
+    <string name="welcome_load_failed_title">Couldn\'t prepare speech</string>
+    <string name="welcome_load_failed_body">The speech model didn\'t load. Try again, or change the language.</string>
+    <!-- The same on the last step, which has no Change, and what TalkBack hears for its picture. -->
+    <string name="welcome_load_failed_retry">The speech model didn\'t load. Try again.</string>
+    <string name="welcome_load_failed_picture_read">Picture: the speech model, which didn\'t load.</string>
+    <string name="welcome_space_title">Not enough space</string>
+    <string name="welcome_space_free">Free up %1$s, then try again.</string>
 
-    <string name="welcome_mic_title">Let %1$s hear you</string>
-    <string name="welcome_mic_body">The mic is on only while the bubble is red.</string>
+    <!-- Steps 1 and 2: Sam's card, the one example, with the real bubble beside its reply, which can't be typed in. -->
+    <string name="welcome_scene_name">Sam</string>
+    <string name="welcome_scene_message">Are you coming tonight?</string>
+    <string name="welcome_card_read">Example chat: Sam asks, Are you coming tonight?</string>
+    <string name="welcome_reply_read">Your dictated words, read only.</string>
+    <string name="welcome_reply_words_read">Your dictated words, read only: %1$s</string>
+    <string name="welcome_listening">Listening</string>
+    <!-- Step 2: the try. The label over the bubble until its first tap, then what to do, and how it went. -->
+    <string name="welcome_tap_label">Tap</string>
+    <string name="welcome_try_tap">Tap the yellow bubble.</string>
+    <string name="welcome_try_speak">Speak now.</string>
+    <!-- While it listens, a line to say (English until the translation round), in a card TalkBack hears as one label, and
+         how to finish. %1$s is the line. -->
+    <string name="welcome_try_saying">Try saying</string>
+    <string name="welcome_try_saying_line">“Yes, see you at seven.”</string>
+    <string name="welcome_try_saying_other">Or say anything.</string>
+    <string name="welcome_try_saying_read">Try saying %1$s Or say anything.</string>
+    <string name="welcome_try_finish">When you finish, tap the bubble again.</string>
+    <string name="welcome_try_done">That\'s it.</string>
+    <string name="welcome_try_done_body">Your words appear wherever you type.</string>
+    <string name="welcome_try_closer">Try speaking near your phone.</string>
+    <!-- A take the speech engine couldn't run (it failed to load, ran out of memory or stopped). -->
+    <string name="welcome_try_engine">Speech couldn\'t run. Tap the bubble to try again.</string>
+    <!-- The microphone, asked at the first tap; refused, the try says so. -->
+    <string name="welcome_mic_off_title">Microphone is off</string>
+    <string name="welcome_mic_off_body">%1$s needs it to hear you. It listens only while the bubble says Listening.</string>
     <string name="welcome_mic_allow">Allow microphone</string>
-    <string name="welcome_mic_granted">Microphone allowed</string>
-    <string name="welcome_mic_denied">Dictation needs the mic. You can allow it later too.</string>
-    <string name="welcome_mic_blocked">The mic is blocked. Allow it in App info.</string>
-    <string name="welcome_open_app_settings">Open app settings</string>
-    <!-- The microphone picture: Android's question, in Android's words. -->
-    <string name="welcome_mic_while_using">While using the app</string>
-    <string name="welcome_mic_only_this_time">Only this time</string>
-    <string name="welcome_mic_dont_allow">Don\'t allow</string>
-    <string name="welcome_mic_choose">Choose While using the app</string>
-    <string name="welcome_mic_read">Picture of Android\'s microphone question, with its answers While using the app, Only this time and Don\'t allow. Choose While using the app.</string>
 
-    <string name="welcome_service_title">Turn on the bubble</string>
+    <!-- Step 3: the bubble's accessibility setting. -->
+    <string name="welcome_service_title">Turn on the bubble.</string>
     <!-- The prominent disclosure Google Play requires before the accessibility setting. -->
     <string name="welcome_service_body">%1$s uses Android accessibility only to show its bubble and type your words. It reads only the field you\'re typing in, and nothing leaves your phone.</string>
     <string name="welcome_service_agree">Agree and open settings</string>
+    <!-- Back from Android's settings with the switch still off: what the step then says, its big button, and the help
+         for a switch Android greys out (a sideloaded app's restricted settings). -->
+    <string name="welcome_service_still_off">The bubble is still off.</string>
+    <string name="welcome_service_again">Open settings again</string>
     <string name="welcome_service_on">The bubble is on</string>
     <string name="welcome_restricted_title">Switch greyed out?</string>
     <string name="welcome_service_restricted">Open App info, tap the three dots at the top, choose Allow restricted settings, then try again.</string>
     <string name="welcome_open_app_info">Open App info</string>
-    <!-- The walkthrough of Android's accessibility settings, in Android's words, one step at a time. -->
-    <string name="welcome_walk_tap">Tap %1$s</string>
-    <string name="welcome_walk_turn_on">Turn on Use %1$s</string>
-    <string name="welcome_walk_allow">Tap Allow</string>
-    <string name="welcome_walk_off">Off</string>
-    <string name="welcome_walk_use">Use %1$s</string>
-    <string name="welcome_walk_shortcut">%1$s shortcut</string>
-    <string name="welcome_walk_leave_off">Leave off</string>
-    <string name="welcome_walk_question">Allow %1$s to have full control of your device?</string>
-    <string name="welcome_walk_allow_button">Allow</string>
-    <string name="welcome_walk_read">Picture of three steps in Android\'s settings. 1: tap %1$s. 2: turn on Use %1$s, and leave %1$s shortcut off. 3: tap Allow.</string>
+    <!-- The two rules under the picture, which never move. -->
+    <string name="welcome_rule_use">Turn on Use %1$s.</string>
+    <string name="welcome_rule_shortcut">Don\'t turn on %1$s shortcut.</string>
+    <!-- The picture of Android's settings, in Android's words, and the one description TalkBack hears for it. -->
+    <string name="welcome_guide_header">Android Settings</string>
+    <string name="welcome_guide_accessibility">Accessibility</string>
+    <string name="welcome_card_downloaded">Downloaded apps</string>
+    <string name="welcome_card_off">Off</string>
+    <string name="welcome_card_use">Use %1$s</string>
+    <string name="welcome_card_shortcut_row">%1$s shortcut</string>
+    <string name="welcome_guide_question">Allow %1$s to have full control of your device?</string>
+    <string name="welcome_guide_deny">Deny</string>
+    <string name="welcome_guide_allow_button">Allow</string>
+    <string name="welcome_guide_read">Picture: in Android Settings, turn on Use %1$s, leave %1$s shortcut off, then tap Allow.</string>
+    <string name="welcome_list_read">Picture of Android\'s accessibility list: %1$s under Downloaded apps.</string>
+
+    <!-- Step 4: all set once everything works; else what a take still needs, one thing at a time. -->
+    <string name="welcome_all_set">You\'re all set.</string>
+    <string name="welcome_all_set_body">In any app, tap where you type. Tap the yellow bubble, speak, then tap it again.</string>
+    <string name="welcome_turn_on_bubble">Turn on the bubble</string>
+    <!-- While the speech model isn't usable (the model was changed or deleted since step 1): the heading, a line under it
+         and the remedy; %1$d in the picture's description is a percentage. -->
+    <string name="welcome_finishing">Finishing the speech download</string>
+    <string name="welcome_finishing_body">Dictation starts when this finishes.</string>
+    <string name="welcome_connection_title">Waiting for a connection</string>
+    <string name="welcome_not_started_title">Download the speech model</string>
+    <string name="welcome_go_home">Go to Home</string>
+    <string name="welcome_open_storage">Open storage</string>
+    <string name="welcome_download_picture_read">Picture: the speech model, %1$d%% downloaded.</string>
 </resources>

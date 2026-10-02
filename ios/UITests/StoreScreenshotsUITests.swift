@@ -3,8 +3,8 @@ import XCTest
 /// The App Store screenshots' screens, not a test: skipped unless `TF_SCREENSHOTS` names a folder. `tools/store-screenshots.sh`
 /// runs it on the "iPhone 17 Pro Max (store)" Simulator (6.9 inch, 1320 x 2868) with the store build's screens and a 9:41
 /// status bar, then puts a caption above each screen. Voice to text in use, saved as 1-talk to 8-history: dictation in
-/// Messages, its words in the message box, a long note in Reminders (the Simulator has no Notes), the Try tab in use with its
-/// offline-ready chip, the message box in Spanish, the keyboard's emoji and suggestions, the Dictionary, and History. Nothing
+/// Messages, its words in the message box, a long note in Reminders (the Simulator has no Notes), Home ready with Try it
+/// and the walkthrough, the message box in Spanish, the keyboard's emoji and suggestions, the Dictionary, and History. Nothing
 /// personal: JFK plays as the microphone (the script's `TF_SCREENSHOTS_AUDIO`, JFK over and over, so a take minutes into a
 /// session still hears speech) and the fixed engine types made-up sample text. Maya is the made-up contact tools/store-sim.sh
 /// adds; nothing is sent.
@@ -13,8 +13,6 @@ import XCTest
     static let message = "Running ten minutes late, save me a seat. Want me to grab you a coffee?"
     /// "Speak in 25 languages": a message in Spanish, one of the Multilingual model's languages.
     static let spanish = "Llego en diez minutos, guárdame un asiento, por favor."
-    /// The Try tab in use: one take in its box.
-    static let practice = "Ideas for the surprise party: balloons, a lemon cake and the old photos."
     static let note = "Pack sunscreen, two towels, the blue cooler and snacks for the kids. Ask Sam to bring the grill and "
         + "charcoal. Check the tires and fill up the tank on Friday night, so we can leave at eight on Saturday and miss the traffic."
     /// History's takes, oldest first (History shows the newest first).
@@ -34,8 +32,8 @@ import XCTest
         audio = ProcessInfo.processInfo.environment["TF_SCREENSHOTS_AUDIO"] ?? ThumbFreeUI.jfk
         _ = launch(Self.message, reset: true) // installs ThumbFree on a new Simulator: Settings lists the keyboard only then
         KeyboardSetup.ensureReady()
-        // Talking in Messages, then its words in the message box. The session starts in ThumbFree (a take on the Try tab),
-        // as in the store build, so each tap in Messages starts at once.
+        // Talking in Messages, then its words in the message box. The session starts in ThumbFree (a take in the try
+        // screen's box), as in the store build, so each tap in Messages starts at once.
         take(in: launch(Self.message, reset: true), typing: Self.message)
         let messages = XCUIApplication(bundleIdentifier: "com.apple.MobileSMS")
         var field = ThumbFreeUI.conversation("555-1212", in: messages)
@@ -98,25 +96,22 @@ import XCTest
         XCTAssertTrue(ThumbFreeUI.wait(for: note, toContain: "sunscreen", timeout: 20), "the note was not typed in Reminders")
         try save("3-note")
         reminders.buttons["Done"].firstMatch.tap() // Reminders reopens a Details sheet left open
-        // The app in use, not a welcome screen: the Try tab with a take in its box and the "Ready · works offline"
-        // chip. Opened fresh from the Home Screen, without a reset: the keyboard mark and mic grant from the steps
-        // above stay, so the chip shows at once. End session then turns the mic off, as you would, so the screen shows
-        // the chip, the words and the mic ready for the next take.
+        // The app in use, not a welcome screen: Home ready, as a person sees it after setup: the "Ready · works offline"
+        // chip, Try it (offered until a take gives text, so a reset) and the walkthrough as it plays, held on its third
+        // beat, the yellow mic. Opened fresh from the Home Screen, so no session is on. The reset also drops the keyboard's
+        // mark from the steps above, so -TFSetupKeyboard holds the keyboard ready, as it is; the mic grant stays.
         XCUIDevice.shared.press(.home)
-        let tryApp = launch(Self.practice, reset: false)
-        take(in: tryApp, typing: Self.practice)
-        let endSession = tryApp.buttons["try.endSession"]
-        XCTAssertTrue(endSession.waitForExistence(timeout: 5), "no live session after the take")
-        endSession.tap()
-        XCTAssertTrue(endSession.waitForNonExistence(timeout: 10), "the session did not end")
-        XCTAssertTrue(ThumbFreeUI.element("try.ready", in: tryApp).waitForExistence(timeout: 10), "no ready chip:\n\(tryApp.debugDescription)")
+        let home = launch(Self.message, reset: true, arguments: ["-TFSetupKeyboard", "ready", "-TFGuideBeat", "3"])
+        XCTAssertTrue(ThumbFreeUI.element("home.ready", in: home).waitForExistence(timeout: 10), "no ready chip:\n\(home.debugDescription)")
+        XCTAssertTrue(ThumbFreeUI.element("home.tryIt", in: home).exists, "no Try it")
         try save("4-private")
-        // History, from nothing: one take on the Try tab for each sample.
+        // History, from nothing: one take in the try screen's box for each sample.
         var app = XCUIApplication()
         for (index, text) in Self.history.enumerated() {
             app = launch(text, reset: index == 0)
             take(in: app, typing: text)
         }
+        app.buttons["try.notNow"].tap() // the try screen covers the tab bar
         app.tabBars.buttons["History"].tap()
         XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 5))
         try save("8-history")
@@ -133,7 +128,7 @@ import XCTest
         XCTAssertTrue(paste.waitForNonExistence(timeout: 5), "the Paste a list sheet stayed")
         XCTAssertTrue(app.staticTexts["\(Self.names.count) words"].waitForExistence(timeout: 5), "the names were not added")
         // Opened again, the tab has no "Added 6 words." line, so all six fit above the tab bar.
-        let dictionary = launch(Self.message, reset: false)
+        let dictionary = launch(Self.message, reset: false, arguments: [])
         dictionary.tabBars.buttons["Dictionary"].tap()
         XCTAssertTrue(dictionary.staticTexts["\(Self.names.count) words"].waitForExistence(timeout: 5), "the names were not kept")
         try save("7-dictionary")
@@ -147,24 +142,28 @@ import XCTest
         XCTAssertTrue(empty(), "the message box was not emptied: \(field.value ?? "")")
     }
 
-    /// A take with the Try tab's mic: tap, 2 s of JFK, tap, and the fixed engine's text in the practice box. The first
-    /// take of a launch starts the session, whose mic stays on for the keyboard's next taps in other apps.
+    /// A take with the ThumbFree keyboard in the try screen's box: its mic, 2 s of JFK, its mic again, and the fixed
+    /// engine's text in the box. The first take of a launch starts the session, whose mic stays on for the keyboard's next
+    /// taps in other apps.
     private func take(in app: XCUIApplication, typing text: String) {
-        let mic = ThumbFreeUI.element("try.mic", in: app)
-        XCTAssertTrue(ThumbFreeUI.wait(until: 30) { mic.isEnabled }, "the Try tab's mic is not ready")
+        let field = ThumbFreeUI.element("try.field", in: app)
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "no try screen:\n\(app.debugDescription)")
+        field.tap()
+        KeyboardSetup.switchToThumbFree(in: app)
+        let mic = app.buttons["keyboard.mic"]
         mic.tap()
-        XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("try.status", in: app), toContain: "Listening", timeout: 10))
+        XCTAssertTrue(ThumbFreeUI.wait(for: app.staticTexts["keyboard.status"], toContain: "Recording", timeout: 15))
         sleep(2)
         mic.tap()
-        // Starts with the words: the box's placeholder ("Tap the mic and say: Running ten minutes late...") contains some.
-        let field = ThumbFreeUI.element("try.field", in: app)
+        // Starts with the words, so the box's placeholder never counts.
         XCTAssertTrue(ThumbFreeUI.wait(until: 20) { (field.value as? String)?.hasPrefix(String(text.prefix(12))) == true })
     }
 
-    /// ThumbFree with the fixed engine typing `text`; `reset` starts from nothing, else History keeps the earlier takes.
-    private func launch(_ text: String, reset: Bool) -> XCUIApplication {
+    /// ThumbFree with the fixed engine typing `text`, opened on the try screen unless `arguments` says otherwise; `reset`
+    /// starts from nothing, else History keeps the earlier takes.
+    private func launch(_ text: String, reset: Bool, arguments: [String] = ThumbFreeUI.tryArguments) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-TFAudioFile", audio, "-TFFakeEngine", "YES", "-TFWelcomeDone", "YES", "-TFFakeText", text]
+        app.launchArguments = ["-TFAudioFile", audio, "-TFFakeEngine", "YES", "-TFWelcomeDone", "YES", "-TFFakeText", text] + arguments
         if reset { app.launchArguments += ["-TFResetState", "YES"] }
         app.launch()
         return app

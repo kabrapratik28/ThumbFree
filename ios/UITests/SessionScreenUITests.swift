@@ -10,7 +10,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["session.subtitle"].label.contains("Swipe right"))
         app.buttons["session.end"].tap()
         XCTAssertTrue(listening.waitForNonExistence(timeout: 5))
-        XCTAssertTrue(ThumbFreeUI.element("try.field", in: app).exists)
+        XCTAssertTrue(ThumbFreeUI.onHome(app, timeout: 5), "not back on Home")
     }
 
     // Guards the ScrollView requirement: at the largest accessibility text size, the 140pt bubble art must never push

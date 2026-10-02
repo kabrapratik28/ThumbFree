@@ -327,7 +327,7 @@ class DownloadWorkerTest {
         assertThat(result.outputData.getString(DownloadWorker.KEY_REASON)).isEqualTo("CANCELLED")
     }
 
-    // The welcome flow or the Try tab may start a model that is already there: nothing is fetched again.
+    // The welcome flow or the Home tab may start a model that is already there: nothing is fetched again.
     @Test
     fun verifiedModelSucceedsWithoutDownloading() = runBlocking {
         modelsDir.mkdirs()

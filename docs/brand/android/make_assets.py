@@ -27,7 +27,7 @@ FRAMES = [  # headline lines and raw capture of frame N
     (["Talk.", "It types."], "1-chat-listening.png"),
     (["Your words,", "in any app"], "2-chat-text.png"),
     (["Long notes,", "hands free"], "3-notes.png"),
-    (["Works offline.", "Nothing leaves", "your phone."], "4-try.png"),
+    (["Works offline.", "Nothing leaves", "your phone."], "4-home.png"),
     (["Names spelled", "your way"], "5-dictionary.png"),
     (["Every take,", "saved on", "your phone"], "6-history.png"),
     (["Speak your", "language"], "7-languages.png"),

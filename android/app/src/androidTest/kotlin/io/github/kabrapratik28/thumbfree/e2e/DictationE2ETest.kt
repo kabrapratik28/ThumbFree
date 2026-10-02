@@ -21,9 +21,12 @@ import io.github.kabrapratik28.thumbfree.app.AppGraph
 import io.github.kabrapratik28.thumbfree.audio.AudioSource
 import io.github.kabrapratik28.thumbfree.audio.ForegroundHooks
 import io.github.kabrapratik28.thumbfree.core.session.Event
+import io.github.kabrapratik28.thumbfree.core.session.Grey
 import io.github.kabrapratik28.thumbfree.core.session.State
 import io.github.kabrapratik28.thumbfree.data.Dictation
 import io.github.kabrapratik28.thumbfree.data.Status
+import io.github.kabrapratik28.thumbfree.models.DownloadState
+import io.github.kabrapratik28.thumbfree.models.ModelDownloads
 import io.github.kabrapratik28.thumbfree.testing.A11yRule
 import io.github.kabrapratik28.thumbfree.testing.JFK_TEXT
 import io.github.kabrapratik28.thumbfree.testing.StrictModeRule
@@ -41,6 +44,7 @@ import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.AfterClass
 import org.junit.Before
@@ -259,6 +263,36 @@ class DictationE2ETest {
         // Read through our service: a UiDevice query first waits for 500 ms without accessibility events.
         assertThat(service.focusedEditable()!!.apply { refresh() }.text?.toString().orEmpty()).isEmpty()
         assertJfkArrives("empty")
+    }
+
+    // Before the chosen speech model is usable the bubble is grey, with the download's ring and badge (TalkBack hears why),
+    // and a tap on it never listens: a panel by it says how far its download is (TalkBack hears whose panel it is),
+    // nothing records, and Open brings the app up on its speech models.
+    @Test
+    fun aTapBeforeTheModelIsUsableShowsTheDownloadAndOpensTheModels() {
+        val model = AppGraph.settings.model
+        onMain { AppGraph.ports.downloadStates = { flowOf(mapOf(model to DownloadState.Downloading(model.sizeBytes * 42 / 100 + 1, model.sizeBytes))) } }
+        try {
+            focusTarget(device, "empty")
+            assertThat(waitFor(5_000) { onMain { DictationAccessibilityService.instance?.bubble?.grey } == Grey(Grey.Badge.DOWNLOAD, 0.42f) }).isTrue()
+            assertThat(device.wait(Until.hasObject(By.desc("Speech is downloading, 40 percent")), 5_000)).isTrue()
+            device.tapBubble()
+
+            assertThat(device.wait(Until.hasObject(By.text("Your speech model is still downloading (42%).")), 5_000)).isTrue()
+            assertThat(device.hasObject(By.desc("ThumbFree. Your speech model is still downloading, 42 percent."))).isTrue()
+            assertThat(onMain { AppGraph.controller.state }).isEqualTo(State.Idle)
+            assertThat(ForegroundHooks.isForeground).isFalse()
+
+            // The window grows to the panel a frame after the panel is drawn, so the button's place is known only once it is
+            // its full width (at least 200 dp); a tap on the bubble itself would put the panel away.
+            val wide = (200 * app.resources.displayMetrics.density).toInt()
+            assertThat(waitFor(2_000) { device.findObject(By.text("Open ThumbFree"))?.visibleBounds?.width()?.let { it >= wide } == true }).isTrue()
+            device.findObject(By.text("Open ThumbFree")).click()
+            assertThat(device.wait(Until.hasObject(By.text("Speech models")), 10_000)).isTrue()
+            assertThat(device.hasObject(By.text("Your speech model is still downloading (42%)."))).isFalse()
+        } finally {
+            onMain { AppGraph.ports.downloadStates = { ModelDownloads.states(app) } }
+        }
     }
 
     @Test

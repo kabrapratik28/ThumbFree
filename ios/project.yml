@@ -21,7 +21,7 @@ settings:
     # The store version: every target's CFBundleShortVersionString and CFBundleVersion come from these two (the
     # extensions must match the app). Raise CURRENT_PROJECT_VERSION for each upload, MARKETING_VERSION for each release.
     MARKETING_VERSION: "1.0.1"
-    CURRENT_PROJECT_VERSION: "4"
+    CURRENT_PROJECT_VERSION: "5"
   configs:
     # TF_AUTO_RETURN turns on automatic return: the keyboard finds the app being typed in through a private UIKit
     # interface, the keyboard arbiter (Keyboard/HostArbiter*), and the app then opens that app's own URL scheme. On in

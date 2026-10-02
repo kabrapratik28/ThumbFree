@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import android.view.View.MeasureSpec
@@ -17,12 +18,16 @@ import io.github.kabrapratik28.thumbfree.core.session.BubbleStyle
 import io.github.kabrapratik28.thumbfree.core.session.BubbleUi
 import io.github.kabrapratik28.thumbfree.core.session.ChipAction
 import io.github.kabrapratik28.thumbfree.core.session.Code
+import io.github.kabrapratik28.thumbfree.core.session.Grey
+import io.github.kabrapratik28.thumbfree.core.session.SpeechWait
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowSystemClock
+import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
 class BubbleViewTest {
@@ -31,18 +36,257 @@ class BubbleViewTest {
     private val view = BubbleView(context) { chips += it }
     private val noTarget = BubbleUi.Chip(Code.NO_TARGET, listOf(ChipAction.COPY, ChipAction.INSERT_HERE))
 
+    // One label before and during a take, set once, so TalkBack never reads a new one into the open microphone; while
+    // the words are worked out (the microphone closed), what it does.
     @Test
     fun contentDescriptions() {
         view.render(BubbleUi.Idle)
-        assertThat(view.contentDescription.toString()).isEqualTo("Start dictation")
+        val label = view.contentDescription
+        assertThat(label.toString()).isEqualTo("Dictation, double tap to start or stop")
+        view.render(BubbleUi.Arming)
         view.render(BubbleUi.Recording(0f, locked = true, 0))
-        assertThat(view.contentDescription.toString()).isEqualTo("Stop dictation")
+        view.render(BubbleUi.Recording(0.6f, locked = true, 100))
+        assertThat(view.contentDescription).isSameInstanceAs(label)
         view.render(BubbleUi.Processing(false, 0, null))
         assertThat(view.contentDescription.toString()).isEqualTo("Transcribing")
 
         view.render(noTarget)
         assertThat(texts()).contains(context.getString(CodeMessages.of(Code.NO_TARGET)))
         assertThat(buttons().map { it.text.toString() }).containsExactly("Copy", "Insert here").inOrder()
+    }
+
+    // Before the speech model is usable a tap shows a panel instead of listening: how far its download is, or why it
+    // waits, with Open ThumbFree. TalkBack reads it as it comes, saying whose it is; a take's chips never are read aloud.
+    @Test
+    fun notReadyPanelSaysWhyAndOpensTheApp() {
+        view.render(BubbleUi.NotReady(SpeechWait.DOWNLOADING, 42))
+
+        val panel = message(DOWNLOADING_42)
+        assertThat(panel.contentDescription.toString()).isEqualTo("ThumbFree. Your speech model is still downloading, 42 percent.")
+        assertThat(panel.accessibilityLiveRegion).isEqualTo(View.ACCESSIBILITY_LIVE_REGION_POLITE)
+        // A tap can't start one now: the bubble says why, in the grey look's words, even before it is grey.
+        assertThat(view.contentDescription.toString()).isEqualTo("Speech is downloading, 40 percent")
+        val open = buttons().single { it.text.toString() == "Open ThumbFree" }
+        // A small filled button in the app's ink, its words white: the thing to tap.
+        assertThat((open.background as android.graphics.drawable.GradientDrawable).color!!.defaultColor).isEqualTo(INK_FACE)
+        assertThat(open.currentTextColor).isEqualTo(Color.WHITE)
+        open.performClick()
+        assertThat(chips).containsExactly(ChipAction.OPEN_SPEECH)
+
+        val says = mapOf(
+            SpeechWait.WIFI to "Your speech model is waiting for Wi-Fi.", SpeechWait.CONNECTION to "Your speech model is waiting for a connection.",
+            SpeechWait.PAUSED to "Your speech model's download stopped.", SpeechWait.PREPARING to "Your speech model is almost ready.",
+            SpeechWait.RETRYING to "Your speech model's download is paused.",
+            SpeechWait.NO_SPACE to "Your speech model needs attention.", SpeechWait.CHECK_FAILED to "Your speech model needs attention.",
+            SpeechWait.NOT_STARTED to "Your speech model needs attention.",
+        )
+        for ((wait, text) in says) {
+            view.render(BubbleUi.NotReady(wait, 0))
+            assertThat(message(text).contentDescription.toString()).isEqualTo("ThumbFree. $text")
+        }
+        // The bubble says what its panel says: paused for a retry's pause, and stopped, as step 1 does, for a stop that
+        // Try again picks up from.
+        view.render(BubbleUi.NotReady(SpeechWait.RETRYING, 40))
+        assertThat(view.contentDescription.toString()).isEqualTo("Speech download paused")
+        view.render(BubbleUi.NotReady(SpeechWait.PAUSED, 40))
+        assertThat(view.contentDescription.toString()).isEqualTo("Speech download stopped")
+
+        view.render(noTarget)
+        assertThat(message(context.getString(CodeMessages.of(Code.NO_TARGET))).accessibilityLiveRegion)
+            .isEqualTo(View.ACCESSIBILITY_LIVE_REGION_NONE)
+    }
+
+    // A bubble that can't listen yet is grey, the art's colours taken out, with its ring and its badge: TalkBack hears
+    // why, a download's percentage in steps of 10, and the label changes only as that does. A take draws as ever.
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun aBubbleThatCantListenIsGreyAndSaysWhy() {
+        val c = view.sizePx / 2
+        val disc = c + view.sizePx / 4 // the disc below the key
+        val yellow = draw(BubbleUi.Idle).getPixel(c, disc)
+        view.grey = Grey(Grey.Badge.DOWNLOAD, 0.42f)
+        val grey = snapshot().getPixel(c, disc)
+        assertThat(Color.blue(yellow)).isLessThan(100)
+        // No colour left: a light grey with a touch of the ink's violet.
+        val channels = listOf(Color.red(grey), Color.green(grey), Color.blue(grey))
+        assertThat(channels.max() - channels.min()).isAtMost(24)
+        assertThat(channels.min()).isAtLeast(160)
+        assertThat(view.contentDescription.toString()).isEqualTo("Speech is downloading, 40 percent")
+
+        val label = view.contentDescription
+        view.grey = Grey(Grey.Badge.DOWNLOAD, 0.47f)
+        assertThat(view.contentDescription).isSameInstanceAs(label) // the same ten percent: not set again
+        view.grey = Grey(Grey.Badge.DOWNLOAD, 0.5f)
+        assertThat(view.contentDescription.toString()).isEqualTo("Speech is downloading, 50 percent")
+
+        val says = mapOf(
+            Grey(Grey.Badge.WIFI, 0f) to "Speech is waiting for Wi-Fi", Grey(Grey.Badge.STOPPED, 0f) to "Speech download stopped",
+            Grey(Grey.Badge.CONNECTION, 0f) to "Speech is waiting for a connection", Grey(Grey.Badge.NOT_STARTED, 0f) to "Speech is not downloaded",
+            Grey(Grey.Badge.LOAD_FAILED, 1f) to "Speech couldn't be prepared", Grey(Grey.Badge.RETRYING, 0.4f) to "Speech download paused",
+            Grey.PREPARING to "Speech is almost ready", Grey.MIC_OFF to "Microphone is off",
+        )
+        for ((look, text) in says) {
+            view.grey = look
+            assertThat(view.contentDescription.toString()).isEqualTo(text)
+        }
+
+        view.render(BubbleUi.Recording(0f, locked = true, 0))
+        assertThat(view.contentDescription.toString()).isEqualTo("Dictation, double tap to start or stop")
+        view.grey = null
+        view.render(BubbleUi.Idle)
+        assertThat(view.contentDescription.toString()).isEqualTo("Dictation, double tap to start or stop")
+    }
+
+    // The panel is a card beside the bubble: 240 to 296 dp wide, at least 88 dp high, its message above Open ThumbFree,
+    // which is a 48 dp row. A take's chip stays a pill, its message beside its buttons.
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun notReadyPanelIsACardBesideTheBubble() {
+        val dp = context.resources.displayMetrics.density
+        view.render(BubbleUi.NotReady(SpeechWait.DOWNLOADING, 42))
+        layOut()
+
+        val panel = message(DOWNLOADING_42).parent as android.widget.LinearLayout
+        assertThat(panel.orientation).isEqualTo(android.widget.LinearLayout.VERTICAL)
+        assertThat(panel.width).isIn(Range.closed((240 * dp).toInt(), (296 * dp).toInt()))
+        assertThat(panel.height).isAtLeast((88 * dp).toInt())
+        assertThat(buttons().single().height).isAtLeast((48 * dp).toInt())
+
+        view.render(BubbleUi.NotReady(SpeechWait.DOWNLOADING, 51)) // in place: the same card, new words
+        assertThat(message("Your speech model is still downloading (51%).").parent).isSameInstanceAs(panel)
+        view.render(noTarget)
+        assertThat((message(context.getString(CodeMessages.of(Code.NO_TARGET))).parent as android.widget.LinearLayout).orientation)
+            .isEqualTo(android.widget.LinearLayout.HORIZONTAL)
+    }
+
+    // The panel takes the phone's dark theme as it is when the panel shows, not as it was when the bubble was made.
+    @Test
+    fun notReadyPanelFollowsTheDarkThemeWhenItShows() {
+        view.render(BubbleUi.NotReady(SpeechWait.DOWNLOADING, 42))
+        assertThat(message(DOWNLOADING_42).currentTextColor).isEqualTo(INK)
+        view.render(BubbleUi.Idle)
+
+        RuntimeEnvironment.setQualifiers("+night")
+        view.render(BubbleUi.NotReady(SpeechWait.DOWNLOADING, 42))
+        assertThat(message(DOWNLOADING_42).currentTextColor).isEqualTo(0xFFEDE9F7.toInt())
+    }
+
+    // Grey, the bubble has no yellow anywhere, its ring and its badge included, on a light phone or a dark one: yellow is
+    // for a bubble that listens.
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun aGreyBubbleHasNoYellowLightOrDark() {
+        fun yellow(bitmap: Bitmap) = (0 until bitmap.width).sumOf { x ->
+            (0 until bitmap.height).count { y ->
+                val c = bitmap.getPixel(x, y)
+                Color.alpha(c) > 128 && Color.red(c) > 200 && Color.green(c) > 150 && Color.blue(c) < 120
+            }
+        }
+        assertThat(yellow(draw(BubbleUi.Idle))).isGreaterThan(100) // the yellow bubble itself
+        for (qualifiers in listOf("", "+night")) {
+            if (qualifiers.isNotEmpty()) RuntimeEnvironment.setQualifiers(qualifiers)
+            for (look in listOf(
+                Grey(Grey.Badge.DOWNLOAD, 1f), Grey(Grey.Badge.STOPPED, 0.5f), Grey(Grey.Badge.RETRYING, 0.5f), Grey.PREPARING, Grey.MIC_OFF,
+            )) {
+                view.grey = look
+                assertWithMessage("$look ${qualifiers.ifEmpty { "light" }}").that(yellow(snapshot())).isEqualTo(0)
+            }
+        }
+    }
+
+    // A retry's pause draws the pause badge, as the last step's picture does, not a stop's mark; a model that wouldn't
+    // load shares the stop mark. The same ring each time, so only the badge can differ.
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun aRetrysPauseDrawsThePauseNotTheStopMark() {
+        fun look(badge: Grey.Badge): Bitmap {
+            view.grey = Grey(badge, 0.5f)
+            return snapshot()
+        }
+        val stopped = look(Grey.Badge.STOPPED)
+        assertThat(look(Grey.Badge.RETRYING).sameAs(stopped)).isFalse()
+        assertThat(look(Grey.Badge.LOAD_FAILED).sameAs(stopped)).isTrue()
+    }
+
+    // Every grey look has its ring, a thin neutral outline even with no progress to show: the microphone off too.
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun everyGreyLookHasARing() {
+        val c = view.sizePx / 2
+        view.grey = Grey(Grey.Badge.DOWNLOAD, 0f)
+        val empty = snapshot()
+        val ringTop = (0 until c).first { Color.alpha(empty.getPixel(c, it)) > 128 } // the first drawn pixel above the art
+        view.grey = Grey.MIC_OFF
+        val micOff = snapshot()
+        assertThat(micOff.getPixel(c, ringTop)).isEqualTo(empty.getPixel(c, ringTop))
+        view.grey = null
+        assertThat(Color.alpha(draw(BubbleUi.Idle).getPixel(c, ringTop))).isLessThan(128) // the yellow bubble has none
+    }
+
+    // In other apps the floating bubble's grey look stays still: drawn again later, the same pixels, so it never asks
+    // for a redraw frame by frame. The welcome's try lets its download arrow drift.
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    @Config(qualifiers = "xxhdpi") // the arrow drifts 1.5 dp: 4.5 px here
+    fun theFloatingBubblesGreyStaysStill() {
+        fun twoMoments(): Pair<Bitmap, Bitmap> {
+            view.grey = Grey(Grey.Badge.DOWNLOAD, 0.42f)
+            ShadowSystemClock.advanceBy(Duration.ofMillis(1_400 - SystemClock.uptimeMillis() % 1_400)) // the drift's start
+            val first = snapshot()
+            ShadowSystemClock.advanceBy(Duration.ofMillis(700)) // its furthest
+            return first to snapshot()
+        }
+        view.greyMotion = false
+        val (a, b) = twoMoments()
+        assertThat(a.sameAs(b)).isTrue()
+        view.grey = null
+        view.greyMotion = true
+        val (c, d) = twoMoments()
+        assertThat(c.sameAs(d)).isFalse()
+    }
+
+    // A preparing ring that can't turn (in other apps, or with animations off) is drawn full: a still 300 degree arc
+    // would read as 83% done. Along a ray through its missing part, it draws as the full ring of a finished download.
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    @Config(qualifiers = "xxhdpi")
+    fun aStillPreparingRingIsFull() {
+        val c = view.sizePx / 2
+        fun ray(bitmap: Bitmap) = (0 until c).map { r ->
+            // 240 degrees from three o'clock, clockwise: eleven o'clock, inside the turning arc's 60 degree gap.
+            val a = Math.toRadians(240.0)
+            bitmap.getPixel((c + r * Math.cos(a)).toInt(), (c + r * Math.sin(a)).toInt())
+        }
+        view.greyMotion = false
+        view.grey = Grey(Grey.Badge.DOWNLOAD, 1f)
+        val full = ray(snapshot())
+        view.grey = Grey.PREPARING
+        assertThat(ray(snapshot())).isEqualTo(full)
+    }
+
+    // The panel's words take the phone's font size as it is when the panel shows, as its Open button does: at 200% they
+    // grow, though the bubble was made at 100%.
+    @Test
+    fun notReadyPanelFollowsTheFontSizeWhenItShows() {
+        view.render(BubbleUi.NotReady(SpeechWait.DOWNLOADING, 42))
+        val size = message(DOWNLOADING_42).textSize
+        view.render(BubbleUi.Idle)
+
+        RuntimeEnvironment.setFontScale(2f)
+        view.render(BubbleUi.NotReady(SpeechWait.DOWNLOADING, 42))
+        assertThat(message(DOWNLOADING_42).textSize).isGreaterThan(size * 1.5f)
+    }
+
+    // The welcome's try gives its bubble a 72 dp target around the same art, and no X, so nothing moves beside it.
+    @Test
+    fun tryBubbleHasALargerTargetAndNoX() {
+        val dp = context.resources.displayMetrics.density
+        view.style = BubbleStyle.RECOMMENDED
+        view.targetDp = 72
+        view.cancelable = false
+        assertThat(view.sizePx).isEqualTo((72 * dp).toInt())
+        view.render(BubbleUi.Recording(0f, locked = true, 0))
+        assertThat(cancelButtons()).isEmpty()
     }
 
     @Test
@@ -99,14 +343,14 @@ class BubbleViewTest {
     @Test
     fun everyStateDescribesItself() {
         val cases = listOf(
-            Triple(BubbleUi.Idle, "Start dictation", emptyList()),
-            Triple(BubbleUi.Arming, "Stop dictation", emptyList()),
-            Triple(BubbleUi.Recording(0.5f, locked = false, 0), "Stop dictation", emptyList()),
-            Triple(BubbleUi.Recording(0.5f, locked = true, 0), "Stop dictation", emptyList()),
+            Triple(BubbleUi.Idle, "Dictation, double tap to start or stop", emptyList()),
+            Triple(BubbleUi.Arming, "Dictation, double tap to start or stop", emptyList()),
+            Triple(BubbleUi.Recording(0.5f, locked = false, 0), "Dictation, double tap to start or stop", emptyList()),
+            Triple(BubbleUi.Recording(0.5f, locked = true, 0), "Dictation, double tap to start or stop", emptyList()),
             Triple(BubbleUi.Processing(loadingModel = true, 0, null), "Loading model", listOf("Loading model")),
             Triple(BubbleUi.Processing(false, 2, 5), "Transcribing, 2 of 5", listOf("2 of 5")),
             Triple(BubbleUi.Processing(false, 0, null), "Transcribing", emptyList()),
-            Triple(noTarget, "Start dictation", listOf(context.getString(CodeMessages.of(Code.NO_TARGET)), "Copy", "Insert here")),
+            Triple(noTarget, "Dictation, double tap to start or stop", listOf(context.getString(CodeMessages.of(Code.NO_TARGET)), "Copy", "Insert here")),
         )
         for ((ui, description, text) in cases) {
             view.render(ui)
@@ -189,6 +433,32 @@ class BubbleViewTest {
         assertThat(Color.blue(small.getPixel(c, c + (14 * dp).toInt()))).isLessThan(100) // the yellow disc, scaled
     }
 
+    // The red ring and the stop mark fade in as listening starts, and out as it stops, rather than snapping.
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun theRingAndTheStopMarkFadeInAndOut() {
+        view.style = BubbleStyle(BubbleStyle.Size.MEDIUM, 85)
+        val c = view.sizePx / 2
+        val dp = context.resources.displayMetrics.density
+        val ring = view.sizePx * 111 / 256
+        val key = c - (4 * dp).toInt()
+        val locked = BubbleUi.Recording(0f, locked = true, 0)
+
+        val starting = draw(locked, settle = false)
+        assertThat(starting.getPixel(c + ring, c)).isNotEqualTo(RING)
+        assertThat(starting.getPixel(c, key)).isNotEqualTo(Color.WHITE)
+        ShadowSystemClock.advanceBy(Duration.ofMillis(110))
+        val halfway = snapshot()
+        assertThat(Color.red(halfway.getPixel(c + ring, c))).isGreaterThan(Color.red(starting.getPixel(c + ring, c)))
+        val listening = draw(locked)
+        assertThat(listening.getPixel(c + ring, c)).isEqualTo(RING)
+        assertThat(listening.getPixel(c, key)).isEqualTo(Color.WHITE)
+
+        val stopping = draw(BubbleUi.Idle, settle = false)
+        assertThat(stopping.getPixel(c + ring, c)).isEqualTo(RING) // still all there as it starts to go
+        assertThat(draw(BubbleUi.Idle).getPixel(c + ring, c)).isNotEqualTo(RING)
+    }
+
     // The idle bubble is drawn at the style's opacity; recording is always fully opaque so the red ring shows.
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -221,8 +491,14 @@ class BubbleViewTest {
         view.layout(0, 0, view.measuredWidth, view.measuredHeight)
     }
 
-    private fun draw(ui: BubbleUi): Bitmap {
+    /** The view drawn in [ui]; [settle] lets its fades finish first, as they do within 220 ms. */
+    private fun draw(ui: BubbleUi, settle: Boolean = true): Bitmap {
         view.render(ui)
+        if (settle) ShadowSystemClock.advanceBy(Duration.ofMillis(300))
+        return snapshot()
+    }
+
+    private fun snapshot(): Bitmap {
         layOut()
         return Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888).also { view.draw(Canvas(it)) }
     }
@@ -240,10 +516,15 @@ class BubbleViewTest {
 
     private fun buttons() = visible().filterIsInstance<Button>()
 
+    /** The chip's or panel's message that says [text]. */
+    private fun message(text: String) = visible().filterIsInstance<TextView>().single { it !is Button && it.text.toString() == text }
+
     private fun cancelButtons() = visible().filter { it.contentDescription?.toString() == "Cancel dictation" }
 
     private companion object {
+        const val DOWNLOADING_42 = "Your speech model is still downloading (42%)."
         const val RING = 0xFFFF3B30.toInt()
         const val INK = 0xFF1F1B3A.toInt() // @color/brand_mark
+        const val INK_FACE = 0xFF39335F.toInt() // the buttons' ink (ui/Theme.kt)
     }
 }

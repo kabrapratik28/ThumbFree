@@ -34,6 +34,8 @@
   the store images from `art/`, `raw/` and the logo; `--art <folder>` takes the illustrations from elsewhere.
 - `python3 ios/tools/store-frames.py` rebuilds the iPhone store images from `docs/brand/ios/art/` and `raw/`
   (`docs/brand/ios/README.md` has the fonts and the capture step).
+- `python3 docs/brand/common/readme/make.py` (needs Pillow) remakes the README's four phone screenshots from
+  captures 1 and 2 in `brand/android/raw/` and `brand/ios/raw/`; run it when those change.
 - Preview Markdown on GitHub before merging: the README uses a Mermaid diagram.
 
 ## Pitfalls
@@ -42,4 +44,5 @@
   began don't exist here.
 - The website is the public repository's `gh-pages` branch, not this folder. The store listing and the app (Settings >
   About) link `https://kabrapratik28.github.io/ThumbFree/android-privacy.html`, and the App Store listing links
-  `privacy.html` and `support.html`, so renaming those pages breaks them.
+  `privacy.html` and `support.html`, so renaming those pages breaks them. The website's FAQ links the README's
+  "Speed and accuracy" heading (`#speed-and-accuracy`): keep that heading's name.

@@ -141,7 +141,7 @@ struct ModelDownloader: Sendable {
     /// means not installed. A receipt from before the pins (by path alone) that still matches every file's size
     /// and date has those files hashed against their pins once, here, with nothing downloaded: they pass into a receipt
     /// of the new kind, so a model installed then stays ready; files that fail lose the old receipt.
-    /// ponytail: a file damaged with no new size or date shows up only as a failed load (the Try tab's Try again).
+    /// ponytail: a file damaged with no new size or date shows up only as a failed load (the setup row's Try again).
     /// ponytail: that one-time hash (about 465 MB) runs on the main thread at the first launch after the update, well under
     /// a second on a recent iPhone; move it into the download's "Checking the file" if a phone shows it.
     static func isInstalled(_ entries: [ModelEntry], in folder: URL) -> Bool {

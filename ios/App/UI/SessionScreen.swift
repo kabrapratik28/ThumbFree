@@ -100,8 +100,8 @@ struct SessionScreen: View {
         }
     }
 
-    /// The mic art for the app's status, as the Try tab shows it: the keyboard's red stop key only while listening, the
-    /// turning arc while the take is transcribed.
+    /// The mic art for the app's status: the keyboard's red stop key only while listening, the turning arc while the
+    /// take is transcribed.
     static func mode(for status: HostStatus) -> BubbleArt.Mode {
         switch status.take {
         case .recording: status.micOn ? .stop : .idle
@@ -115,9 +115,9 @@ struct SessionScreen: View {
     private static func isLive(_ status: HostStatus) -> Bool { status.take != .idle || status.session != .off }
 }
 
-/// The swipe-back hint: a finger sliding right along the bottom edge, reusing the walkthrough's finger. A still frame at
-/// the end of the swipe when Reduce Motion or VoiceOver is on. Hidden from VoiceOver's own navigation either way (the
-/// sub-line already tells the user what to do).
+/// The swipe-back hint: the guides' swipe cue sliding right along the bottom edge. Still at the end of the swipe when
+/// Reduce Motion or VoiceOver is on. Hidden from VoiceOver's own navigation either way (the sub-line already tells the
+/// user what to do).
 private struct SwipeBackHint: View {
     let reduceMotion: Bool
 
@@ -126,10 +126,10 @@ private struct SwipeBackHint: View {
             let travel = geo.size.width * 0.5
             let y = geo.size.height / 2
             if reduceMotion {
-                GuideFinger(pulsing: false).position(x: geo.size.width / 2 + travel / 2, y: y)
+                cue.position(x: geo.size.width / 2 + travel / 2, y: y)
             } else {
                 KeyframeAnimator(initialValue: 0.0, repeating: true) { x in
-                    GuideFinger(pulsing: false).position(x: geo.size.width / 2 - travel / 2 + travel * x, y: y)
+                    cue.position(x: geo.size.width / 2 - travel / 2 + travel * x, y: y)
                 } keyframes: { _ in
                     LinearKeyframe(0.0, duration: 0.3)
                     LinearKeyframe(1.0, duration: 1.2)
@@ -139,4 +139,6 @@ private struct SwipeBackHint: View {
         }
         .accessibilityHidden(true)
     }
+
+    private var cue: some View { TapCue(outline: Capsule(), gesture: "Swipe").frame(width: 44, height: 26) }
 }

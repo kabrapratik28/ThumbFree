@@ -5,17 +5,22 @@ import android.database.sqlite.SQLiteFullException
 import android.graphics.Rect
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.os.Looper
 import android.text.InputType
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.TextView
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
 import android.view.accessibility.AccessibilityWindowInfo
 import com.google.common.truth.Truth.assertThat
 import io.github.kabrapratik28.thumbfree.a11y.AccessibilityEditorPort
+import io.github.kabrapratik28.thumbfree.a11y.BubbleView
 import io.github.kabrapratik28.thumbfree.a11y.DictationAccessibilityService
 import io.github.kabrapratik28.thumbfree.a11y.FocusTracker
 import io.github.kabrapratik28.thumbfree.a11y.EditorPort
@@ -28,6 +33,7 @@ import io.github.kabrapratik28.thumbfree.audio.bursts
 import io.github.kabrapratik28.thumbfree.core.audio.Chunk
 import io.github.kabrapratik28.thumbfree.core.audio.WavWriter
 import io.github.kabrapratik28.thumbfree.core.models.Catalog
+import io.github.kabrapratik28.thumbfree.core.models.ModelFile
 import io.github.kabrapratik28.thumbfree.core.models.ModelLeases
 import io.github.kabrapratik28.thumbfree.core.models.ModelStore
 import io.github.kabrapratik28.thumbfree.core.session.BubblePlacement.Spot
@@ -36,6 +42,7 @@ import io.github.kabrapratik28.thumbfree.core.session.BubbleUi
 import io.github.kabrapratik28.thumbfree.core.session.ChipAction
 import io.github.kabrapratik28.thumbfree.core.session.Code
 import io.github.kabrapratik28.thumbfree.core.session.Event
+import io.github.kabrapratik28.thumbfree.core.session.Grey
 import io.github.kabrapratik28.thumbfree.core.session.HapticKind
 import io.github.kabrapratik28.thumbfree.core.session.Outcome
 import io.github.kabrapratik28.thumbfree.core.session.Session
@@ -48,6 +55,7 @@ import io.github.kabrapratik28.thumbfree.data.Status
 import io.github.kabrapratik28.thumbfree.engine.FakeEngine
 import io.github.kabrapratik28.thumbfree.engine.FakeEngine.Reply
 import io.github.kabrapratik28.thumbfree.engine.TranscriptionQueue
+import io.github.kabrapratik28.thumbfree.models.DownloadState
 import io.github.kabrapratik28.thumbfree.ui.copyText
 import io.github.kabrapratik28.thumbfree.ui.finalText
 import java.io.File
@@ -57,6 +65,8 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
@@ -138,6 +148,10 @@ class AndroidPortsTest {
         AppGraph.settings = Settings(app.getSharedPreferences("settings", Context.MODE_PRIVATE))
         AppGraph.settings.retention = Retention(maxDays = null, maxTakes = 200) // rows here start at 0: no day limit
         AppGraph.leases = ModelLeases() // each test's takes hold their own leases
+        ports.downloadStates = { MutableStateFlow(Catalog.all.associateWith { DownloadState.Ready }) } // every model usable: a tap starts a take
+        // The bubble's fades run on the frame clock, which a paused looper's idle() never moves on, so they would never
+        // end here: animations off, as the fades have their own test (BubbleViewTest).
+        android.provider.Settings.Global.putFloat(app.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
     }
 
     @After
@@ -579,7 +593,7 @@ class AndroidPortsTest {
     @Test
     fun hapticConstants() {
         assertThat(AndroidPorts.hapticConstant(HapticKind.TICK)).isEqualTo(HapticFeedbackConstants.CLOCK_TICK)
-        assertThat(AndroidPorts.hapticConstant(HapticKind.STOP)).isEqualTo(HapticFeedbackConstants.CONTEXT_CLICK)
+        assertThat(AndroidPorts.hapticConstant(HapticKind.STOP)).isEqualTo(HapticFeedbackConstants.CLOCK_TICK) // the same tick
         assertThat(AndroidPorts.hapticConstant(HapticKind.CONFIRM)).isEqualTo(HapticFeedbackConstants.CONFIRM)
         assertThat(AndroidPorts.hapticConstant(HapticKind.REJECT)).isEqualTo(HapticFeedbackConstants.REJECT)
     }
@@ -785,6 +799,44 @@ class AndroidPortsTest {
         assertThat(ports.insertedText).isEmpty()
     }
 
+    // After Agree and open settings (the wait set), the service connecting brings the app back by itself: its launcher
+    // activity, into its own task, handing the intent to the activity already there, with the extra MainActivity reads
+    // as the return. Once per wait: a second connect (the switch off and on again) brings nothing more. The wait stays,
+    // since Android can refuse the start without a word; MainActivity ends it on its next resume.
+    @Test
+    fun serviceConnectingAfterAgreeBringsTheAppBack() {
+        AppGraph.controller = DictationController(FakePorts(), { 0L }) // for callbacks an earlier test left on main
+        val since = System.currentTimeMillis() - 60_000L
+        AppGraph.settings.accessibilityWait = since
+
+        ports.onServiceConnected(Robolectric.setupService(DictationAccessibilityService::class.java))
+
+        val started = shadowOf(app).nextStartedActivity
+        assertThat(started.component?.className).isEqualTo("io.github.kabrapratik28.thumbfree.ui.MainActivity")
+        val flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        assertThat(started.flags and flags).isEqualTo(flags)
+        assertThat(started.getBooleanExtra(AndroidPorts.EXTRA_BACK_FROM_ACCESSIBILITY, false)).isTrue()
+        assertThat(AppGraph.settings.accessibilityWait).isEqualTo(since)
+
+        ports.onServiceConnected(Robolectric.setupService(DictationAccessibilityService::class.java))
+        assertThat(shadowOf(app).nextStartedActivity).isNull()
+    }
+
+    // A wait over 10 minutes old is an earlier trip's, and nothing comes to the front. Nor does anything without a wait
+    // (a reboot, an update, the switch turned on from elsewhere).
+    @Test
+    fun aStaleOrMissingWaitBringsNothingBack() {
+        AppGraph.controller = DictationController(FakePorts(), { 0L }) // for callbacks an earlier test left on main
+        AppGraph.settings.accessibilityWait = System.currentTimeMillis() - 11 * 60_000L
+
+        ports.onServiceConnected(Robolectric.setupService(DictationAccessibilityService::class.java))
+        assertThat(shadowOf(app).nextStartedActivity).isNull()
+
+        AppGraph.settings.accessibilityWait = null
+        ports.onServiceConnected(Robolectric.setupService(DictationAccessibilityService::class.java))
+        assertThat(shadowOf(app).nextStartedActivity).isNull()
+    }
+
     // A warning chip 14 minutes into a hands-free take must not let the screen dim: the flag follows the take, not what
     // the bubble draws.
     @Test
@@ -838,11 +890,141 @@ class AndroidPortsTest {
     }
 
     /** The circle's top-left on screen from the window's params: under END gravity x counts from the right edge. */
+    /** Every visible text under [root], buttons' too. */
+    private fun texts(root: View): List<String> = when {
+        root.visibility != View.VISIBLE -> emptyList()
+        root is TextView -> listOf(root.text.toString())
+        root is ViewGroup -> (0 until root.childCount).flatMap { texts(root.getChildAt(it)) }
+        else -> emptyList()
+    }
+
+    private fun clickButton(root: View, text: String) {
+        fun find(view: View): View? = when {
+            view is Button && view.text.toString() == text -> view
+            view is ViewGroup -> (0 until view.childCount).firstNotNullOfOrNull { find(view.getChildAt(it)) }
+            else -> null
+        }
+        checkNotNull(find(root)) { "no $text button" }.performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
     private fun circleAt(service: DictationAccessibilityService): Pair<Int, Int> {
         val bubble = service.bubble!!
         val width = service.getSystemService(WindowManager::class.java).currentWindowMetrics.bounds.width()
         val fromRight = (bubble.params.gravity and Gravity.END) == Gravity.END
         return (if (fromRight) width - bubble.params.x - bubble.sizePx else bubble.params.x) to bubble.params.y
+    }
+
+    // A yellow bubble always listens, so the floating bubble is grey until a tap can: with the microphone off (its
+    // badge, no ring), then while the chosen model downloads (its ring and badge), and yellow once it is usable. It is
+    // read again as the download changes and whenever the bubble shows.
+    @Test
+    fun theFloatingBubbleIsGreyUntilATapCanListen() {
+        AppGraph.controller = DictationController(FakePorts(), { 0L })
+        val model = AppGraph.settings.model
+        val downloads = MutableStateFlow<Map<ModelFile, DownloadState>>(mapOf(model to DownloadState.Downloading(model.sizeBytes * 42 / 100 + 1, model.sizeBytes)))
+        ports.downloadStates = { downloads }
+        val service = serviceWithKeyboard(imeTop = 300)
+        ports.onFieldChanged(textField)
+        shadowOf(Looper.getMainLooper()).idle()
+        val view = Shadow.extract<ShadowWindowManagerImpl>(service.getSystemService(WindowManager::class.java)).views.single() as BubbleView
+        assertThat(view.grey).isEqualTo(Grey.MIC_OFF)
+
+        shadowOf(app).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        ports.onFieldChanged(textField)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertThat(view.grey).isEqualTo(Grey(Grey.Badge.DOWNLOAD, 0.42f))
+
+        downloads.value = mapOf(model to DownloadState.Verifying)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertThat(view.grey).isEqualTo(Grey.PREPARING)
+        downloads.value = mapOf(model to DownloadState.Ready)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertThat(view.grey).isNull()
+    }
+
+    // Before the chosen model is usable a tap on the bubble never listens: a panel by it says how far the download is,
+    // and nothing starts. The panel follows the download only in 10% steps, at most once a second (TalkBack reads it as
+    // it comes), and goes once the model is ready; a drag still only moves the bubble; a second tap puts it away, as does
+    // a tap outside it; Open brings the app up on its speech models. A state not known yet (the first seconds after the
+    // process starts) reads as the model being prepared: the panel says so, and a take starts only once it is usable.
+    @Test
+    fun aTapBeforeTheModelIsUsableShowsThePanelAndStartsNothing() {
+        val fake = FakePorts()
+        val controller = DictationController(fake, { 0L })
+        AppGraph.controller = controller
+        val model = AppGraph.settings.model
+        fun at(percent: Int): Map<ModelFile, DownloadState> = mapOf(model to DownloadState.Downloading(model.sizeBytes * percent / 100 + 1, model.sizeBytes))
+        val downloads = MutableStateFlow(at(42))
+        ports.downloadStates = { downloads }
+        val service = serviceWithKeyboard(imeTop = 300)
+        AppGraph.settings.bubbleSpot = Spot(0f, 0.5f) // the left half: Robolectric puts a window by its x, not END gravity
+        ports.onFieldChanged(textField)
+        shadowOf(Looper.getMainLooper()).idle()
+        val (x, y) = circleAt(service)
+        val view = Shadow.extract<ShadowWindowManagerImpl>(service.getSystemService(WindowManager::class.java)).views.single()
+        fun touch(action: Int, atMs: Long, dx: Int = 0, dy: Int = 0) =
+            view.dispatchTouchEvent(MotionEvent.obtain(0, atMs, action, (x + 24 + dx).toFloat(), (y + 24 + dy).toFloat(), 0))
+        fun tap(atMs: Long) {
+            touch(MotionEvent.ACTION_DOWN, atMs)
+            touch(MotionEvent.ACTION_UP, atMs + 80)
+            shadowOf(Looper.getMainLooper()).idle()
+        }
+        fun shown(): List<String> = texts(view)
+        fun set(now: Map<ModelFile, DownloadState>) {
+            downloads.value = now
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1_100)) // past the panel's once-a-second and its fade
+        }
+        fun settle() = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(200)) // the panel's fade out
+
+        tap(0)
+        assertThat(shown()).containsAtLeast("Your speech model is still downloading (42%).", "Open ThumbFree")
+        assertThat(controller.state).isEqualTo(State.Idle)
+        assertThat(fake.calls).isEmpty() // no row, no service, no microphone
+        set(at(47))
+        assertThat(shown()).contains("Your speech model is still downloading (42%).") // the same 10% step: drawn as it was
+        set(at(51))
+        assertThat(shown()).contains("Your speech model is still downloading (51%).")
+        set(mapOf(model to DownloadState.Ready))
+        assertThat(shown().filter { it.startsWith("Your speech model") }).isEmpty()
+
+        set(mapOf(model to DownloadState.Queued(wifiOnly = true)))
+        touch(MotionEvent.ACTION_DOWN, 1_000)
+        touch(MotionEvent.ACTION_MOVE, 1_050, 100, -100) // past the slop before the hold threshold: a drag
+        touch(MotionEvent.ACTION_UP, 1_100, 110, -90)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertThat(shown()).doesNotContain("Your speech model is waiting for Wi-Fi.")
+        assertThat(circleAt(service)).isEqualTo(x + 110 to y - 90)
+
+        tap(2_000)
+        assertThat(shown()).contains("Your speech model is waiting for Wi-Fi.")
+        tap(3_000)
+        settle()
+        assertThat(shown()).doesNotContain("Your speech model is waiting for Wi-Fi.")
+        tap(4_000)
+        assertThat(shown()).contains("Your speech model is waiting for Wi-Fi.")
+        view.dispatchTouchEvent(MotionEvent.obtain(0, 4_500, MotionEvent.ACTION_OUTSIDE, 0f, 0f, 0))
+        settle()
+        assertThat(shown()).doesNotContain("Your speech model is waiting for Wi-Fi.")
+        tap(5_000)
+        assertThat(shown()).contains("Your speech model is waiting for Wi-Fi.")
+        clickButton(view, "Open ThumbFree")
+        settle()
+        val started = shadowOf(app).nextStartedActivity
+        assertThat(started.component?.className).isEqualTo("io.github.kabrapratik28.thumbfree.ui.MainActivity")
+        assertThat(started.getBooleanExtra(AndroidPorts.EXTRA_OPEN_SPEECH_MODELS, false)).isTrue()
+        assertThat(shown()).doesNotContain("Your speech model is waiting for Wi-Fi.")
+        assertThat(controller.state).isEqualTo(State.Idle)
+
+        set(emptyMap())
+        tap(6_000)
+        assertThat(shown()).contains("Your speech model is almost ready.") // not known yet: being prepared
+        assertThat(controller.state).isEqualTo(State.Idle)
+        assertThat(fake.calls).isEmpty()
+        set(mapOf(model to DownloadState.Ready))
+        assertThat(shown().filter { it.startsWith("Your speech model") }).isEmpty() // usable: the panel goes by itself
+        tap(7_000)
+        assertThat(controller.state).isNotEqualTo(State.Idle) // and a tap starts the take
     }
 
     // A drag leaves the bubble where it is let go, the middle included, and the next placement (another report, a new
@@ -1249,6 +1431,89 @@ class AndroidPortsTest {
             runBlocking { ports.db.barrier() }
 
             assertThat(ports.heldTakes()).containsExactly(last)
+        } finally {
+            RecordingService.pendingStarts = 0
+            RecordingService.stopWhenStarted = false
+            ForegroundHooks.takeActive = false
+        }
+    }
+
+    // The welcome's try runs a real take through the same machine, microphone and model, and keeps nothing: no History
+    // row, no recording once it ends, no text left in the take machine. Its words go to the try, never into a field, and
+    // the bubble's drawing and buzzes go to the try's own bubble.
+    @Test
+    fun aTrialTakeKeepsNothing() {
+        shadowOf(app).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        queueOver(FakeEngine(Reply("Yes, see you at seven.")))
+        val controller = DictationController(ports, { 0L })
+        AppGraph.controller = controller
+        val words = mutableListOf<String>()
+        val drawn = mutableListOf<BubbleUi>()
+        val buzzes = mutableListOf<HapticKind>()
+        val host = object : TrialHost {
+            override fun render(ui: BubbleUi) { drawn += ui }
+            override fun haptic(kind: HapticKind) { buzzes += kind }
+            override fun words(text: String) { words += text }
+        }
+        ports.attachTrial(host)
+        try {
+            // The mic fails after 1 s, which stops the take: no tail, so no waiting on the clock.
+            AppGraph.audioSourceFactory = { FakeAudioSource(listOf(bursts(1_000), CaptureException(Code.MIC_UNAVAILABLE))) }
+            ports.trialTouch(TouchOutput.Press)
+            val id = Session.sessionId(controller.state)!!
+            controller.onForegroundStarted()
+            waitUntil {
+                shadowOf(Looper.getMainLooper()).idle()
+                scheduler.advanceUntilIdle()
+                controller.state == State.Idle
+            }
+            runBlocking { ports.db.barrier() }
+
+            assertThat(words.single()).contains("see you at seven")
+            assertThat(drawn.any { it is BubbleUi.Recording }).isTrue()
+            assertThat(buzzes).containsAtLeast(HapticKind.TICK, HapticKind.CONFIRM)
+            assertThat(AppGraph.history.list(10)).isEmpty()
+            assertThat(File(app.filesDir, "trial").listFiles().orEmpty().toList()).isEmpty()
+            assertThat(File(app.filesDir, "recordings/$id.wav").exists()).isFalse()
+            assertThat(ports.heldTakes()).isEmpty()
+            assertThat(controller.staged).isEmpty()
+        } finally {
+            ports.detachTrial(host)
+            RecordingService.pendingStarts = 0
+            RecordingService.stopWhenStarted = false
+            ForegroundHooks.takeActive = false
+        }
+    }
+
+    // While a take from the floating bubble runs (a locked take in another app), the try's bubble does nothing to it;
+    // leaving the try cancels a take the try started, and its recording goes.
+    @Test
+    fun theTryNeverStopsAnotherTakeAndLeavingItCancelsItsOwn() {
+        shadowOf(app).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        queueOver(FakeEngine())
+        val controller = DictationController(ports, { 0L })
+        AppGraph.controller = controller
+        val host = object : TrialHost {
+            override fun render(ui: BubbleUi) = Unit
+            override fun haptic(kind: HapticKind) = Unit
+            override fun words(text: String) = Unit
+        }
+        ports.attachTrial(host)
+        try {
+            controller.onTouch(TouchOutput.Press) // the floating bubble's take
+            val floating = Session.sessionId(controller.state)
+            ports.trialTouch(TouchOutput.Press)
+            ports.trialTouch(TouchOutput.Release(80))
+            assertThat(controller.state).isEqualTo(State.Arming(floating!!))
+            controller.onEvent(Event.Cancel)
+
+            ports.trialTouch(TouchOutput.Press) // the try's own take
+            assertThat(controller.state).isInstanceOf(State.Arming::class.java)
+            ports.detachTrial(host)
+            assertThat(controller.state).isEqualTo(State.Idle)
+            runBlocking { ports.db.barrier() }
+            assertThat(ports.heldTakes()).isEmpty()
+            assertThat(File(app.filesDir, "trial").listFiles().orEmpty().toList()).isEmpty()
         } finally {
             RecordingService.pendingStarts = 0
             RecordingService.stopWhenStarted = false

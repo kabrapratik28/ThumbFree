@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The tabs, the setup rows, the Try tab and the History tab (ui.HomeScreen, ui.TryScreen, ui.HistoryScreen). -->
+<!-- The tabs, the setup rows, the Home tab and the History tab (ui.HomeScreen, ui.HomeTab, ui.HistoryScreen). -->
 <resources>
-    <string name="ui_tab_try">Try</string>
+    <string name="ui_tab_home">Home</string>
     <string name="ui_tab_history">History</string>
     <string name="ui_tab_dictionary">Dictionary</string>
     <string name="ui_tab_settings">Settings</string>
@@ -36,24 +36,13 @@
     <string name="ui_mic_blocked">The microphone is blocked. Allow it in App info.</string>
     <string name="ui_open">Open</string>
 
-    <string name="ui_try_title">Try it</string>
     <string name="ui_setup_card_title">Finish setup</string>
     <string name="ui_setup_card_count">%1$d of %2$d done</string>
-    <string name="ui_setup_card_body">Three quick steps, then you can dictate in any app.</string>
     <string name="ui_ready">Ready · works offline</string>
-    <string name="ui_practice">Try it here</string>
-    <string name="ui_practice_placeholder">Tap here, then tap the yellow bubble and speak.</string>
-    <string name="ui_practice_note">Only for practice. Nothing here is sent anywhere.</string>
-    <string name="ui_clear">Clear</string>
-    <string name="ui_how_title">How it works</string>
-    <string name="ui_how_1">Tap a text field. The yellow bubble appears beside it.</string>
-    <string name="ui_how_2">Tap the bubble and speak.</string>
-    <string name="ui_how_3">Tap it again to stop. Your words appear.</string>
-    <string name="ui_how_hold">Or hold the bubble while you talk, and let go to stop.</string>
-    <string name="ui_examples_title">Try saying</string>
-    <string name="ui_example_1">Let\'s meet at the café at ten tomorrow.</string>
-    <string name="ui_example_2">Can you send me the slides from today\'s meeting?</string>
-    <string name="ui_example_3">Pick up bread, bananas and coffee on the way home.</string>
+    <string name="ui_home_how">How to use it</string>
+    <!-- Home's one sentence on how to use it, once ready, and what TalkBack hears when Home turns ready while it shows. -->
+    <string name="ui_home_how_body">Tap where you type in any app. Tap the yellow bubble, speak, then tap it again.</string>
+    <string name="ui_ready_read">Ready. Works offline.</string>
 
     <string name="ui_history">History</string>
     <string name="ui_history_search">Search your takes</string>
@@ -68,7 +57,7 @@
     <string name="ui_cancel">Cancel</string>
     <string name="ui_history_empty_title">No takes yet</string>
     <string name="ui_history_empty_body">Everything you dictate shows up here, so you can copy it or transcribe it again. It never leaves your phone.</string>
-    <string name="ui_history_empty_action">Try it</string>
+    <string name="ui_history_empty_action">How to use it</string>
     <string name="ui_history_no_match">No takes match \"%1$s\".</string>
     <string name="ui_history_read_failed">Could not read history.</string>
     <string name="ui_today">Today</string>

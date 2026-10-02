@@ -22,7 +22,16 @@ the text, and `PreviewPanel` is the experimental live preview's window.
   field, even in the same view, refuses the write.
 - The bubble and the preview window never take focus, so the field keeps its keyboard. Main thread only for windows;
   every `EditorPort` call runs off the main thread.
-- The preview panel is never a live region: TalkBack reading it aloud would go into the open microphone.
+- The preview panel is never a live region: TalkBack reading it aloud would go into the open microphone. For the same
+  reason the bubble's label stays one while it listens; it changes only with the microphone closed (transcribing, grey).
+- Before the chosen speech model is usable a tap on the bubble never listens: AndroidPorts shows the not-ready panel
+  (`BubbleUi.NotReady`, from the shared download state the screens read too), whose Open opens the app's speech models.
+  It is the bubble's one live region, redrawn at most every 10% and once a second, since no microphone is open while it
+  shows. No timer puts it away, only Open, a tap outside it (the window watches outside touches only then) or a second
+  tap on the bubble.
+- The bubble keeps its size and place in every state; its listening ring and stop mark fade (220 and 180 ms), and the
+  start and stop of listening tick the same, through the phone's haptic setting. While a tap can't listen (the
+  microphone off, the chosen model not usable) it is grey, with a ring for how far and a badge for why.
 - If the service goes away during a take, the take stops and keeps its text for Copy.
 
 ## Testing

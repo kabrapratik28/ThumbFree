@@ -1,16 +1,59 @@
 import XCTest
 
 /// How every UI test starts ThumbFree: JFK from this test bundle instead of the microphone, the fixed-text engine
-/// (unless `realModel`), no state left from an earlier test, and the welcome flow already done (unless `welcome`).
-/// `AppEnvironment` reads the arguments when it builds the app's session host.
+/// (unless `realModel`), no state left from an earlier test (unless `reset` is false), and the welcome flow already done
+/// (unless `welcome`). `AppEnvironment` reads the arguments when it builds the app's session host.
 @MainActor enum ThumbFreeUI {
-    static func launch(realModel: Bool = false, welcome: Bool = false, arguments: [String] = []) -> XCUIApplication {
+    static func launch(realModel: Bool = false, welcome: Bool = false, reset: Bool = true, arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-TFAudioFile", jfk, "-TFResetState", "YES", "-TFWelcomeDone", welcome ? "NO" : "YES"] + arguments
+        app.launchArguments += ["-TFAudioFile", jfk, "-TFResetState", reset ? "YES" : "NO", "-TFWelcomeDone", welcome ? "NO" : "YES"] + arguments
         if !realModel { app.launchArguments += ["-TFFakeEngine", "YES"] }
         if let models = ProcessInfo.processInfo.environment["TF_MODELS_DIR"] { app.launchEnvironment["TF_MODELS_DIR"] = models }
         app.launch()
         return app
+    }
+
+    /// The try screen over Home at launch, held at its mic stage, so a take that gives text never takes the keyboard down.
+    static let tryArguments = ["-TFOpenTry", "YES", "-TFTryStage", "tapMic"]
+
+    /// ThumbFree launched as `launch` does, with the try screen's box (`try.field`) for the keyboard tests and tools. A
+    /// refused microphone, which another test may leave, shows "Microphone is off" in place of the box: then the
+    /// permission is reset and the app launched again (the audio comes from JFK all the same). A grant stays, as on the
+    /// store tools' Simulator, where Home shows it.
+    static func launchTry(realModel: Bool = false, reset: Bool = true, arguments: [String] = []) -> (app: XCUIApplication, field: XCUIElement) {
+        let app = launch(realModel: realModel, reset: reset, arguments: tryArguments + arguments)
+        let field = element("try.field", in: app)
+        let refused = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Microphone is off")).firstMatch
+        if !field.waitForExistence(timeout: 5), refused.exists {
+            app.resetAuthorizationStatus(for: .microphone) // this ends the app
+            app.launch()
+        }
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "no box in the try screen:\n\(app.debugDescription)")
+        return (app, field)
+    }
+
+    /// Home is on screen: its one card, its ready chip, or its quiet "Getting ready", whichever this state shows.
+    static func onHome(_ app: XCUIApplication, timeout: TimeInterval = 10) -> Bool {
+        wait(until: timeout) { ["home.blocker", "home.ready", "home.gettingReady"].contains { element($0, in: app).exists } }
+    }
+
+    /// Allows the microphone outside the try, as a person can: Settings' Setup row, then iOS's prompt; then back on Home.
+    /// Home has no microphone card (iOS asks at the try's first take), so a test that needs Home ready allows it here.
+    static func allowMicrophone(in app: XCUIApplication) {
+        app.tabBars.buttons["Settings"].tap()
+        let allow = app.buttons["setup.mic"]
+        XCTAssertTrue(allow.waitForExistence(timeout: 5), "Settings' microphone row offers no Allow")
+        allow.tap()
+        answerMicPrompt()
+        XCTAssertTrue(wait(until: 5) { !app.buttons["setup.mic"].exists }, "Settings' microphone row still asks")
+        app.tabBars.buttons["Home"].tap()
+    }
+
+    /// Answers iOS's microphone prompt with `button` ("Allow" or "Don’t Allow"); fails when no prompt comes.
+    static func answerMicPrompt(_ button: String = "Allow") {
+        let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "no microphone prompt")
+        alert.buttons[button].tap()
     }
 
     /// JFK in this test bundle: the microphone's audio, and with `-TFModelFixture` the "model" to download.

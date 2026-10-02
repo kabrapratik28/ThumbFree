@@ -1,16 +1,25 @@
 import XCTest
 
 @MainActor final class HistoryUITests: XCTestCase {
-    // One take from the Try tab: History shows it under Today as typed, Copy copies it, Transcribe again keeps what
-    // was typed, and Clear all asks first.
+    // One take with the keyboard in the try screen's box: back on Home the session goes on until End session; History
+    // shows the take under Today as typed, Copy copies it, Transcribe again keeps what was typed, and Clear all asks first.
     func testHistoryShowsCopiesAndClearsATake() throws {
-        let app = ThumbFreeUI.launch()
-        let mic = ThumbFreeUI.element("try.mic", in: app)
+        KeyboardSetup.ensureReady()
+        let (app, field) = ThumbFreeUI.launchTry()
+        field.tap()
+        KeyboardSetup.switchToThumbFree(in: app)
+        let mic = app.buttons["keyboard.mic"]
         mic.tap()
-        XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("try.status", in: app), toContain: "Listening", timeout: 10))
+        XCTAssertTrue(ThumbFreeUI.wait(for: app.staticTexts["keyboard.status"], toContain: "Recording", timeout: 15))
         sleep(2)
         mic.tap()
-        XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("try.field", in: app), toContain: "ask not what your country", timeout: 20))
+        XCTAssertTrue(ThumbFreeUI.wait(for: field, toContain: "ask not what your country", timeout: 20))
+        app.buttons["try.notNow"].tap()
+        let end = app.buttons["home.endSession"]
+        XCTAssertTrue(end.waitForExistence(timeout: 5), "Home does not show the live session")
+        XCTAssertTrue(app.staticTexts["Ready, mic on"].exists)
+        end.tap()
+        XCTAssertTrue(end.waitForNonExistence(timeout: 5), "End session did not end the session")
         app.tabBars.buttons["History"].tap()
         XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Typed"].exists)

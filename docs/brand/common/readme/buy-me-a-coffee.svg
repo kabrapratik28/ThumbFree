@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="204" height="52" viewBox="0 0 204 52">
+<rect width="204" height="52" rx="26" fill="#FFC83D"/>
+<g fill="none" stroke="#26264A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 22h17v8a7 7 0 0 1-7 7h-3a7 7 0 0 1-7-7z" fill="#FFF8E7"/><path d="M35 24h2.5a3.5 3.5 0 0 1 0 7H35"/><path d="M23 11.5c-1.6 1.6 1.6 3.2 0 4.8M29 11.5c-1.6 1.6 1.6 3.2 0 4.8"/></g>
+<text x="116" y="26" dy=".35em" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#26264A">Buy me a coffee</text>
+</svg>

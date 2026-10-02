@@ -78,14 +78,14 @@ internal fun Dictation.matches(query: String): Boolean = query.isBlank() || copy
 
 /**
  * The history tab, newest first under a header per day: search, the retention rule with the storage it uses and a
- * link to its setting ([onRetention]), and per ended take Copy, Transcribe again and Delete.
- * [apps] names the apps takes were typed into, by package.
+ * link to its setting ([onRetention]), and per ended take Copy, Transcribe again and Delete. Empty, it points to how to
+ * use the bubble on Home ([onHome]). [apps] names the apps takes were typed into, by package.
  */
 @Composable
 fun HistoryScreen(
     rows: List<Dictation>, apps: Map<String, String>, retention: Retention, storageBytes: Long,
     onCopy: (Dictation) -> Unit, onDelete: (Dictation) -> Unit, onTranscribe: (Dictation) -> Unit,
-    onClearAll: () -> Unit, onRetention: () -> Unit, onTry: () -> Unit,
+    onClearAll: () -> Unit, onRetention: () -> Unit, onHome: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var confirmClear by rememberSaveable { mutableStateOf(false) }
@@ -121,7 +121,7 @@ fun HistoryScreen(
         }
         item(key = "retention") { RetentionLine(retention, storageBytes, onRetention) }
         when {
-            rows.isEmpty() -> item(key = "empty") { EmptyHistory(onTry) }
+            rows.isEmpty() -> item(key = "empty") { EmptyHistory(onHome) }
             shown.isEmpty() -> item(key = "no-match") {
                 Text(
                     stringResource(R.string.ui_history_no_match, query.trim()), Modifier.fillMaxWidth().padding(vertical = 32.dp),
@@ -206,7 +206,7 @@ fun retentionSummary(retention: Retention): String {
 }
 
 @Composable
-private fun EmptyHistory(onTry: () -> Unit) {
+private fun EmptyHistory(onHome: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 48.dp, start = 16.dp, end = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         IconBadge(AppIcons.History, MaterialTheme.colorScheme.onPrimaryContainer, MaterialTheme.colorScheme.primaryContainer, size = 88)
         Text(stringResource(R.string.ui_history_empty_title), Modifier.padding(top = 20.dp), style = MaterialTheme.typography.titleLarge)
@@ -214,7 +214,7 @@ private fun EmptyHistory(onTry: () -> Unit) {
             stringResource(R.string.ui_history_empty_body), Modifier.padding(top = 8.dp, bottom = 20.dp),
             style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Button(onTry) { Text(stringResource(R.string.ui_history_empty_action)) }
+        Button(onHome) { Text(stringResource(R.string.ui_history_empty_action)) }
     }
 }
 

@@ -20,7 +20,7 @@ enum DictateLink {
         return URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "host" }?.value
     }
 
-    /// `thumbfree://model`: the keyboard opens the app on its Try tab, which offers the speech model's download.
+    /// `thumbfree://model`: the keyboard opens the app on Home, whose setup card offers the speech model's download.
     static let model = URL(string: "\(Brand.urlScheme)://model")
 
     static func isModel(_ url: URL) -> Bool { url.scheme == Brand.urlScheme && url.host() == "model" }

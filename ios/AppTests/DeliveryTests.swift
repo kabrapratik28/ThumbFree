@@ -11,18 +11,23 @@ import TFCore
     let shared: SharedStore
     let host: SessionHost
     let proxy = FakeProxy()
+    /// The hosts' defaults (the count of takes that gave text), kept out of the test app's own.
+    let suite = TestFiles.defaultsSuite("DeliveryTests", test: "host")
 
     init() throws {
         root = try TestFiles.folder()
         shared = SharedStore(directory: root.appendingPathComponent("IPC"))
         host = SessionHost(history: HistoryStore(root: root.appendingPathComponent("History")), shared: shared,
-                           engine: .fixed(AppEnvironment.fakeText)) {
+                           engine: .fixed(AppEnvironment.fakeText), defaults: try #require(UserDefaults(suiteName: suite))) {
             if let file = try? FileAudioSource(url: TestFiles.url("jfk.wav"), realTime: false) { return file }
             return MuteSource()
         }
     }
 
-    deinit { try? FileManager.default.removeItem(at: root) }
+    deinit {
+        try? FileManager.default.removeItem(at: root)
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+    }
 
     func keyboard(opened: @escaping (URL) -> Void = { _ in }) -> KeyboardClient {
         KeyboardClient(shared: shared) { url, done in

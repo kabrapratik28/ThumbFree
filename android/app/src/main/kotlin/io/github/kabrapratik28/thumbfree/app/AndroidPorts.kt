@@ -2,6 +2,7 @@ package io.github.kabrapratik28.thumbfree.app
 
 import android.Manifest
 import android.app.Application
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.media.AudioManager
@@ -38,9 +39,11 @@ import io.github.kabrapratik28.thumbfree.core.audio.WavWriter
 import io.github.kabrapratik28.thumbfree.core.models.ModelFile
 import io.github.kabrapratik28.thumbfree.core.session.BubblePlacement
 import io.github.kabrapratik28.thumbfree.core.session.BubbleUi
+import io.github.kabrapratik28.thumbfree.core.session.ChipAction
 import io.github.kabrapratik28.thumbfree.core.session.Code
 import io.github.kabrapratik28.thumbfree.core.session.Event
 import io.github.kabrapratik28.thumbfree.core.session.Gesture
+import io.github.kabrapratik28.thumbfree.core.session.Grey
 import io.github.kabrapratik28.thumbfree.core.session.HapticKind
 import io.github.kabrapratik28.thumbfree.core.session.Outcome
 import io.github.kabrapratik28.thumbfree.core.session.Preview
@@ -50,9 +53,14 @@ import io.github.kabrapratik28.thumbfree.core.session.State
 import io.github.kabrapratik28.thumbfree.core.session.TouchOutput
 import io.github.kabrapratik28.thumbfree.core.text.joinChunks
 import io.github.kabrapratik28.thumbfree.data.HistoryWriteException
+import io.github.kabrapratik28.thumbfree.data.Settings
 import io.github.kabrapratik28.thumbfree.data.Status
+import io.github.kabrapratik28.thumbfree.data.TRIAL_DIR
 import io.github.kabrapratik28.thumbfree.engine.PreviewFeed
 import io.github.kabrapratik28.thumbfree.engine.TranscriptionQueue
+import io.github.kabrapratik28.thumbfree.models.DownloadState
+import io.github.kabrapratik28.thumbfree.models.ModelDownloads
+import io.github.kabrapratik28.thumbfree.models.Readiness
 import java.io.File
 import java.io.IOException
 import java.util.SortedMap
@@ -63,8 +71,11 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -79,17 +90,25 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         private const val TAG = "ThumbFree"
         private const val GEOMETRY_MS = 500L // live preview: the geometry's refresh, at most this often
 
+        /** On the intent [returnToApp] brings MainActivity back with: its resume is the return from Android's settings. */
+        const val EXTRA_BACK_FROM_ACCESSIBILITY = "back_from_accessibility"
+
+        /** On the intent the not-ready panel's Open starts MainActivity with: it opens on the speech models. */
+        const val EXTRA_OPEN_SPEECH_MODELS = "open_speech_models"
+
         fun statusOf(outcome: Outcome): Status = Status.valueOf(outcome.name)
 
+        /** One light tick as listening starts and the same as it stops, through the phone's own haptic setting. */
         fun hapticConstant(kind: HapticKind): Int = when (kind) {
             HapticKind.TICK -> HapticFeedbackConstants.CLOCK_TICK
-            HapticKind.STOP -> HapticFeedbackConstants.CONTEXT_CLICK
+            HapticKind.STOP -> HapticFeedbackConstants.CLOCK_TICK
             HapticKind.CONFIRM -> HapticFeedbackConstants.CONFIRM
             HapticKind.REJECT -> HapticFeedbackConstants.REJECT
         }
     }
 
     internal val db = DbThread(AppGraph::historyWritten)
+    private var answeredWait: Long? = null // the accessibility wait returnToApp last answered, in this process
     private val main = Handler(Looper.getMainLooper())
     private val scope = MainScope()
     private val filesDir = app.filesDir // read once, at process start: getFilesDir() touches the disk
@@ -129,6 +148,13 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
     private val markFailed = ConcurrentHashMap.newKeySet<String>() // written on the history thread
     private val redoing = HashSet<String>() // ended takes whose Undo, Retry or history Transcribe still runs
     private var serviceTake: String? = null // the take RecordingService was started for
+    // The welcome's try (TrialHost), while its screen shows. Its takes, until each ends, run the same machine, microphone
+    // and model as any other but keep nothing: no row, a recording in filesDir/trial only until the take ends, and the
+    // words only on the try's screen. trialShown: the latest take came from the try, so the bubble's drawing goes there.
+    private var trial: TrialHost? = null
+    private val trialTakes = HashSet<String>()
+    private var trialShown = false
+    private var trialPress = false // the press being dispatched came from the try's bubble
     // The model of each take and each Retry or history Transcribe, fixed when it starts and read by the queue's worker
     // (modelPath): a switch while it runs, even before the queue reaches it, applies from the next one. The stage writes
     // it to the row with the text it made.
@@ -206,11 +232,11 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
     /** Live preview: whether the preview has words to show (the panel shows them once it has geometry), for tests. */
     internal val previewHasWords: Boolean get() = previewUi != PreviewUi.Hidden
 
-    /** Every take id the per-take maps above still hold, the live preview's too, for tests. */
+    /** Every take id the per-take maps above still hold, the live preview's and the try's too, for tests. */
     internal fun heldTakes(): Set<String> = listOf(
         recorders.keys, finishing.keys, pins.keys, downAt.keys, samples.keys, chunkCount.keys, totals.keys,
         chunkTexts.keys, insertedText.keys, markFailed, redoing, models.keys, leases.keys, requests.keys,
-        listOfNotNull(preview.take),
+        listOfNotNull(preview.take), trialTakes,
     ).flatten().toSet()
 
     /** The take has ended: nothing reads these entries again. Its pin is up to the caller. */
@@ -276,11 +302,57 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
     private var downAtMs = 0L
     private val recheck = Runnable { place() }
 
+    /**
+     * Every catalog model's download, collected while the service is connected: the source the screens read too. Before
+     * the chosen model is usable, a tap on the bubble shows why (the not-ready [panel]) instead of listening. Tests
+     * replace it; a new one is collected at once.
+     */
+    internal var downloadStates: () -> Flow<Map<ModelFile, DownloadState>> = { ModelDownloads.states(app) }
+        set(value) {
+            field = value
+            if (service != null) collectDownloads()
+        }
+    private var downloads: Map<ModelFile, DownloadState> = emptyMap()
+    private var downloadsJob: Job? = null
+    private var panel: BubbleUi.NotReady? = null // the not-ready panel on the bubble, until it goes
+    private var panelAt = 0L // when the panel last changed, so a new percentage shows at most once a second
+    private var held = false // a touch the panel took: its tap shows the panel, a drag only moves the bubble
+
     private fun post(block: () -> Unit) {
         main.post(block)
     }
 
-    private fun wavOf(id: String) = File(filesDir, "recordings/$id.wav")
+    private fun wavOf(id: String) = File(filesDir, if (id in trialTakes) "$TRIAL_DIR/$id.wav" else "recordings/$id.wav")
+
+    /** The try's screen shows: the takes its bubble starts (trialTouch) draw and type there. */
+    fun attachTrial(host: TrialHost) {
+        trial = host
+    }
+
+    /**
+     * The try's screen goes: a take it started that still records or transcribes is cancelled, which deletes its
+     * recording, and nothing of it is drawn there any more.
+     */
+    fun detachTrial(host: TrialHost) {
+        if (trial !== host) return
+        if (Session.sessionId(controller.state) in trialTakes) controller.onEvent(Event.Cancel)
+        trial = null
+    }
+
+    /**
+     * A touch on the try's bubble, through its own classifier, into the same machine as the floating bubble's. While a
+     * take from the floating bubble still runs (a locked take in another app) it does nothing: that take keeps its stop.
+     */
+    fun trialTouch(output: TouchOutput) {
+        val live = Session.sessionId(controller.state)
+        if (live != null && live !in trialTakes) return
+        trialPress = output == TouchOutput.Press
+        try {
+            controller.onTouch(output)
+        } finally {
+            trialPress = false
+        }
+    }
 
     private fun px(dp: Int) = (dp * app.resources.displayMetrics.density).toInt()
 
@@ -289,6 +361,12 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
     override fun newSessionId(): String = UUID.randomUUID().toString()
 
     override fun createRow(id: String): Boolean {
+        trialShown = trialPress
+        if (trialPress) {
+            trialTakes += id
+            use(id, AppGraph.settings.model)
+            return true // no row: the try keeps nothing
+        }
         val pkg = focus.current?.packageName
         val model = AppGraph.settings.model
         val created = db.writeAndWait(500) {
@@ -307,8 +385,10 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         pins -= id
         redoing -= id
         insertedText -= id
+        val wav = wavOf(id)
+        trialTakes -= id
         db.write {
-            wavOf(id).delete()
+            wav.delete()
             history.delete(id, filesDir) // a missing row is fine
         }
     }
@@ -366,6 +446,8 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
 
             override fun onStopped(result: RecordingResult) = post {
                 result.tail?.let { Log.i(TAG, "take_tail ms=${result.tailMs} end=${it.name.lowercase()}") }
+                // A try's take that ended while this recorder still wrote (a cancel): its file goes now it is let go.
+                if (wav.parentFile?.name == TRIAL_DIR && id !in trialTakes) db.write { wav.delete() }
                 if (finishing.remove(id) == null) {
                     if (recorders[id] === recorder) recorders.remove(id) // its last call: the ring buffer can go
                     samples[id] = result.samples
@@ -381,7 +463,7 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         val open = { WavWriter.create(wav.apply { parentFile!!.mkdirs() }) } // on the writer thread
         // With the live preview on and a model that can show it, the Recorder puts the take's audio in a ring the feed
         // streams to :engine. Off, or on a model without it, nothing of the preview runs.
-        val model = models[id]?.takeIf { AppGraph.settings.livePreview && it.livePreview }
+        val model = models[id]?.takeIf { AppGraph.settings.livePreview && it.livePreview && id !in trialTakes }
         val ring = model?.let { PcmRing(PreviewFeed.RING_SAMPLES) }
         recorder = Recorder(source, open, listener, SystemClock::elapsedRealtime, preview = ring)
         recorders[id] = recorder
@@ -423,12 +505,14 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
     override fun abortEngine(id: String) = queue.cancel(id)
 
     override fun pinTarget(id: String) {
+        if (id in trialTakes) return // the try types into no field
         pins.keys.retainAll(redoing) // the new take replaces any chip: only a running Undo or Retry still needs its pin
         pins[id] = downPin
         downAt[id] = downAtMs
     }
 
     override fun saveStaged(id: String, raw: String, text: String): Boolean {
+        if (id in trialTakes) return true // nothing to save: the try only shows the words
         val durationMs = samples[id]?.let { it * 1000 / 16_000 }
         val model = models[id]?.id // made this text; a retranscription's may differ from the row's
         val saved = db.writeAndWait(500) {
@@ -456,6 +540,7 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
     }
 
     override fun markInserting(id: String) {
+        if (id in trialTakes) return
         markFailed -= id
         db.write {
             try {
@@ -467,13 +552,25 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         }
     }
 
-    override fun insert(id: String, text: String, autoInsert: Boolean) = launchInsert(id) {
-        db.barrier() // the INSERTING row is on disk before any commit
-        // Without that row a crash during the insert could not be told apart later: the text waits on the chip.
-        inserter.insert(text, pins[id], autoInsert && id !in markFailed)
+    override fun insert(id: String, text: String, autoInsert: Boolean) {
+        if (id in trialTakes) return showTrialWords(id, text)
+        launchInsert(id) {
+            db.barrier() // the INSERTING row is on disk before any commit
+            // Without that row a crash during the insert could not be told apart later: the text waits on the chip.
+            inserter.insert(text, pins[id], autoInsert && id !in markFailed)
+        }
     }
 
-    override fun insertHere(id: String, text: String) = launchInsert(id) { inserter.insertHere(text) }
+    override fun insertHere(id: String, text: String) {
+        if (id in trialTakes) return showTrialWords(id, text)
+        launchInsert(id) { inserter.insertHere(text) }
+    }
+
+    /** A try's words go to its screen, never into a field; the take then ends as a typed one does. */
+    private fun showTrialWords(id: String, text: String) {
+        trial?.words(text)
+        post { controller.onEvent(Event.InsertDone(id, Outcome.INSERTED, null)) }
+    }
 
     /**
      * Runs one insert and reports it. An unexpected exception (from an accessibility, clipboard or file call) ends the
@@ -499,6 +596,14 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
     }
 
     override fun saveOutcome(id: String, outcome: Outcome, code: Code?) {
+        if (id in trialTakes) {
+            // The try's take has ended: its recording goes (again when its recorder lets go of it, onStopped), no row.
+            val wav = wavOf(id)
+            trialTakes -= id
+            ended(id)
+            db.write { wav.delete() }
+            return
+        }
         val inserted = insertedText.remove(id) // each insert result is saved once, right after its InsertDone
         // Unknown yet after a Cancel while recording: onStopped writes it then.
         val durationMs = samples[id]?.let { it * 1000 / 16_000 }
@@ -513,10 +618,14 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
     }
 
     override fun haptic(kind: HapticKind) {
-        bubble?.haptic(hapticConstant(kind))
+        val trial = trial
+        if (trialShown && trial != null) trial.haptic(kind) else bubble?.haptic(hapticConstant(kind))
     }
 
     override fun render(ui: BubbleUi) {
+        val trial = trial
+        if (trialShown && trial != null) return trial.render(ui)
+        panel = null // the take machine's drawing replaces the not-ready panel
         // A take that has ended (typed, a chip, no speech, a failure) takes its live preview panel with it.
         if (controller.state == State.Idle) preview.take?.let { onPreview(Preview.Event.Done(it)) }
         val bubble = bubble ?: return
@@ -602,8 +711,8 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         val count = texts.size
         // A live take's truncated chunk comes here before onFailed, so its partial text is saved too. A Retry's or history
         // Transcribe's is not: its row stays terminal while it runs, and History would show and copy the text before the
-        // end. Its text reaches the row when it ends (stage), and a failed one leaves the row as it was.
-        if (sessionId !in redoing) {
+        // end. Its text reaches the row when it ends (stage), and a failed one leaves the row as it was. The try's has no row.
+        if (sessionId !in redoing && sessionId !in trialTakes) {
             val partial = joinChunks(texts.values.toList())
             db.write { history.saveChunk(sessionId, count, partial) }
         }
@@ -644,13 +753,122 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         val windows = service.getSystemService(WindowManager::class.java)
         windowManager = windows
         relay = TouchRelay(Gesture(ViewConfiguration.get(service).scaledTouchSlop.toFloat()), ::onTouchOutput)
-        bubble = BubbleWindow(service, windows, ::onBubbleTouch) { controller.onChip(it) }.also {
+        bubble = BubbleWindow(service, windows, ::onBubbleTouch, ::onChipAction).also {
             it.onDropped = ::place // found gone: the touch on it ends at once and the window comes back, with no focus event
             it.restyle(AppGraph.settings.bubbleStyle)
             service.bubble = it
         }
         shownAt = null
         touching = false
+        collectDownloads()
+        returnToApp(service)
+    }
+
+    private fun collectDownloads() {
+        downloadsJob?.cancel()
+        val states = downloadStates()
+        // What is known already counts from now, not from the collector's first turn: a tap right after the service
+        // connects reads the shared state as it is.
+        if (states is StateFlow) downloads = states.value
+        bubble?.grey = greyNow()
+        downloadsJob = scope.launch {
+            states.collect {
+                downloads = it
+                bubble?.grey = greyNow()
+                followDownload()
+            }
+        }
+    }
+
+    /**
+     * The panel for a tap now, or null when the take may start: only once the chosen model is known to be usable. Not
+     * known yet (the first seconds after the process starts, while a file already on disk is checked) reads as being
+     * prepared: the panel says so, and goes as soon as the model turns out usable (followDownload).
+     */
+    private fun notReady(): BubbleUi.NotReady? =
+        Readiness.speech(verified = false, downloads[AppGraph.settings.model])?.let { BubbleUi.NotReady(it.wait, it.percent) }
+
+    /**
+     * The floating bubble's grey look: the microphone off, or the chosen model not usable yet (as its panel would say);
+     * null once a tap listens. Read again whenever the bubble shows and whenever a download changes.
+     */
+    private fun greyNow(): Grey? = when {
+        app.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED -> Grey.MIC_OFF
+        else -> notReady()?.let { Grey.of(it.wait, it.percent) }
+    }
+
+    private fun showPanel(ui: BubbleUi.NotReady) {
+        val bubble = bubble ?: return
+        panel = ui
+        panelAt = SystemClock.uptimeMillis()
+        bubble.render(ui)
+    }
+
+    /** The panel goes; the bubble draws what the take machine last asked for, which is idle while a panel can show. */
+    private fun hidePanel() {
+        if (panel == null) return
+        panel = null
+        bubble?.render(BubbleUi.Idle)
+    }
+
+    /**
+     * A panel on screen follows the download: drawn again when the reason changes, or when the download passes the next
+     * 10% and a second has gone by since the last change, and gone once the model is usable. So TalkBack, which reads
+     * it as it comes, never counts every percent, and the words never flicker.
+     */
+    private fun followDownload() {
+        val shown = panel ?: return
+        val now = notReady()
+        when {
+            now == null -> hidePanel()
+            now.wait != shown.wait -> showPanel(now)
+            now.percent / 10 != shown.percent / 10 && SystemClock.uptimeMillis() - panelAt >= 1_000 -> showPanel(now)
+        }
+    }
+
+    // The bubble window's buttons. The not-ready panel is no take's: its Open opens the speech models, and its timer's
+    // DISMISS puts it away. Every other action is the take machine's.
+    private fun onChipAction(action: ChipAction) {
+        if (panel == null) return controller.onChip(action)
+        hidePanel()
+        if (action == ChipAction.OPEN_SPEECH) openSpeechModels()
+    }
+
+    /** The panel's Open: the app, on its speech models, which name the chosen model and what its download needs. */
+    private fun openSpeechModels() {
+        val service = service ?: return
+        val intent = service.packageManager.getLaunchIntentForPackage(service.packageName) ?: return
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(EXTRA_OPEN_SPEECH_MODELS, true)
+        try {
+            service.startActivity(intent)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "open_models_failed ${e.javaClass.name}")
+        }
+    }
+
+    /**
+     * The owner turned the service on within 10 minutes of Agree and open settings on the bubble step
+     * (Settings.accessibilityWait, set then): the app comes back to the front by itself, once per wait, on the step
+     * after the bubble's, instead of leaving the owner in Android's settings. A service the system binds may start an
+     * activity from the background, but Android can still refuse the start without a word, so the wait stays for
+     * MainActivity to end on its next resume, and the owner's own return then counts as it always did.
+     */
+    private fun returnToApp(service: DictationAccessibilityService) {
+        val since = AppGraph.settings.accessibilityWait ?: return
+        if (since == answeredWait || !Settings.recentWait(since, System.currentTimeMillis())) return
+        answeredWait = since // the switch turned off and on again before the owner is back brings nothing more
+        val intent = service.packageManager.getLaunchIntentForPackage(service.packageName) ?: return
+        // Into the app's own task: CLEAR_TOP closes Android's settings if they opened on top of the app in that task, and
+        // SINGLE_TOP hands the intent to the activity already there, which keeps the step it shows.
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(EXTRA_BACK_FROM_ACCESSIBILITY, true)
+        try {
+            service.startActivity(intent)
+            Log.i(TAG, "return_started")
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "return_failed ${e.javaClass.name}")
+        }
     }
 
     override fun onServiceGone() {
@@ -662,6 +880,10 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         windowManager = null
         shownAt = null
         touching = false
+        downloadsJob?.cancel()
+        downloadsJob = null
+        panel = null
+        held = false
         relay?.hide()
         post { controller.onServiceGone() }
     }
@@ -736,6 +958,7 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         if (!focus.visible(SystemClock.uptimeMillis(), controller.state != State.Idle)) {
             touching = false
             relay?.hide() // the classifier will never see the UP of a finger on a removed window
+            hidePanel() // so the next field's bubble doesn't come back with it
             bubble.hide()
             shownAt = null
             return
@@ -745,6 +968,7 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
             touching = false
             relay?.hide()
         }
+        bubble.grey = greyNow() // the microphone may have been allowed or taken away since it last showed
         if (touching) return // the window stays under the finger; the UP places it again
         val spot = spot() ?: return
         if (spot == shownAt && bubble.shown) return // a window the system dropped is added again
@@ -854,6 +1078,24 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
             }
             else -> Unit
         }
+        // Before the chosen model is usable a tap never listens: the panel says why. A drag still moves the bubble.
+        if (output == TouchOutput.Press && controller.state == State.Idle && notReady() != null) held = true
+        if (held) {
+            // A second tap puts the panel away again.
+            if (output is TouchOutput.Release) if (panel != null) hidePanel() else notReady()?.let(::showPanel)
+            if (output is TouchOutput.Release || output is TouchOutput.DragEnd || output == TouchOutput.Cancelled) held = false
+            return
+        }
         controller.onTouch(output)
     }
+}
+
+/**
+ * The welcome's try (ui.TryOnce): the bubble it draws in the welcome screen, and where its take's words go. Its takes run
+ * through the same take machine, microphone and model as the floating bubble's (AndroidPorts.trialTouch).
+ */
+interface TrialHost {
+    fun render(ui: BubbleUi)
+    fun haptic(kind: HapticKind)
+    fun words(text: String)
 }

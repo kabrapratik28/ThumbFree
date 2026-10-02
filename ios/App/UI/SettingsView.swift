@@ -163,8 +163,8 @@ struct SettingsView: View {
         model === models.english ? "English (recommended)" : "Multilingual"
     }
 
-    /// The multilingual model's 25 languages.
-    static let languages = "Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Russian, Slovak, Slovenian, Spanish, Swedish, Ukrainian"
+    /// The multilingual model's 25 languages, by name.
+    static let languages = SpeechModels.languages.map(\.value).joined(separator: ", ")
 }
 
 /// One speech model: tap to use it once it is here; its size and Download, Cancel or Delete.

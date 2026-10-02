@@ -38,7 +38,7 @@ HOW IT WORKS
 2. Tap the yellow mic at the top right and speak.
 3. Tap it again. Your words are typed where your cursor is.
 
-iOS does not let keyboards use the microphone, so the first tap of a session opens ThumbFree to turn it on, and ThumbFree takes you straight back to Messages, Notes or Signal (elsewhere, one swipe back). While the session lasts, every tap starts at once, right where you are. Want to practice first? Use the Try tab in ThumbFree.
+iOS does not let keyboards use the microphone, so the first tap of a session opens ThumbFree to turn it on, and ThumbFree takes you straight back to Messages, Notes or Signal (elsewhere, one swipe back). While the session lasts, every tap starts at once, right where you are. Want to practice first? Tap Try it on ThumbFree's Home.
 
 PRIVATE BY DESIGN
 • Speech recognition runs on your iPhone, with NVIDIA's open Parakeet AI model. Your voice and your words are never uploaded.
@@ -87,9 +87,8 @@ speech,text,typing,transcribe,transcription,dictate,talk,notes,write,email,memo,
 Not asked for a first version (1.0). For 1.0.1 [320]:
 
 <!-- whatsnew -->
-A shorter setup: three steps, with animations that show exactly what to tap in Settings to add the keyboard.
+A simpler setup: pick your language, and a short video floats over Settings to show exactly what to tap to add the keyboard.
 ThumbFree now takes you back to your app by itself after the first tap of a session, in Messages, Notes and Signal. The first time, iOS may ask you to confirm. You can turn it off in Settings.
-A simpler Try tab.
 <!-- /whatsnew -->
 
 ## Screenshots

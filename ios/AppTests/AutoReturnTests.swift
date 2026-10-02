@@ -11,18 +11,25 @@ import TFCore
     let root: URL
     let history: HistoryStore
     let shared: SharedStore
+    /// The hosts' defaults (the count of takes that gave text), kept out of the test app's own.
+    let suite = TestFiles.defaultsSuite("AutoReturnTests", test: "host")
+    let defaults: UserDefaults
 
     init() throws {
         root = try TestFiles.folder()
         history = HistoryStore(root: root.appendingPathComponent("History"))
         shared = SharedStore(directory: root.appendingPathComponent("IPC"))
+        defaults = try #require(UserDefaults(suiteName: suite))
     }
 
-    deinit { try? FileManager.default.removeItem(at: root) }
+    deinit {
+        try? FileManager.default.removeItem(at: root)
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+    }
 
     func host(returnDelayMs: Int = 0, fallbackDelayMs: Int = 1_500) -> SessionHost {
         let host = SessionHost(history: history, shared: shared, engine: .fixed("hi"),
-                                returnDelayMs: returnDelayMs, fallbackDelayMs: fallbackDelayMs) {
+                                returnDelayMs: returnDelayMs, fallbackDelayMs: fallbackDelayMs, defaults: defaults) {
             if let file = try? FileAudioSource(url: TestFiles.url("jfk.wav"), realTime: false) { return file }
             return MuteSource()
         }
@@ -47,6 +54,7 @@ import TFCore
         let take = UUID()
         try keyboardPress(take)
         host.openLink(take, host: "net.whatsapp.WhatsApp", autoReturn: true)
+        #expect(host.coldTake == take) // the take a try screen still up leaves alone (`TryItView.takeToCancel`)
         #expect(host.returnTrip == ReturnTrip(appName: "WhatsApp", phase: .leaving, firstReturn: true))
         #expect(opened.isEmpty) // nothing opens before the cold take's first audio buffer
         try await waitUntil { !opened.isEmpty }

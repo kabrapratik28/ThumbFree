@@ -91,7 +91,7 @@ internal val LICENSES = listOf(
 )
 
 /**
- * Settings in sections, each with a line on what it is for: Setup (the Try card's items while one is missing, else one
+ * Settings in sections, each with a line on what it is for: Setup (Home's setup rows while one is missing, else one
  * line; the welcome screens again), Bubble (size, transparency, position), Speech model, Dictionary (a row to its tab), History (retention and the
  * storage it uses) and About. [showRetention] scrolls to History once, then calls [onRetentionShown].
  */

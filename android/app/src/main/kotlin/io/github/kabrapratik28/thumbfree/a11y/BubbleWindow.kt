@@ -3,6 +3,7 @@ package io.github.kabrapratik28.thumbfree.a11y
 import android.content.Context
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -13,12 +14,14 @@ import android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
 import android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 import android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
 import android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+import android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
 import android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
 import android.view.WindowManager.LayoutParams.WRAP_CONTENT
 import io.github.kabrapratik28.thumbfree.core.session.BubblePlacement
 import io.github.kabrapratik28.thumbfree.core.session.BubbleStyle
 import io.github.kabrapratik28.thumbfree.core.session.BubbleUi
 import io.github.kabrapratik28.thumbfree.core.session.ChipAction
+import io.github.kabrapratik28.thumbfree.core.session.Grey
 import io.github.kabrapratik28.thumbfree.core.session.PreviewPlace
 import io.github.kabrapratik28.thumbfree.core.session.PreviewPlacement
 import io.github.kabrapratik28.thumbfree.core.session.PreviewUi
@@ -41,17 +44,30 @@ class BubbleWindow(
         // x, y are screen pixels, like BubblePlacement's: no status bar, navigation bar or cutout inset shifts them.
         fitInsetsTypes = 0
         layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        // A chip or the not-ready panel widens the window toward the middle of the screen, which moves its left edge: the
+        // system would slide the whole window there, bubble and all, from where it was. The bubble stays put instead, and
+        // the panel comes in place. (Android 13 has no public way to ask this.)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) setCanPlayMoveAnimation(false)
     }
 
     private val view = BubbleView(context, onChip).apply {
+        greyMotion = false // its grey look stays still in other apps: no redraw frame by frame
         setOnTouchListener { _, event ->
             if (!shown) return@setOnTouchListener true // an event queued before hide() must not re-arm the guard
+            // A tap anywhere else puts the not-ready panel away; only its window asks for such touches.
+            if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) {
+                if (panel) onChip(ChipAction.DISMISS)
+                return@setOnTouchListener true
+            }
             touching = event.actionMasked != MotionEvent.ACTION_UP && event.actionMasked != MotionEvent.ACTION_CANCEL
             onTouch(event)
         }
-        // A chip or X button coming or going changes the window's width: placed again from its spot (see place).
-        addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
-            if (right - left != oldRight - oldLeft) this@BubbleWindow.handler.post { spot?.let { (x, y) -> move(x, y) } }
+        // A chip, the panel or the X button coming or going changes the window's size: placed again from its spot (see
+        // place), so the circle stays where it was.
+        addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                this@BubbleWindow.handler.post { spot?.let { (x, y) -> move(x, y) } }
+            }
         }
     }
     private val handler = Handler(Looper.getMainLooper())
@@ -68,6 +84,7 @@ class BubbleWindow(
     /** Posted to main when a relayout or a remove finds the window dropped: a finger on it never sends its UP. */
     var onDropped: () -> Unit = {}
     private var touching = false
+    private var panel = false // the not-ready panel shows
     private var spot: Pair<Int, Int>? = null // the circle's top-left as last placed
 
     /**
@@ -120,15 +137,33 @@ class BubbleWindow(
         hide()
     }
 
-    /** A chip's dismissal timer keeps running while the window is hidden, and the next render cancels it. */
+    /**
+     * A chip's dismissal timer keeps running while the window is hidden, and the next render cancels it. The not-ready
+     * panel has no timer: what it says is how to get dictation working, so it stays until Open, a tap outside it (the
+     * window watches outside touches only while it shows) or a second tap on the bubble. Its DISMISS goes to its owner,
+     * AndroidPorts, since the panel is no take's.
+     */
     fun render(ui: BubbleUi) {
         handler.removeCallbacks(dismiss)
         view.render(ui)
         if (ui is BubbleUi.Chip) handler.postDelayed(dismiss, chipMs(ui.actions))
+        panel = ui is BubbleUi.NotReady
+        val flags = if (panel) params.flags or FLAG_WATCH_OUTSIDE_TOUCH else params.flags and FLAG_WATCH_OUTSIDE_TOUCH.inv()
+        if (flags != params.flags) {
+            params.flags = flags
+            relayout()
+        }
     }
 
     /** The circle's touch target side in pixels, for the current [style]. */
     val sizePx: Int get() = view.sizePx
+
+    /** The bubble's grey look while it can't listen yet (BubbleView.grey); null once it can. */
+    var grey: Grey?
+        get() = view.grey
+        set(value) {
+            view.grey = value
+        }
 
     val style: BubbleStyle get() = view.style
 
@@ -210,21 +245,35 @@ class BubbleWindow(
     /**
      * Points [params] at the circle's top-left corner [x], [y]; false when nothing changed. In the right half of the
      * screen the window hangs from the right edge and the view mirrors, so the X button and chip open to the left of
-     * the circle. A bubble dropped mid-screen can have less room there than a chip needs: the whole window then shifts
-     * in just enough to keep it on screen, and goes back when the chip goes.
+     * the circle. The not-ready panel opens beside the circle toward the middle when there is room for it and 12 dp more,
+     * else above the circle, or below it when the panel would reach within 12 dp of the screen's top, kept 12 dp from the
+     * screen's edges. A bubble dropped mid-screen can have less room than a chip needs: the whole window then shifts in
+     * just enough to keep it on screen, and goes back when the chip goes.
      */
     private fun place(x: Int, y: Int): Boolean {
         spot = x to y
         // ponytail: one binder call per move on API 33 (insets load lazily from 34); cache the width if drags stutter there
         val screenWidth = windowManager.currentWindowMetrics.bounds.width()
         val right = BubblePlacement.snapSide(x + view.sizePx / 2, screenWidth) == BubblePlacement.Side.RIGHT
+        val edge = (12 * context.resources.displayMetrics.density).toInt()
+        val outer = if (right) screenWidth - x - view.sizePx else x // the circle's distance from its own screen edge
+        val panel = view.panelWidth
+        val gap = (8 * context.resources.displayMetrics.density).toInt()
+        view.mirrored = right
+        view.panelInset = maxOf(0, edge - outer)
+        view.panelPlace = when {
+            panel == 0 || (if (right) x else screenWidth - x - view.sizePx) >= panel + edge + gap -> BubbleView.PanelPlace.BESIDE
+            y - view.panelHeight - gap < edge -> BubbleView.PanelPlace.BELOW // above, it would leave the screen's top
+            else -> BubbleView.PanelPlace.ABOVE
+        }
         val gravity = Gravity.TOP or if (right) Gravity.END else Gravity.START
-        val offset = (if (right) screenWidth - x - view.sizePx else x).coerceAtMost(screenWidth - maxOf(view.width, view.sizePx))
-        if (gravity == params.gravity && offset == params.x && y == params.y) return false
+        val far = if (panel > 0) edge else 0 // the panel keeps 12 dp from the far edge too
+        val offset = outer.coerceAtMost(screenWidth - maxOf(view.width, view.sizePx) - far)
+        val top = y - view.circleTop
+        if (gravity == params.gravity && offset == params.x && top == params.y) return false
         params.gravity = gravity
         params.x = offset
-        params.y = y
-        view.mirrored = right
+        params.y = top
         return true
     }
 

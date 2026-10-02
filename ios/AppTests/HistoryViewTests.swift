@@ -93,28 +93,19 @@ import TFCore
         #expect(HistoryView.retranscribedNote(.inserted) == "Transcribed again. This text wasn't typed in.")
     }
 
-    @Test func theTryTabSaysWhatTheMicDoes() {
-        #expect(TryView.hint(for: HostStatus()) == "Tap to talk, tap again to stop. Or hold while you talk.")
-        #expect(TryView.hint(for: HostStatus(micOn: true, take: .recording)) == "Listening. Tap to stop.")
-        #expect(TryView.hint(for: HostStatus(take: .transcribing)) == "Transcribing")
-        #expect(TryView.hint(for: HostStatus(message: "No speech heard.")) == "No speech heard.")
-        #expect(TryView.hint(for: HostStatus(), modelReady: false) == "Get the speech model above to start.")
-        // The first load after a download takes a while: the idle hint says so instead of "Tap to talk".
-        let gettingReady = "Getting ready for this iPhone. The first time takes about half a minute. After that, ThumbFree starts in a moment."
-        #expect(TryView.hint(for: HostStatus(engine: .loading)) == gettingReady)
-        #expect(TryView.hint(for: HostStatus(engine: .warming)) == gettingReady)
-        #expect(TryView.hint(for: HostStatus(engine: .loading, micOn: true, take: .recording)) == "Listening. Tap to stop.")
-    }
-
-    // The setup card's model row counts as done once the model is in and the engine did not fail to load it.
+    // The setup card's model row counts as done only once the engine has loaded the model: ready means usable now, so a
+    // model still loading or warming up is not done, and its row says so.
     @Test func theSetupCardsModelRowSaysWhatIsLeft() {
         #expect(!SetupRows.modelDone(.missing, engine: .noModel))
         #expect(!SetupRows.modelDone(.downloading(done: 1, total: 2), engine: .noModel))
         #expect(!SetupRows.modelDone(.ready, engine: .failed))
-        #expect(SetupRows.modelDone(.ready, engine: .unloaded))
+        for engine in [EnginePhase.unloaded, .loading, .warming] { #expect(!SetupRows.modelDone(.ready, engine: engine), "\(engine)") }
+        #expect(SetupRows.modelDone(.ready, engine: .readyNeuralEngine))
+        #expect(SetupRows.modelDone(.ready, engine: .readyCPU))
         #expect(SetupRows.modelLine(.missing, engine: .noModel, total: 465_000_000) == "Not downloaded · 465 MB")
         #expect(SetupRows.modelLine(.downloading(done: 1, total: 4), engine: .noModel, total: 4) == "Downloading · 25%")
         #expect(SetupRows.modelLine(.ready, engine: .readyNeuralEngine, total: 1) == "Ready")
+        #expect(SetupRows.modelLine(.ready, engine: .loading, total: 1) == "Getting ready for this iPhone")
         #expect(SetupRows.modelLine(.ready, engine: .failed, total: 1) == "Could not load the model.")
     }
 
@@ -129,15 +120,58 @@ import TFCore
         #expect(SetupRows.doneCount(mixedDone) == 2)
     }
 
+    // Ready means usable now, on the welcome's last step and on Home alike: the microphone allowed, the keyboard seen with
+    // Full Access, and the engine loaded.
+    @Test func readyNeedsAllThreeUsableNow() {
+        #expect(SetupRows.ready(SetupRows.Facts(mic: .granted, keyboard: .ready, model: true)))
+        #expect(!SetupRows.ready(SetupRows.Facts(mic: .undetermined, keyboard: .ready, model: true)))
+        #expect(!SetupRows.ready(SetupRows.Facts(mic: .denied, keyboard: .ready, model: true)))
+        #expect(!SetupRows.ready(SetupRows.Facts(mic: .granted, keyboard: .added, model: true)))
+        #expect(!SetupRows.ready(SetupRows.Facts(mic: .granted, keyboard: .ready, model: false)))
+        #expect(!SetupRows.facts(model: .ready, engine: .warming, keyboard: .ready).model) // still warming up
+    }
+
+    // Home's top while only the engine's load is left: a quick load of a model loaded before gets the quiet "Getting
+    // ready" in the ready chip's place, so the card never flashes; the first load after a download keeps the card, which
+    // says it takes a while. Anything else left is the card.
+    @Test func homeShowsAQuietLoadInsteadOfFlashingTheCard() {
+        func top(mic: AVAudioApplication.recordPermission = .granted, keyboard: KeyboardStatus = .ready,
+                 phase: SpeechModel.Phase = .ready, engine: EnginePhase, loadedBefore: Bool = true) -> HomeView.Top {
+            HomeView.top(mic: mic, keyboard: keyboard, phase: phase, waiting: nil, engine: engine, loadedBefore: loadedBefore)
+        }
+        for engine in [EnginePhase.unloaded, .loading, .warming] {
+            #expect(top(engine: engine) == .gettingReady, "\(engine)")
+            #expect(top(engine: engine, loadedBefore: false) == .blocker(.loading), "\(engine)")
+        }
+        #expect(top(engine: .readyCPU) == .ready)
+        #expect(top(engine: .failed) == .blocker(.loadFailed)) // its fix
+        #expect(top(phase: .downloading(done: 1, total: 4), engine: .noModel) == .blocker(.downloading(percent: 25)))
+        #expect(top(mic: .denied, engine: .loading) == .blocker(.micOff)) // something else is left
+        // A microphone iOS has not asked about is asked in the try: the quick load alone still gets the quiet chip.
+        #expect(top(mic: .undetermined, engine: .loading) == .gettingReady)
+        #expect(top(keyboard: .notAdded, engine: .loading) == .blocker(.keyboardOff))
+        // A keyboard in iOS's list but not yet seen waits for speech: the quick load alone still gets the quiet chip.
+        #expect(top(keyboard: .added, engine: .loading) == .gettingReady)
+    }
+
+    // Home when only what the try finishes is left (the keyboard in iOS's list but not yet seen, or the microphone not
+    // asked yet, with speech usable): one card, "Try ThumbFree" with Try it, whose box is where the keyboard first comes up
+    // and where iOS asks for the microphone; no trip to Settings, which could not confirm it, and no "Ready" yet.
+    @Test func homeLeavesWhatOnlyTheTryFinishesToTheTry() {
+        for (mic, keyboard) in [(AVAudioApplication.recordPermission.granted, KeyboardStatus.added), (.undetermined, .ready),
+                                (.undetermined, .added)] {
+            let top = HomeView.top(mic: mic, keyboard: keyboard, phase: .ready, waiting: nil, engine: .readyCPU, loadedBefore: true)
+            #expect(top == .blocker(.untried), "\(mic) \(keyboard)")
+        }
+        #expect(SetupBlocker.untried.words(.home, model: "English", size: 1) == SetupBlocker.Words(title: "Try ThumbFree", detail: nil,
+                                                                                               action: .tryKeyboard))
+    }
+
     // The snapshot factory's model fact must agree with modelDone, the same rule the model row itself uses: two
     // divergent copies of "is the model done" is exactly the bug this guards against.
     @Test func theSetupCardsFactsAgreeWithModelDone() {
         let facts = SetupRows.facts(model: .ready, engine: .readyNeuralEngine, keyboard: .added)
         #expect(facts.model == SetupRows.modelDone(.ready, engine: .readyNeuralEngine))
         #expect(facts.model)
-    }
-
-    @Test func theTryTabShowsTheLastStopToTextTime() {
-        #expect(TryView.speedLine(125) == "Last take: text ready 125 ms after the stop.")
     }
 }

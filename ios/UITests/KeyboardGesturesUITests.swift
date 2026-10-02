@@ -93,8 +93,7 @@ import XCTest
     // The words are long: one character at a time, 3.6 s takes at most 32 characters; whole words take far more.
     func testHoldingDeleteTakesWholeWords() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry()
         let seed = "extraordinary responsibility international environmental understanding representative communication neighborhood"
         ThumbFreeUI.type(seed, into: field, in: app) // with the system keyboard, then ThumbFree's
         KeyboardSetup.switchToThumbFree(in: app)
@@ -198,11 +197,10 @@ import XCTest
         XCTAssertTrue(ThumbFreeUI.element("keyboard.key.hash", in: app).exists, "it left #+=")
     }
 
-    /// The Try tab's field with the ThumbFree keyboard up.
+    /// The try screen's box with the ThumbFree keyboard up.
     private func tryField() -> (XCUIApplication, XCUIElement) {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry()
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         return (app, field)

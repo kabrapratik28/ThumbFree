@@ -71,6 +71,13 @@ enum Transcription: Equatable {
         ModelVariant.allCases.first { folder?.lastPathComponent.hasPrefix($0.rawValue) == true } ?? .v2
     }
 
+    /// The model folder the engine loads; nil for a fixed engine or no model. At a ready phase it is the folder that just
+    /// loaded: a model change stops the load it replaces from landing (`generation`).
+    var folder: URL? {
+        if case .parakeet(let folder) = source { return folder }
+        return nil
+    }
+
     /// False for Parakeet with no model folder: status.json says noModel, and keyboards offer to get the model.
     var hasModel: Bool {
         if case .parakeet(let folder) = source { return folder != nil }

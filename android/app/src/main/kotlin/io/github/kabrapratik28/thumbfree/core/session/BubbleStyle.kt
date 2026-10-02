@@ -18,7 +18,7 @@ data class BubbleStyle(val size: Size, val opacity: Int) {
         const val MIN_OPACITY = 30
         const val MAX_OPACITY = 100
 
-        /** Large and 50% opaque (50% transparent) while idle, by design; installs that saved a style keep it. */
-        val RECOMMENDED = BubbleStyle(Size.LARGE, 50)
+        /** Large and 80% opaque (20% transparent) while idle, by design; installs that saved a style keep it. */
+        val RECOMMENDED = BubbleStyle(Size.LARGE, 80)
     }
 }

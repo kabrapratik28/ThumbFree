@@ -55,7 +55,7 @@ import UniformTypeIdentifiers
         status = try? shared?.status()
         chip = nil
         opening = .no
-        // No speech model: a take could only fail. ThumbFree opens on its Try tab, which offers the download.
+        // No speech model: a take could only fail. ThumbFree opens on Home, which offers the download.
         if status?.engine == .noModel, status?.liveTake(now: Date()) == nil, let url = DictateLink.model {
             activeTake = nil
             open(url) { [weak self] opened in

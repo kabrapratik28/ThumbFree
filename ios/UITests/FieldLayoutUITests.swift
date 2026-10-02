@@ -1,6 +1,6 @@
 import XCTest
 
-/// The keyboard follows the field as Apple's does: the practice box takes each keyboard type with `-TFFieldType` (a
+/// The keyboard follows the field as Apple's does: the try screen's box takes each keyboard type with `-TFFieldType` (a
 /// `UIKeyboardType` raw value), and the keys are Apple's for it.
 @MainActor final class FieldLayoutUITests: XCTestCase {
     // An email field has Apple's @ and . beside a shorter space bar; a web address field has . / .com and no space bar.
@@ -47,11 +47,10 @@ import XCTest
         XCTAssertFalse(ThumbFreeUI.element("keyboard.key.q", in: app).exists)
     }
 
-    /// The Try tab's field as keyboard type `type`, with ThumbFree's keyboard up.
+    /// The try screen's box as keyboard type `type`, with ThumbFree's keyboard up.
     private func field(type: Int) -> (XCUIApplication, XCUIElement) {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch(arguments: ["-TFFieldType", String(type)])
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry(arguments: ["-TFFieldType", String(type)])
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         return (app, field)

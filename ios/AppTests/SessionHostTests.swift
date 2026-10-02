@@ -3,6 +3,7 @@ import AVFoundation
 import Foundation
 import Testing
 import TFCore
+import TFEngine
 @testable import ThumbFree
 
 // aCallEndsTheSessionAndKeepsTheTake posts its interruption to a private object (not process-wide), so it can no
@@ -11,21 +12,28 @@ import TFCore
     let root: URL
     let history: HistoryStore
     let shared: SharedStore
+    /// The hosts' defaults (the count of takes that gave text), one suite for this suite's tests, which run one at a time.
+    let suite = TestFiles.defaultsSuite("SessionHostTests", test: "host")
+    let defaults: UserDefaults
     static let fixed = "and so my fellow americans ask not what your country can do for you"
 
     init() throws {
         root = try TestFiles.folder()
         history = HistoryStore(root: root.appendingPathComponent("History"))
         shared = SharedStore(directory: root.appendingPathComponent("IPC"))
+        defaults = try #require(UserDefaults(suiteName: suite))
     }
 
-    deinit { try? FileManager.default.removeItem(at: root) }
+    deinit {
+        try? FileManager.default.removeItem(at: root)
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+    }
 
     func host(engine: EngineSource = .fixed(fixed), idleTimeout: TimeInterval = 300,
               interruptionSource: AnyObject = AVAudioSession.sharedInstance(),
               source: @escaping @MainActor () throws -> AudioSource) -> SessionHost {
         SessionHost(history: history, shared: shared, engine: engine, idleTimeout: idleTimeout,
-                    interruptionSource: interruptionSource) {
+                    interruptionSource: interruptionSource, defaults: defaults) {
             (try? source()) ?? MuteSource()
         }
     }
@@ -56,7 +64,7 @@ import TFCore
         }
     }
 
-    @Test func aTakeFromTheTryTabIsSavedThenTypedInTheApp() async throws {
+    @Test func aTakeInTheAppIsSavedThenTyped() async throws {
         let host = host { try self.jfk() }
         var typed: [String] = []
         host.deliverInApp = { typed.append($0) }
@@ -257,15 +265,57 @@ import TFCore
         #expect(try history.record(take)?.status == .inserted)
     }
 
-    // The Try tab shows the last take's time from the stop to its text, to compare a phone with the Mac's numbers.
-    @Test func theLastTakesStopToTextTimeIsKept() async throws {
+    // A take whose text is staged counts once, and the count is kept: a new host on the same defaults reads it.
+    @Test func aTakeWithTextIsCountedAndTheCountIsKept() async throws {
         let host = host { try self.jfk() }
         host.deliverInApp = { _ in }
-        #expect(host.lastStopToTextMs == nil)
+        #expect(host.textTakes == 0)
         _ = try await tapTake(host) { host.recordedMs >= 2_000 }
         try await waitUntil { host.status.take == .idle }
-        let ms = try #require(host.lastStopToTextMs)
-        #expect(ms >= 0 && ms < 2_000)
+        #expect(host.textTakes == 1)
+        #expect(self.host { MuteSource() }.textTakes == 1)
+    }
+
+    // A take with no text (the engine heard only blanks), a failed take (no model) and a take cancelled while it records
+    // (as the try screen does when it goes away mid-take) count nothing.
+    @Test func takesWithoutTextAreNotCounted() async throws {
+        let blank = host(engine: .fixed(" ")) { try self.jfk() }
+        _ = try await tapTake(blank) { blank.recordedMs >= 2_000 }
+        try await waitUntil { blank.status.take == .idle }
+        #expect(blank.status.message == "No speech heard.")
+        #expect(blank.textTakes == 0)
+        let failed = host(engine: .parakeet(nil)) { try self.jfk() }
+        _ = try await tapTake(failed) { failed.recordedMs >= 2_000 }
+        try await waitUntil { failed.status.take == .idle }
+        #expect(failed.status.message == "No speech model yet.")
+        #expect(failed.textTakes == 0)
+        let cancelled = host { LoudSource() }
+        let take = UUID()
+        cancelled.pressInApp(take)
+        cancelled.releaseInApp(take)
+        try await waitUntil { cancelled.status.take == .recording && cancelled.recordedMs >= 1_000 }
+        cancelled.send(.cancel(take))
+        try await waitUntil { cancelled.status.take == .idle }
+        #expect(try history.record(take)?.status == .cancelled) // kept in History, with its audio
+        #expect(cancelled.textTakes == 0)
+        cancelled.endSession() // LoudSource never runs out: close the session so its task and the host's timer stop
+        #expect(defaults.integer(forKey: SessionHost.textTakesKey) == 0)
+    }
+
+    // An update from a version that kept no count: a take in History starts it at 1, saved, so Home offers no first try.
+    @Test func withNoCountATakeInHistoryStartsItAtOne() throws {
+        try history.create(TakeRecord(id: UUID(), order: 1, startedAt: Date() - 60, modelID: "test", status: .inserted))
+        #expect(host { MuteSource() }.textTakes == 1)
+        #expect(defaults.object(forKey: SessionHost.textTakesKey) as? Int == 1)
+    }
+
+    // With no count and an empty History (a first launch, or a reset) it starts at 0, saved too, so a take that later
+    // gives no text never turns it into 1 on the next launch.
+    @Test func withNoCountAnEmptyHistoryStartsItAtZero() throws {
+        #expect(host { MuteSource() }.textTakes == 0)
+        #expect(defaults.object(forKey: SessionHost.textTakesKey) as? Int == 0)
+        try history.create(TakeRecord(id: UUID(), order: 1, startedAt: Date() - 60, modelID: "test", status: .noSpeech))
+        #expect(host { MuteSource() }.textTakes == 0)
     }
 
     // Under 1 s of silence leaves no trace.
@@ -297,6 +347,18 @@ import TFCore
         #expect(record.error == TakeMessage.noModel.rawValue)
         #expect(host.status.message == "No speech model yet.")
         #expect(host.status.engine == .noModel)
+    }
+
+    // Each time the engine finishes loading, the host says so, with the folder it loaded (none for a fixed engine), for
+    // that model to remember it was loaded.
+    @Test func theHostSaysWhenTheEngineIsReady() async throws {
+        let host = host { MuteSource() }
+        var folders: [URL?] = []
+        host.onEngineReady = { folders.append($0) }
+        host.prepareEngine()
+        try await waitUntil { folders.count == 1 }
+        #expect(folders == [nil])
+        #expect(host.status.engine == .readyCPU)
     }
 
     // Keyboards read noModel from the first status on, and a finished download starts the engine's load at once.
@@ -410,8 +472,8 @@ import TFCore
         #expect(none.status.session == .off)
     }
 
-    // No model: Start ThumbFree starts nothing and opens the model's offer on the Try tab, as the keyboard's no-model
-    // press does.
+    // No model: Start ThumbFree starts nothing and opens the model's offer on Home, as the keyboard's no-model press
+    // does.
     @Test func startThumbFreeWithNoModelOpensTheModelOffer() async throws {
         let host = host(engine: .parakeet(nil)) { LoudSource() }
         AppEnvironment.routeStart(to: host)
@@ -920,4 +982,42 @@ import TFCore
 /// A stub clock for the stop tail's seam: the test moves `ms` directly, instead of waiting on the real clock.
 @MainActor private final class ManualClock {
     var ms = 0
+}
+
+extension RealModelTests {
+    // A model chosen during a take waits for the take's end, so the load of the model before it, already on its way,
+    // ends after the choice: the model whose folder loaded is the one remembered as loaded, never the choice, whose own
+    // first load is still to come (Home then shows its card, which says it takes a while). The app's own wiring
+    // (`AppEnvironment.connect`). Needs the v2 model (on the Simulator, the Mac's cached one).
+    @Test(.enabled(if: DevModels.directory(for: .v2) != nil))
+    func aChoiceDuringATakeIsNotMarkedLoadedByTheLoadBeforeIt() async throws {
+        let v2 = try #require(DevModels.directory(for: .v2))
+        let root = try TestFiles.folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let v3 = root.appendingPathComponent("parakeet-tdt-0.6b-v3") // its load, after the take, fails at once
+        try FileManager.default.createDirectory(at: v3, withIntermediateDirectories: true)
+        try Data("not a vocabulary".utf8).write(to: v3.appendingPathComponent("parakeet_vocab.json"))
+        let suite = TestFiles.defaultsSuite("RealModelMarks")
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let models = SpeechModels(
+            english: SpeechModel(entries: SpeechModel.english, folder: root.appendingPathComponent("v2"), ready: true, cached: v2, defaults: defaults),
+            multilingual: SpeechModel(entries: SpeechModel.multilingual, folder: v3, ready: true, defaults: defaults),
+            defaults: defaults, preferredLanguages: ["en-US"])
+        let host = SessionHost(history: HistoryStore(root: root.appendingPathComponent("History")),
+                               shared: SharedStore(directory: root.appendingPathComponent("IPC")),
+                               engine: .parakeet(models.active.usableFolder), defaults: defaults) { LoudSource() }
+        AppEnvironment.connect(models, to: host)
+        let take = UUID()
+        host.pressInApp(take)
+        host.releaseInApp(take) // the session starts, and with it the English model's load
+        try await waitUntil { host.status.take == .recording && host.status.engine == .loading }
+        models.choose(models.multilingual) // waits for the take's end
+        #expect(models.active === models.multilingual)
+        try await waitUntil(.seconds(300)) { host.status.engine == .readyNeuralEngine || host.status.engine == .readyCPU }
+        #expect(models.english.loadedBefore)
+        #expect(!models.multilingual.loadedBefore)
+        host.endSession()
+        try await waitUntil(.seconds(60)) { host.status.take == .idle }
+    }
 }

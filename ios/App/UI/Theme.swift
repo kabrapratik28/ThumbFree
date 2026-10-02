@@ -25,9 +25,34 @@ enum Theme {
     static let success = Color(light: 0x1B7A4A, dark: 0x7DDBA3)
     /// Section headers ("How it works", "Today"): the Android app's dark gold, sunflower on dark.
     static let heading = Color(light: 0x7A5900, dark: 0xFFD35A)
-    /// The mic key's ring while it listens.
-    static let recording = Color(light: 0xFF3B30, dark: 0xFF3B30)
+    /// The stop key while a take records.
+    static let recording = Color(light: 0xFF3B30, dark: 0xFF6961)
     static let error = Color(light: 0xBA1A1A, dark: 0xFFB4AB)
+
+    // Illustrations: every drawing of a chat, a keyboard or Settings sits on these, in a soft labelled frame
+    // (`IllustrationFrame`), with thin light lines, so it reads as a picture and never as a control.
+
+    /// The frame's background.
+    static let canvas = Color(light: 0xF5F0E7, dark: 0x211D38)
+    /// Drawn rows and text boxes.
+    static let surface = Color(light: 0xFFFCF7, dark: 0x2C2742)
+    /// The fine lines of a drawing, and the frame's edge.
+    static let line = Color(light: 0xCFC7BA, dark: 0x554E69)
+    /// Empty fields, switches that are off, and the frame's label.
+    static let muted = Color(light: 0xE8E2D7, dark: 0x3A344F)
+    /// The drawn keyboard and its keys.
+    static let keyboardGlass = Color(light: 0xDDE0E5, dark: 0x19191C)
+    static let keyFace = Color(light: 0xFFFFFF, dark: 0x3A3A3C)
+    /// A drawn Settings switch that is on: iOS's green, as the person will see it in Settings.
+    static let switchOn = Color(light: 0x34C759, dark: 0x30D158)
+    /// Sam's message in a drawn chat: the chip color, a step lighter in Dark Mode, so it shows on the chat's card.
+    static let bubble = Color(light: 0xF5E9D6, dark: 0x3A344F)
+    /// The thin edge just outside a tap cue's yellow ring, so the ring stands out on light and dark canvases alike.
+    static let cueEdge = Color(light: 0x7A5900, dark: 0xFFF0B8)
+    /// A drawn switch's knob: white in both, as iOS draws it.
+    static let knob = Color(light: 0xFFFFFF, dark: 0xFFFFFF)
+    /// Shadows, at the opacity each one sets.
+    static let shadow = Color(light: 0x000000, dark: 0x000000)
 }
 
 extension Color {

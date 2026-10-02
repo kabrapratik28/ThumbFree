@@ -39,3 +39,16 @@ The store illustrations share one style. Use this as the style part of any new i
 > Hand-drawn illustration with thick navy outlines (#26264A) and flat fills in warm yellow (#FFC83D), soft orange and coral red accents. Plain cream background (#FFF8E7) edge to edge, with no frame, border or shadow box. Small playful motion marks around the main objects. Friendly, simple, modern editorial doodle look. No gradients, no photo textures. No text, letters, numbers, logos or brand marks: squiggly lines where words would be. The app's signature element is a round, glossy yellow floating button with a small dark rounded-square icon showing a sound wave.
 
 The prompts for each platform's images are in `android/prompts/` and `ios/`.
+
+## README images
+
+`readme/` holds the images the repository README shows besides the logo.
+
+| File | Use |
+|---|---|
+| `android-1-listening.png`, `android-2-typed.png`, `iphone-1-listening.png`, `iphone-2-typed.png` | Captures 1 and 2 from `../android/raw/` and `../ios/raw/` in a navy phone frame, 480 px wide with 256 colours |
+| `join-android-test.svg` | The Join the Android test button, with the bubble on navy |
+| `buy-me-a-coffee.svg` | The Buy me a coffee button, navy on sunflower |
+| `make.py` | Makes the four screenshots again (needs Pillow); run it when those captures change |
+
+The buttons set their labels in the reader's system font, because GitHub shows an SVG as an image, which can't load web fonts.

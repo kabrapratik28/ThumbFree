@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -53,15 +54,15 @@ import io.github.kabrapratik28.thumbfree.core.models.ModelStatus
 import io.github.kabrapratik28.thumbfree.core.models.ModelStore
 import io.github.kabrapratik28.thumbfree.models.DownloadState
 
-/** The three screens under the bottom bar. Try opens first. */
+/** The four screens under the bottom bar. Home opens first. */
 enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
-    TRY(R.string.ui_tab_try, AppIcons.Mic),
+    HOME(R.string.ui_tab_home, AppIcons.Home),
     HISTORY(R.string.ui_tab_history, AppIcons.History),
     DICTIONARY(R.string.ui_tab_dictionary, AppIcons.Book),
     SETTINGS(R.string.ui_tab_settings, AppIcons.Settings),
 }
 
-/** What a take needs. The Try card, Settings and the welcome steps fix them. */
+/** What a take needs. Home's setup card, Settings and the welcome steps fix them. */
 enum class SetupItem { MIC, SERVICE, MODEL }
 
 /**
@@ -195,7 +196,7 @@ fun IconBadge(icon: ImageVector, tint: Color, background: Color, size: Int = 40)
  * percentage or the file check with a bar, and a failed download says why, with Try again.
  */
 @Composable
-fun SetupRows(setup: SetupState, items: List<SetupItem>, onFix: (SetupItem) -> Unit, modelDownload: DownloadState? = null) {
+fun SetupRows(setup: SetupState, items: List<SetupItem>, onFix: (SetupItem) -> Unit, modelDownload: DownloadState? = null, thinBar: Boolean = false) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         for (item in items) {
             val ok = setup.ok(item)
@@ -209,7 +210,7 @@ fun SetupRows(setup: SetupState, items: List<SetupItem>, onFix: (SetupItem) -> U
             val action = when {
                 ok || (item == SetupItem.MODEL && setup.model == null) -> null // nothing to fix, or the check still runs
                 download is DownloadState.Failed -> stringResource(R.string.ui_models_try_again)
-                download is DownloadState.Queued && download.wifiOnly -> stringResource(R.string.ui_use_mobile_data)
+                download is DownloadState.Queued && download.wifiOnly && !download.retrying -> stringResource(R.string.ui_use_mobile_data)
                 download != null -> null // under way: the bar shows it
                 else -> stringResource(setupFix(item))
             }
@@ -217,6 +218,7 @@ fun SetupRows(setup: SetupState, items: List<SetupItem>, onFix: (SetupItem) -> U
                 icon = setupIcon(item), title = stringResource(setupTitle(item, setup.chosen)), detail = detail,
                 ok = ok, action = action, onAction = { onFix(item) },
                 progress = if (download == null || download is DownloadState.Failed) null else downloadFraction(download) ?: Float.NaN,
+                thinBar = thinBar,
             )
         }
     }
@@ -231,7 +233,7 @@ fun downloadDetail(download: DownloadState): String = when (download) {
 }
 
 @Composable
-private fun SetupRow(icon: ImageVector, title: String, detail: String, ok: Boolean, action: String?, onAction: () -> Unit, progress: Float?) {
+private fun SetupRow(icon: ImageVector, title: String, detail: String, ok: Boolean, action: String?, onAction: () -> Unit, progress: Float?, thinBar: Boolean) {
     val colors = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics(mergeDescendants = true) {},
@@ -244,8 +246,17 @@ private fun SetupRow(icon: ImageVector, title: String, detail: String, ok: Boole
             Text(detail, style = MaterialTheme.typography.bodyMedium, color = if (ok) colors.success else colors.onSurfaceVariant)
             // NaN: a wait or the file check, which have no value to show.
             // The badge colour for the track: the default track is the sunflower of the setup card itself.
-            if (progress != null && progress.isNaN()) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 6.dp), trackColor = colors.badge)
-            else if (progress != null) LinearProgressIndicator({ progress }, Modifier.fillMaxWidth().padding(top = 6.dp), trackColor = colors.badge)
+            val bar = Modifier.fillMaxWidth().padding(top = 6.dp)
+            when {
+                progress == null -> Unit
+                // Home's row has a 2 dp line, on its own raised surface.
+                thinBar && progress.isNaN() -> LinearProgressIndicator(bar.height(2.dp), trackColor = colors.secondary.copy(alpha = 0.2f), gapSize = 0.dp)
+                thinBar -> LinearProgressIndicator(
+                    { progress }, bar.height(2.dp), trackColor = colors.secondary.copy(alpha = 0.2f), gapSize = 0.dp, drawStopIndicator = {},
+                )
+                progress.isNaN() -> LinearProgressIndicator(bar, trackColor = colors.badge)
+                else -> LinearProgressIndicator({ progress }, bar, trackColor = colors.badge)
+            }
         }
         if (action != null) {
             Button(onAction, contentPadding = PaddingValues(horizontal = 16.dp), colors = ButtonDefaults.buttonColors()) { Text(action) }

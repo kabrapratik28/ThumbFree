@@ -19,12 +19,6 @@ struct DictionaryView: View {
         let check = Self.check(draft, in: dictionary.entries)
         List {
             Section {
-                Text("Names and words ThumbFree should spell your way: family, friends, colleagues, places, work terms.")
-                    .foregroundStyle(Theme.inkSoft)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 8, trailing: 4))
-            }
-            Section {
                 HStack {
                     TextField("Word or phrase", text: $draft)
                         .textInputAutocapitalization(.words)
@@ -47,6 +41,14 @@ struct DictionaryView: View {
                 Button("Paste a list") { pasting = true }
                     .disabled(dictionary.isFull)
                     .accessibilityIdentifier("dictionary.paste")
+            } header: {
+                // The section's header, not a row of its own: a row's rounded corners clip its first and last letters.
+                // The bottom inset keeps the gap of a section break between it and the field.
+                Text("Names and words ThumbFree should spell your way: family, friends, colleagues, places, work terms.")
+                    .font(.body)
+                    .foregroundStyle(Theme.inkSoft)
+                    .textCase(nil)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 43, trailing: 4))
             }
             .listRowBackground(Theme.card)
             if dictionary.entries.isEmpty {

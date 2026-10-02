@@ -9,7 +9,7 @@ struct ThumbFreeApp: App {
     @State private var models: SpeechModels
     @State private var dictionary: DictionaryStore
     @State private var settings: AppSettings
-    @State private var tab = RootTab.try
+    @State private var tab = RootTab.home
     @State private var welcome: Bool
     @State private var showSession = false
     @State private var commands: DarwinObserver?
@@ -22,6 +22,7 @@ struct ThumbFreeApp: App {
         _dictionary = State(initialValue: dictionary)
         _settings = State(initialValue: settings)
         _welcome = State(initialValue: !UserDefaults.standard.bool(forKey: WelcomeView.doneKey)) // after -TFResetState
+        if !UserDefaults.standard.bool(forKey: WelcomeView.doneKey) { WelcomeView.restoreStep(model: models.active) }
         // Keyboard commands are heard from launch on, not from the first scene: Start ThumbFree can launch the app in the
         // background with no scene, and the keyboard's next tap must reach that session. With no session and the app
         // not on screen, handleCommands() leaves a press on disk.
@@ -32,8 +33,8 @@ struct ThumbFreeApp: App {
         WindowGroup {
             Group {
                 if welcome {
-                    WelcomeView(host: host, model: models.active) {
-                        tab = .try
+                    WelcomeView(host: host, models: models) {
+                        tab = .home
                         welcome = false
                     }
                 } else {
@@ -52,10 +53,10 @@ struct ThumbFreeApp: App {
                     }
                 }
                 .onOpenURL { url in
-                    // The keyboard found no model, or a dictate link came with none: no take; show where to get it.
+                    // The keyboard found no model, or a dictate link came with none: no take; show where to get it, Home's
+                    // card, or during the welcome its own step, whose first one gets speech ready.
                     if DictateLink.isModel(url) || (DictateLink.take(from: url) != nil && !host.hasModel) {
-                        if welcome { UserDefaults.standard.set(WelcomeView.Step.howTo.rawValue, forKey: WelcomeView.stepKey) }
-                        tab = .try
+                        tab = .home
                         return
                     }
                     guard let take = DictateLink.take(from: url) else { return }

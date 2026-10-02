@@ -39,10 +39,10 @@ import XCTest
         ready = true
     }
 
-    /// Whether ThumbFree's keyboard, up in the app's Try field, has Full Access: its status line does not ask for it.
+    /// Whether ThumbFree's keyboard, up in the try screen's box, has Full Access: its status line does not ask for it.
     private static func hasFullAccess() -> Bool {
-        let app = ThumbFreeUI.launch()
-        ThumbFreeUI.element("try.field", in: app).tap()
+        let (app, field) = ThumbFreeUI.launchTry()
+        field.tap()
         switchToThumbFree(in: app)
         let status = app.staticTexts["keyboard.status"]
         return status.waitForExistence(timeout: 3) && !status.label.hasPrefix("Full Access is off")
@@ -50,13 +50,24 @@ import XCTest
 
     /// Taps the system globe ("Next keyboard", below the keyboard) until ThumbFree's mic key shows. Short looks between
     /// taps (a wrong keyboard costs 1.5 s, not 3), and rounds enough to come back once to a keyboard that was still
-    /// starting when a look gave up on it.
+    /// starting when a look gave up on it. iOS's one-time keyboard tips go first: they cover the keys.
     static func switchToThumbFree(in app: XCUIApplication) {
         let mic = app.buttons["keyboard.mic"]
         for _ in 0..<6 {
-            if mic.waitForExistence(timeout: 1.5) { return }
+            dismissKeyboardTip(in: app)
+            if mic.waitForExistence(timeout: 1.5) {
+                dismissKeyboardTip(in: app) // one may come with the switch
+                return
+            }
             app.buttons["Next keyboard"].firstMatch.tap() // more than one matches "Next keyboard" on some layers
         }
         XCTAssertTrue(mic.waitForExistence(timeout: 5), "the ThumbFree keyboard did not show")
+    }
+
+    /// A fresh Simulator shows iOS's keyboard tips once ("Quickly Change Keyboards", sliding to type) in the keys' place,
+    /// each closed by its Continue. The places these tests type in have no Continue of their own.
+    private static func dismissKeyboardTip(in app: XCUIApplication) {
+        let tip = app.buttons["Continue"]
+        if tip.exists, tip.isHittable { tip.tap() }
     }
 }

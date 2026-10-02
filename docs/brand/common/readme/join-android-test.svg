@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="244" height="52" viewBox="0 0 244 52">
+<defs><linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD35A"/><stop offset="1" stop-color="#FFB61E"/></linearGradient></defs>
+<rect x="0.5" y="0.5" width="243" height="51" rx="25.5" fill="#26264A" stroke="#39335F"/>
+<circle cx="26" cy="26" r="18" fill="url(#sun)"/>
+<g transform="translate(26 26) scale(0.05) translate(-512 -441)"><g transform="rotate(-9 512 440)"><rect x="302" y="258" width="420" height="366" rx="86" fill="#1F1B3A"/><rect x="338" y="276" width="348" height="270" rx="62" fill="#39335F"/><g fill="#FFC83D"><rect x="379" y="376" width="34" height="70" rx="17"/><rect x="437" y="346" width="34" height="130" rx="17"/><rect x="495" y="321" width="34" height="180" rx="17"/><rect x="553" y="346" width="34" height="130" rx="17"/><rect x="611" y="376" width="34" height="70" rx="17"/></g></g></g>
+<text x="140" y="26" dy=".35em" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#FFF8E7">Join the Android test</text>
+</svg>

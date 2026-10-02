@@ -1,9 +1,14 @@
 package io.github.kabrapratik28.thumbfree.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.net.ConnectivityManager
+import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +25,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -44,6 +50,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -72,9 +79,11 @@ fun formatSize(bytes: Long): String {
 
 /**
  * One card per catalog model, following its [DownloadState]: its size and Download; a wait, a percentage or the file
- * check, each with a bar and Cancel; Installed and Delete once ready; or what went wrong and Try again. With [wifiOnly]
- * on, a tap on a [metered] network asks first whether to use mobile data now or wait for Wi-Fi. [onWifiOnly] shows the
- * Wi-Fi-only switch, [onBack] a back arrow. A model in [pending] has a Cancel or Delete still running: its buttons wait.
+ * check, each with a bar and Cancel; Installed and Delete once ready; or what went wrong and Try again (and Open storage
+ * when there is no room, [onOpenStorage]). With [wifiOnly] on, a tap on a [metered] network asks first whether to use
+ * mobile data now or wait for Wi-Fi. [onWifiOnly] shows the Wi-Fi-only switch, [onBack] a back arrow. A model in
+ * [pending] has a Cancel or Delete still running: its buttons wait. The [chosen] model, the one takes use, says In use;
+ * every other one offers Use this model ([onChoose]), on the phone or not yet.
  */
 @Composable
 fun ModelScreen(
@@ -87,6 +96,9 @@ fun ModelScreen(
     onWifiOnly: ((Boolean) -> Unit)? = null,
     onBack: (() -> Unit)? = null,
     pending: Set<ModelFile> = emptySet(),
+    chosen: ModelFile? = null,
+    onChoose: ((ModelFile) -> Unit)? = null,
+    onOpenStorage: (() -> Unit)? = null,
 ) {
     Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
@@ -110,7 +122,12 @@ fun ModelScreen(
                 }
             }
             if (onWifiOnly != null) item(key = "wifi") { WifiOnlyRow(wifiOnly, onWifiOnly) }
-            items(rows, key = { it.model.id }) { row -> ModelRowItem(row, metered, wifiOnly, onDownload, onCancel, onDelete, row.model in pending) }
+            items(rows, key = { it.model.id }) { row ->
+                ModelRowItem(
+                    row, metered, wifiOnly, onDownload, onCancel, onDelete, row.model in pending, row.model == chosen,
+                    onChoose?.takeIf { row.model != chosen }, onOpenStorage,
+                )
+            }
         }
     }
 }
@@ -144,6 +161,9 @@ private fun ModelRowItem(
     onCancel: (ModelFile) -> Unit,
     onDelete: (ModelFile) -> Unit,
     pending: Boolean,
+    inUse: Boolean,
+    onChoose: ((ModelFile) -> Unit)?,
+    onOpenStorage: (() -> Unit)?,
 ) {
     var askWifi by rememberSaveable(row.model.id) { mutableStateOf(false) }
     var askDelete by rememberSaveable(row.model.id) { mutableStateOf(false) } // a model is a big download: Delete asks first
@@ -170,6 +190,12 @@ private fun ModelRowItem(
                     Text(stringResource(modelName(row.model)), style = MaterialTheme.typography.titleMedium)
                     Text(modelDetail(row.model), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                 }
+                if (inUse) {
+                    Text(
+                        stringResource(R.string.ui_models_chosen), Modifier.clip(CircleShape).background(colors.chosen).padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium, color = colors.onChosen,
+                    )
+                }
             }
             when (val state = row.state) {
                 // Cancel stays for as long as work is unfinished, a wait with no progress data included: a second
@@ -190,13 +216,14 @@ private fun ModelRowItem(
                         OutlinedButton(onClick = { onCancel(row.model) }, enabled = !pending) { Text(stringResource(R.string.ui_models_cancel)) }
                     }
                     // A Wi-Fi wait can use mobile data now instead (start with wifiOnly false replaces the wait).
-                    if (state is DownloadState.Queued && state.wifiOnly) {
+                    if (state is DownloadState.Queued && state.wifiOnly && !state.retrying) {
                         FilledTonalButton(onClick = { onDownload(row.model, false) }) { Text(stringResource(R.string.ui_use_mobile_data)) }
                     }
                 }
                 DownloadState.Ready -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(AppIcons.CheckCircle, contentDescription = null, Modifier.size(20.dp), tint = colors.success)
                     Text(stringResource(R.string.ui_models_installed), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = colors.success)
+                    if (onChoose != null) FilledTonalButton(onClick = { onChoose(row.model) }) { Text(stringResource(R.string.ui_models_use)) }
                     TextButton(onClick = { askDelete = true }, enabled = !pending) { Text(stringResource(R.string.ui_delete), color = colors.error) }
                 }
                 DownloadState.NotDownloaded, is DownloadState.Failed -> if (askWifi) {
@@ -221,7 +248,15 @@ private fun ModelRowItem(
                             Text(stringResource(if (failed != null) R.string.ui_models_try_again else R.string.ui_models_download))
                         }
                     }
+                    // No room: the remedy is outside the app, so it offers the way there too.
+                    if (failed?.reason == FailReason.NOT_ENOUGH_SPACE && onOpenStorage != null) {
+                        OutlinedButton(onClick = onOpenStorage) { Text(stringResource(R.string.ui_models_open_storage)) }
+                    }
                 }
+            }
+            // Not on the phone yet: the switch starts its download too (MainActivity), whose state this card then shows.
+            if (onChoose != null && row.state != DownloadState.Ready) {
+                FilledTonalButton(onClick = { onChoose(row.model) }) { Text(stringResource(R.string.ui_models_use)) }
             }
         }
     }
@@ -233,7 +268,13 @@ internal fun downloadFraction(state: DownloadState): Float? =
 
 @Composable
 internal fun progressLabel(state: DownloadState): String = when (state) {
-    is DownloadState.Queued -> stringResource(if (state.wifiOnly) R.string.ui_models_waiting_for_wifi else R.string.ui_models_waiting_for_network)
+    is DownloadState.Queued -> stringResource(
+        when {
+            state.retrying -> R.string.ui_models_retrying
+            state.wifiOnly -> R.string.ui_models_waiting_for_wifi
+            else -> R.string.ui_models_waiting_for_network
+        },
+    )
     is DownloadState.Downloading -> "${if (state.total > 0) (state.bytes * 100 / state.total).coerceIn(0, 100) else 0}%"
     else -> stringResource(R.string.ui_models_verifying)
 }
@@ -246,9 +287,12 @@ internal fun failLabel(reason: FailReason): Int = when (reason) {
     FailReason.FILE_CHECK_FAILED -> R.string.ui_models_failed_check
 }
 
-/** Wires the stateless [ModelScreen] to [ModelDownloads], the Wi-Fi-only setting and connectivity. */
+/**
+ * Wires the stateless [ModelScreen] to [ModelDownloads], the Wi-Fi-only setting and connectivity; the [chosen] model and
+ * a switch to another ready one ([onChoose]) are MainActivity's.
+ */
 @Composable
-fun ModelsRoute(onBack: () -> Unit) {
+fun ModelsRoute(onBack: () -> Unit, chosen: ModelFile? = null, onChoose: ((ModelFile) -> Unit)? = null) {
     val context = LocalContext.current
     BackHandler(onBack = onBack)
 
@@ -288,5 +332,14 @@ fun ModelsRoute(onBack: () -> Unit) {
         wifiOnly = wifiOnly,
         onWifiOnly = { AppGraph.settings.wifiOnly = it; wifiOnly = it },
         onBack = onBack,
+        chosen = chosen,
+        onChoose = onChoose,
+        onOpenStorage = {
+            try {
+                context.startActivity(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS))
+            } catch (e: ActivityNotFoundException) {
+                Log.w("ThumbFree", "no_activity storage")
+            }
+        },
     )
 }

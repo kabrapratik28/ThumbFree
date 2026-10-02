@@ -64,6 +64,11 @@ import TFCore
     /// Gives the host the session length and the retention rule.
     func apply(to host: SessionHost) {
         host.idleTimeout = TimeInterval(sessionMinutes * 60)
+        #if DEBUG
+        // UI tests (Debug builds): `-TFEndSessions YES` ends each session as soon as its take is over, so the app stops
+        // rewriting its status while a test watches the keyboard, and the next take starts the test audio again.
+        if defaults.bool(forKey: "TFEndSessions") { host.idleTimeout = 0 }
+        #endif
         host.keepDays = keepDays
         host.keepCount = keepCount
     }

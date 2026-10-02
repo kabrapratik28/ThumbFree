@@ -4,15 +4,15 @@ import XCTest
 /// voice it names. `tools/store-video.sh` makes both, records the Simulator's screen while this runs, and cuts the preview
 /// from the times this writes to `events.json`. ThumbFree's real engine types what the voice says: the voice plays as the
 /// microphone (`-TFAudioFile`) from the moment the session starts, so every tap is timed against the voice's clock.
-/// The store build's flow: the session starts in ThumbFree (a take on the Try tab, which also readies the engine), then
-/// Messages, where each tap starts a take at once. Maya is a made-up contact the script adds; nothing is sent.
+/// The store build's flow: the session starts in ThumbFree (a take in the try screen's box, which also readies the
+/// engine), then Messages, where each tap starts a take at once. Maya is a made-up contact the script adds; nothing is sent.
 /// Optional: the listing has screenshots only, no App Preview video. Kept working, for when a video is wanted.
 @MainActor final class StoreVideoUITests: XCTestCase {
     struct Plan: Decodable {
         /// A spoken line: where it starts and ends in the voice WAV, in seconds, and words its text must contain.
         struct Line: Decodable { let start, end: Double; let expect: String }
         let voice: String      // the WAV that plays as the microphone
-        let warmup: Line       // the Try tab's take: starts the session and readies the engine
+        let warmup: Line       // the take in the try screen's box: starts the session and readies the engine
         let lines: [Line]      // the takes in Messages
         let conversation: String // part of the conversation's name in Messages' list
         let lead, stopAfter, hold: Double // the tap this long before a line, the stop this long after it, the last frames
@@ -27,22 +27,24 @@ import XCTest
         let folder = URL(fileURLWithPath: path, isDirectory: true)
         let plan = try JSONDecoder().decode(Plan.self, from: Data(contentsOf: folder.appendingPathComponent("plan.json")))
         let app = XCUIApplication()
-        app.launchArguments = ["-TFAudioFile", plan.voice, "-TFResetState", "YES", "-TFWelcomeDone", "YES"] // the real engine
+        app.launchArguments = ["-TFAudioFile", plan.voice, "-TFResetState", "YES", "-TFWelcomeDone", "YES"] + ThumbFreeUI.tryArguments // the real engine
         app.launch() // installs ThumbFree on a new Simulator: Settings lists the keyboard only then
         KeyboardSetup.ensureReady()
         app.launch()
-        // The session: its first take on the Try tab. The voice starts with the tap, and the engine is ready once the
-        // warm-up line is typed in the practice box.
-        let tryMic = ThumbFreeUI.element("try.mic", in: app)
-        XCTAssertTrue(ThumbFreeUI.wait(until: 30) { tryMic.isEnabled }, "the Try tab's mic is not ready")
-        tryMic.tap()
+        // The session: its first take, with the keyboard in the try screen's box. The voice starts with the tap, and the
+        // engine is ready once the warm-up line is typed in the box.
+        let box = ThumbFreeUI.element("try.field", in: app)
+        XCTAssertTrue(box.waitForExistence(timeout: 10), "no try screen:\n\(app.debugDescription)")
+        box.tap()
+        KeyboardSetup.switchToThumbFree(in: app)
+        let boxMic = app.buttons["keyboard.mic"]
+        boxMic.tap()
         let clock = Date() // the voice's second 0, give or take the tap's own time: each line has a second to spare
         mark("sessionStart")
-        XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("try.status", in: app), toContain: "Listening", timeout: 10))
+        XCTAssertTrue(ThumbFreeUI.wait(for: app.staticTexts["keyboard.status"], toContain: "Recording", timeout: 10))
         wait(until: clock + plan.warmup.end + plan.stopAfter)
-        tryMic.tap()
-        XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("try.field", in: app), toContain: plan.warmup.expect, timeout: 120),
-                      "the engine did not type the warm-up line")
+        boxMic.tap()
+        XCTAssertTrue(ThumbFreeUI.wait(for: box, toContain: plan.warmup.expect, timeout: 120), "the engine did not type the warm-up line")
         // Messages, in Maya's conversation.
         let messages = XCUIApplication(bundleIdentifier: "com.apple.MobileSMS")
         let field = ThumbFreeUI.conversation(plan.conversation, in: messages)

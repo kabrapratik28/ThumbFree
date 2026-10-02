@@ -3,8 +3,7 @@ import XCTest
 @MainActor final class KeyboardUITests: XCTestCase {
     func testTheKeysTypeIntoTheTryField() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry()
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         // The letters layer: type "hi". The field auto-capitalizes the first letter of the sentence, so it reads "Hi".
@@ -25,8 +24,7 @@ import XCTest
     // The return key inserts a newline and is labelled for the field; double space makes a full stop.
     func testReturnAndDoubleSpace() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry()
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         for id in ["keyboard.key.h", "keyboard.key.i"] { ThumbFreeUI.element(id, in: app).tap() }
@@ -35,7 +33,7 @@ import XCTest
         ThumbFreeUI.element("keyboard.space", in: app).doubleTap()
         XCTAssertTrue(ThumbFreeUI.wait(for: field, toContain: "Hi. ", timeout: 5), "double space did not make a full stop")
         let ret = ThumbFreeUI.element("keyboard.return", in: app)
-        XCTAssertEqual(ret.label, "return") // the practice box's return key type is the default one
+        XCTAssertEqual(ret.label, "return") // the try box's return key type is the default one
         ret.tap()
         for id in ["keyboard.key.b", "keyboard.key.y", "keyboard.key.e"] { ThumbFreeUI.element(id, in: app).tap() }
         XCTAssertTrue(ThumbFreeUI.wait(for: field, toContain: "bye", timeout: 5), "the letters after return did not arrive")
@@ -45,8 +43,7 @@ import XCTest
     // Apple's layer rule: a space typed on the 123 layer goes back to the letters.
     func testASpaceOnTheNumbersLayerGoesBackToLetters() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry()
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         ThumbFreeUI.element("keyboard.toNumbers", in: app).tap()
@@ -62,8 +59,7 @@ import XCTest
     // Once delete has fired, sliding the finger off it onto a letter only stops it: the release types nothing.
     func testSlidingOffDeleteTypesNothing() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry()
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         // A word with no m, long enough that a stray delete repeat never empties the field (an empty field's value is
@@ -82,8 +78,7 @@ import XCTest
     // A double tap on shift locks capitals, also at the start of a sentence, where one capital is already on.
     func testADoubleTapOnShiftLocksCapitals() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry()
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         ThumbFreeUI.element("keyboard.shift", in: app).doubleTap()
@@ -96,8 +91,7 @@ import XCTest
     // and "Hi." with no space after it does not end a sentence, so the next letter stays lowercase.
     func testAnAutomaticCapitalGoesAwayWhenTheSentenceEndIsDeleted() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry()
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         for id in ["keyboard.key.h", "keyboard.key.i"] { ThumbFreeUI.element(id, in: app).tap() }
@@ -113,8 +107,7 @@ import XCTest
     // this guards against left a leaked repeat loop that both kept deleting and swallowed the next press.
     func testHoldingDeleteRepeatsAndStopsOnRelease() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        let field = ThumbFreeUI.element("try.field", in: app)
+        let (app, field) = ThumbFreeUI.launchTry()
         field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         // Long enough that a 1.2 s hold (about 1 + (1200 - 500) / 100 = 8 deletes, Apple's pace) cannot empty it, leaving
@@ -146,14 +139,14 @@ import XCTest
         let listening = app.staticTexts["session.title"]
         app.buttons["session.end"].tap()
         XCTAssertTrue(listening.waitForNonExistence(timeout: 5), "End session did not close the session screen")
-        XCTAssertTrue(ThumbFreeUI.element("try.field", in: app).exists)
+        XCTAssertTrue(ThumbFreeUI.onHome(app, timeout: 5), "not back on Home")
         // settingsSearchWithThumbFree already switched to the ThumbFree keyboard once, in Settings: its
-        // viewWillAppear wrote the keyboard's mark, so the Try tab's setup card no longer asks for the keyboard,
+        // viewWillAppear wrote the keyboard's mark, so Home's setup card no longer asks for the keyboard,
         // per the contract in docs/contract.md.
         let keyboardLine = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "switch to ThumbFree", "Add the keyboard")).firstMatch
         XCTAssertTrue(ThumbFreeUI.wait(until: 5) { !keyboardLine.exists },
-                      "the Try tab still asked for the keyboard after it appeared in another app")
+                      "Home still asked for the keyboard after it appeared in another app")
     }
 
     // ThumbFree is not running (iOS ended it, or it was swiped away): the mic opens it, the take starts, and its text
@@ -162,7 +155,7 @@ import XCTest
     func testTheMicOpensThumbFreeWhenItIsNotRunning() throws {
         KeyboardSetup.ensureReady()
         let app = ThumbFreeUI.launch(arguments: ["-TFKeepSetup", "YES"])
-        XCTAssertTrue(ThumbFreeUI.element("try.field", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(ThumbFreeUI.onHome(app))
         app.terminate()
         XCTAssertEqual(app.state, .notRunning)
         let (settings, search) = settingsSearchWithThumbFree()
@@ -179,9 +172,11 @@ import XCTest
     // goes where the stop is tapped.
     func testTheMicStartsAFreshTakeAfterThumbFreeDiedDuringOne() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch(arguments: ["-TFKeepSetup", "YES"])
-        ThumbFreeUI.element("try.mic", in: app).tap()
-        XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("try.status", in: app), toContain: "Listening", timeout: 10))
+        let (app, field) = ThumbFreeUI.launchTry(arguments: ["-TFKeepSetup", "YES"])
+        field.tap()
+        KeyboardSetup.switchToThumbFree(in: app)
+        app.buttons["keyboard.mic"].tap()
+        XCTAssertTrue(ThumbFreeUI.wait(for: app.staticTexts["keyboard.status"], toContain: "Recording", timeout: 15))
         let (settings, search) = settingsSearchWithThumbFree() // the take keeps recording in the background
         let status = settings.staticTexts["keyboard.status"]
         XCTAssertTrue(ThumbFreeUI.wait(for: status, toContain: "Recording", timeout: 10))
@@ -203,13 +198,15 @@ import XCTest
     // opens ThumbFree instead of waiting for it.
     func testTheMicOpensThumbFreeWhenItsLiveSessionWentAway() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch(arguments: ["-TFKeepSetup", "YES"])
-        let tryMic = ThumbFreeUI.element("try.mic", in: app)
-        tryMic.tap()
-        XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("try.status", in: app), toContain: "Listening", timeout: 10))
+        let (app, field) = ThumbFreeUI.launchTry(arguments: ["-TFKeepSetup", "YES"])
+        field.tap()
+        KeyboardSetup.switchToThumbFree(in: app)
+        let mic = app.buttons["keyboard.mic"]
+        mic.tap()
+        XCTAssertTrue(ThumbFreeUI.wait(for: app.staticTexts["keyboard.status"], toContain: "Recording", timeout: 15))
         sleep(3)
-        tryMic.tap()
-        XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("try.field", in: app), toContain: "ask not what your country", timeout: 20))
+        mic.tap()
+        XCTAssertTrue(ThumbFreeUI.wait(for: field, toContain: "ask not what your country", timeout: 20))
         app.terminate()
         XCTAssertEqual(app.state, .notRunning)
         let (settings, _) = settingsSearchWithThumbFree()
@@ -222,8 +219,8 @@ import XCTest
     // ends.
     func testARecordingTakeShowsRecordingItsTimeAndTheStopKey() throws {
         KeyboardSetup.ensureReady()
-        let app = ThumbFreeUI.launch()
-        ThumbFreeUI.element("try.field", in: app).tap()
+        let (app, field) = ThumbFreeUI.launchTry()
+        field.tap()
         KeyboardSetup.switchToThumbFree(in: app)
         let mic = app.buttons["keyboard.mic"]
         let status = app.staticTexts["keyboard.status"]

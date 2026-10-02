@@ -10,7 +10,7 @@
 | `make_assets.py` | Makes the screenshots and the feature graphic from the illustrations, `raw/`, `../common/logo/` and two fonts |
 | `check.py` | Checks sizes, aspect ratios, PNG format and file sizes against Play's rules, and the listing's lengths and wording |
 
-Screenshots, in order: "Talk. It types." (a chat, the bubble listening), "Your words, in any app" (the reply typed in), "Long notes, hands free" (a long note), "Works offline. Nothing leaves your phone." (the Try tab, ready), "Names spelled your way" (the Dictionary), "Every take, saved on your phone" (History) and "Speak your language" (Settings, the multilingual model and its languages). The colours are the App Store images' navy (38, 38, 74) and cream (255, 248, 231).
+Screenshots, in order: "Talk. It types." (a chat, the bubble listening), "Your words, in any app" (the reply typed in), "Long notes, hands free" (a long note), "Works offline. Nothing leaves your phone." (Home, ready), "Names spelled your way" (the Dictionary), "Every take, saved on your phone" (History) and "Speak your language" (Settings, the multilingual model and its languages). The colours are the App Store images' navy (38, 38, 74) and cream (255, 248, 231).
 
 Each illustration is 480 px wide at the top right, over the phone's top; it shrinks only when its drawing would reach the phone. The feature illustration is as wide as the graphic unless its drawing needs a smaller size to keep 20 px from the top and bottom, and the logo and headline stay clear of it on the left.
 
@@ -18,4 +18,4 @@ The chat and the note are `ChatSceneActivity` and `NotesSceneActivity` in the te
 
 To make them again: `python3 make_assets.py --serif SourceSerif4Display-Regular.ttf --font Roboto-Regular.ttf`, then `python3 check.py`. `--art <folder>` takes new illustrations from another folder, with the same file names. Frames 1 to 6 and the feature graphic each need theirs, and a missing one stops the run before anything changes; frame 7 is made only when `android-7.png` exists. The headlines are Source Serif 4 Display (SIL Open Font License), from Adobe's source-serif releases on GitHub; the name beside the logo is Roboto, the app's type, from an Android image's `/system/fonts` or Google Fonts. The fonts are not in the repository.
 
-`prompts/` holds the prompts that made the illustrations in `art/` (one file per image; see its README), and `app-screenshots/` the app screens the repository README shows.
+`prompts/` holds the prompts that made the illustrations in `art/` (one file per image; see its README), and `app-screenshots/` captures of the app's own screens, light and dark.

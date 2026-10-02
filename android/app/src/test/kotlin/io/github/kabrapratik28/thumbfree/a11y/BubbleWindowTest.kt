@@ -118,6 +118,75 @@ class BubbleWindowTest {
         }
     }
 
+    // The not-ready panel says how to get dictation working, so no timer puts it away: a tap outside it does, which the
+    // window watches for only while the panel shows.
+    @Test
+    fun notReadyPanelStaysUntilATapOutside() {
+        window.show(0, 0)
+        window.render(BubbleUi.NotReady(io.github.kabrapratik28.thumbfree.core.session.SpeechWait.DOWNLOADING, 42))
+
+        idle(60_000)
+        assertThat(chips).isEmpty()
+        assertThat(window.params.flags and FLAG_WATCH_OUTSIDE_TOUCH).isEqualTo(FLAG_WATCH_OUTSIDE_TOUCH)
+        windowManager.view!!.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_OUTSIDE, 0f, 0f, 0))
+        assertThat(chips).containsExactly(DISMISS)
+
+        window.render(BubbleUi.Idle)
+        assertThat(window.params.flags and FLAG_WATCH_OUTSIDE_TOUCH).isEqualTo(0)
+        chips.clear()
+        windowManager.view!!.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_OUTSIDE, 0f, 0f, 0))
+        assertThat(chips).isEmpty()
+    }
+
+    // Where the room beside the bubble, toward the middle, is narrower than the panel and 12 dp more, the panel stands
+    // above the bubble instead, and the bubble stays where it was.
+    @Test
+    fun thePanelStandsAboveTheBubbleWhenThereIsNoRoomBeside() {
+        val narrow = FakeWindowManager(context.getSystemService(WindowManager::class.java), width = 400)
+        val window = BubbleWindow(context, narrow, onTouch = { false }, onChip = {})
+        window.show(100, 1_000)
+        window.render(BubbleUi.NotReady(io.github.kabrapratik28.thumbfree.core.session.SpeechWait.DOWNLOADING, 42))
+        val view = narrow.view as BubbleView
+        repeat(3) {
+            val any = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            view.measure(any, any)
+            view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+            shadowOf(Looper.getMainLooper()).idle()
+        }
+
+        assertThat(view.panelPlace).isEqualTo(BubbleView.PanelPlace.ABOVE)
+        assertThat(view.circleTop).isGreaterThan(0)
+        assertThat(window.params.y).isEqualTo(1_000 - view.circleTop)
+        assertThat(window.circle()!!.toList()).containsExactly(100, 1_000, 100 + window.sizePx, 1_000 + window.sizePx).inOrder()
+
+        // Gone, the bubble's circle is at the window's top again (its fade out runs only in a shown window: none here).
+        android.provider.Settings.Global.putFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+        window.render(BubbleUi.Idle)
+        assertThat(view.circleTop).isEqualTo(0)
+    }
+
+    // Near the screen's top there is no room above either: the panel opens below the bubble, which stays where it was.
+    @Test
+    fun thePanelOpensBelowTheBubbleWhenThereIsNoRoomAbove() {
+        val narrow = FakeWindowManager(context.getSystemService(WindowManager::class.java), width = 400)
+        val window = BubbleWindow(context, narrow, onTouch = { false }, onChip = {})
+        window.show(100, 40)
+        window.render(BubbleUi.NotReady(io.github.kabrapratik28.thumbfree.core.session.SpeechWait.DOWNLOADING, 42))
+        val view = narrow.view as BubbleView
+        repeat(3) {
+            val any = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            view.measure(any, any)
+            view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+            shadowOf(Looper.getMainLooper()).idle()
+        }
+
+        assertThat(view.panelPlace).isEqualTo(BubbleView.PanelPlace.BELOW)
+        assertThat(view.circleTop).isEqualTo(0)
+        assertThat(window.params.y).isEqualTo(40)
+        assertThat(view.measuredHeight).isAtLeast(window.sizePx + view.panelHeight) // the panel under the circle
+        assertThat(window.circle()!!.toList()).containsExactly(100, 40, 100 + window.sizePx, 40 + window.sizePx).inOrder()
+    }
+
     @Test
     fun laterRenderCancelsTheDismissal() {
         window.render(BubbleUi.Chip(Code.NO_SPEECH, listOf(DISMISS)))

@@ -30,7 +30,8 @@ import TFCore
     // "Forever" and "No limit" are kept too, and every change reaches the host at once.
     @Test func choicesAreKeptAndReachTheHost() {
         let settings = AppSettings(defaults: defaults)
-        let host = SessionHost(history: HistoryStore(root: root), shared: SharedStore(directory: root), engine: .fixed("hi")) { MuteSource() }
+        let host = SessionHost(history: HistoryStore(root: root), shared: SharedStore(directory: root), engine: .fixed("hi"),
+                               defaults: defaults) { MuteSource() }
         settings.onChange = { $0.apply(to: host) }
         settings.sessionMinutes = 2
         settings.keepDays = 30
@@ -42,6 +43,16 @@ import TFCore
         #expect(again.sessionMinutes == 2)
         #expect(again.keepDays == 30)
         #expect(again.keepCount == nil)
+    }
+
+    // UI tests (Debug builds): -TFEndSessions ends each session with its take, whatever length is chosen; a test of the
+    // keyboard's bar relies on it, since a live session refreshes the bar every second.
+    @Test func endSessionsEndsEachSessionWithItsTake() {
+        defaults.set(true, forKey: "TFEndSessions")
+        let host = SessionHost(history: HistoryStore(root: root), shared: SharedStore(directory: root), engine: .fixed("hi"),
+                               defaults: defaults) { MuteSource() }
+        AppSettings(defaults: defaults).apply(to: host)
+        #expect(host.idleTimeout == 0)
     }
 
     @Test func theWarningSpeaksPlainEnglish() {

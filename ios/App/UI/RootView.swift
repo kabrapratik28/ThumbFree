@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The app's tabs; a link can pick one (the keyboard's "get the model" opens the Try tab).
-enum RootTab: Hashable { case `try`, history, dictionary, settings }
+/// The app's tabs; a link can pick one (the keyboard's "get the model" opens the Home tab).
+enum RootTab: Hashable { case home, history, dictionary, settings }
 
 struct RootView: View {
     let host: SessionHost
@@ -14,10 +14,10 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            Tab("Try", systemImage: "mic", value: RootTab.try) {
-                TryView(host: host, model: models.active)
+            Tab("Home", systemImage: "house", value: RootTab.home) {
+                HomeView(host: host, models: models)
             }
-            Tab("History", systemImage: "clock", value: RootTab.history) { HistoryView(host: host) { tab = .try } }
+            Tab("History", systemImage: "clock", value: RootTab.history) { HistoryView(host: host) { tab = .home } }
             Tab("Dictionary", systemImage: "book.closed", value: RootTab.dictionary) {
                 NavigationStack { DictionaryView(dictionary: dictionary, language: host.language) }
             }

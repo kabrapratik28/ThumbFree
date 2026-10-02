@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import TFCore
+import UIKit
 @testable import ThumbFree
 
 @Suite struct KeyStateTests {
@@ -9,7 +10,7 @@ import TFCore
                                   .listening, .transcribing, .gettingReady, .message("No speech heard.")]
         #expect(states.map(\.text) == [
             "Full Access is off. Turn it on to dictate.",
-            "No speech model yet. Tap the mic to get it.",
+            "Speech isn't ready. Tap the mic to open ThumbFree.",
             "Tap the mic. ThumbFree opens and listens.",
             "Opening ThumbFree",
             "Open ThumbFree to start.",
@@ -21,6 +22,21 @@ import TFCore
             "No speech heard.",
         ])
         for state in states { #expect(!state.text.contains("\u{2014}") && !state.text.contains("\u{2013}")) }
+    }
+
+    // The keyboard's own words fit the bar: at most two lines in the width it leaves them on a 375-point iPhone (about
+    // 287 points), at the largest text size the bar allows (.xxLarge).
+    @Test func theKeyboardsOwnWordsFitTheBar() {
+        let font = UIFont.preferredFont(forTextStyle: .footnote, compatibleWith: UITraitCollection(preferredContentSizeCategory: .extraExtraLarge))
+        let states: [KeyState] = [.needsFullAccess, .needsModel, .startDictation, .opening, .openFailed, .starting, .ready,
+                                  .listening, .transcribing, .gettingReady]
+        func height(_ text: String) -> CGFloat {
+            (text as NSString).boundingRect(with: CGSize(width: 287, height: CGFloat.greatestFiniteMagnitude),
+                                            options: .usesLineFragmentOrigin, attributes: [.font: font], context: nil).height
+        }
+        let line = height("A")
+        for state in states { #expect(height(state.text) < line * 2.5, "\(state.text)") }
+        #expect(height(String(repeating: "Speech isn't ready. ", count: 6)) > line * 2.5) // the measure sees a third line
     }
 
     // The app says it has no model: the keyboard says so instead of offering a take that could only fail. A live take

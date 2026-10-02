@@ -99,6 +99,44 @@ import TFCore
         #expect(try StubServer.requests(url()).map { $0.value(forHTTPHeaderField: "Range") } == [nil, nil])
     }
 
+    // A progress report from a download that was cancelled, arriving after the next one began, never moves the new one;
+    // the new one's own reports do.
+    @Test func progressFromAnOlderStartIsDropped() async throws {
+        StubServer.serve(try url(), [.stall(data), .stall(data)])
+        let model = model()
+        model.download()
+        let first = model.starts
+        try await waitUntil { (try? StubServer.requests(self.url()).count) == 1 }
+        model.cancel()
+        try await waitUntil { model.phase == .missing }
+        model.download()
+        #expect(model.starts == first + 1)
+        model.progress(1_999, 2_000, of: first) // the cancelled download's last report, late
+        #expect(model.phase != .downloading(done: 1_999, total: 2_000))
+        model.progress(1_234, 2_000, of: model.starts)
+        #expect(model.phase == .downloading(done: 1_234, total: 2_000))
+        model.cancel()
+        try await waitUntil { model.phase == .missing }
+    }
+
+    // The engine's first load after a download takes about half a minute, later ones seconds: the model remembers it was
+    // loaded since its download, and a Delete or a new download forgets it.
+    @Test func theModelRemembersItsLoadUntilANewDownload() async throws {
+        let model = model(ready: true)
+        #expect(!model.loadedBefore)
+        model.markLoaded()
+        model.markLoaded()
+        #expect(model.loadedBefore)
+        #expect(defaults.stringArray(forKey: SpeechModel.loadedKey) == ["test"])
+        model.delete()
+        #expect(!model.loadedBefore)
+        model.markLoaded()
+        StubServer.serve(try url(), [.file(data)])
+        model.download()
+        #expect(!model.loadedBefore)
+        try await waitUntil { model.phase == .ready }
+    }
+
     @Test func aReadyModelIsNeverFetchedAgain() throws {
         let model = model(ready: true)
         model.download()
@@ -250,7 +288,7 @@ import TFCore
         #expect(!FileManager.default.fileExists(atPath: ModelDownloader.staging(for: folder).path))
     }
 
-    // The words the welcome flow and the Try tab show, from the Android app.
+    // The words the welcome flow and the setup rows show, from the Android app.
     @Test func theStatusSpeaksPlainEnglish() {
         #expect(ModelStatusView.size(465_476_672) == "465 MB")
         #expect(ModelStatusView.size(1_539_218_496) == "1.5 GB")
