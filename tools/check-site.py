@@ -3,7 +3,9 @@
 - The inline script's hash is in index.html's Content-Security-Policy (it prints the right one if not).
 - The JSON-LD parses, every local file a page points to exists (for a page in a folder, such as beta/, from that
   folder), and every image has a width, a height and an alt.
-- The Android test page, beta/, loads no Meta pixel and not site.js, which holds the pixel's code.
+- The Android test page, beta/, never runs site.js, which holds the pixel's code, and never loads a tracker: no page
+  there has a site.js script, and no page or script there names Meta's pixel (facebook, fbq). Its beta.js may still
+  fetch site.js as text, to read the App Store setting.
 - The copy follows the project's writing rules: no em-dashes, none of the filler words, no email but the public one.
 - The four pages the app stores link (privacy and support, iPhone and Android) are byte for byte the last commit's.
 - A store that site.js marks live has a real address. As a note, not a failure: when index.html still tells visitors
@@ -28,8 +30,8 @@ pages = sorted(os.path.relpath(os.path.join(root, name), SITE) for root, _, file
                for name in files if name.endswith(".html"))
 for page in pages:
     html = open(os.path.join(SITE, page), encoding="utf-8").read()
-    if page.startswith("beta/") and re.search(r"facebook|site\.js", html):
-        problems.append(f"{page}: the test page must load no Meta pixel and not site.js")
+    if page.startswith("beta/") and re.search(r"<script\b[^>]*\bsrc=\"[^\"]*site\.js\"", html):
+        problems.append(f"{page}: the test page must never run site.js")
     for script in re.findall(r"<script>(.*?)</script>", html, re.S):
         digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
         if f"'sha256-{digest}'" not in html:
@@ -66,6 +68,8 @@ for root, _, files in os.walk(SITE):
         path = os.path.join(root, name)
         text = open(path, encoding="utf-8").read()
         rel = os.path.relpath(path, SITE)
+        if rel.startswith("beta/") and re.search(r"facebook|\bfbq\b", text, re.I):  # also connect.facebook.net
+            problems.append(f"{rel}: the test page must never load a tracker, but this names Meta's pixel")
         if "—" in text:
             problems.append(f"{rel}: has an em-dash")
         for word in FILLER:
