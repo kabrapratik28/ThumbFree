@@ -1,7 +1,9 @@
 """Checks the website before a commit: python3 tools/check-site.py
 
 - The inline script's hash is in index.html's Content-Security-Policy (it prints the right one if not).
-- The JSON-LD parses, every local file a page points to exists, and every image has a width, a height and an alt.
+- The JSON-LD parses, every local file a page points to exists (for a page in a folder, such as beta/, from that
+  folder), and every image has a width, a height and an alt.
+- The Android test page, beta/, loads no Meta pixel and not site.js, which holds the pixel's code.
 - The copy follows the project's writing rules: no em-dashes, none of the filler words, no email but the public one.
 - The four pages the app stores link (privacy and support, iPhone and Android) are byte for byte the last commit's.
 - A store that site.js marks live has a real address. As a note, not a failure: when index.html still tells visitors
@@ -22,9 +24,12 @@ EMAIL = "thumbfree.app@gmail.com"
 SITE_URL = "https://kabrapratik28.github.io/ThumbFree/"
 problems, notes = [], []
 
-pages = sorted(f for f in os.listdir(SITE) if f.endswith(".html"))
+pages = sorted(os.path.relpath(os.path.join(root, name), SITE) for root, _, files in os.walk(SITE) if ".git" not in root
+               for name in files if name.endswith(".html"))
 for page in pages:
     html = open(os.path.join(SITE, page), encoding="utf-8").read()
+    if page.startswith("beta/") and re.search(r"facebook|site\.js", html):
+        problems.append(f"{page}: the test page must load no Meta pixel and not site.js")
     for script in re.findall(r"<script>(.*?)</script>", html, re.S):
         digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
         if f"'sha256-{digest}'" not in html:
@@ -38,12 +43,14 @@ for page in pages:
         u.split()[0] for s in re.findall(r'srcset="([^"]+)"', html) for u in s.split(",")] + [
         c for c in re.findall(r'content="([^"]+)"', html) if c.startswith(SITE_URL)]
     for ref in refs:
+        base = os.path.dirname(page)  # a relative address starts from the page's folder, a site address from the top
         for prefix in (SITE_URL, "/ThumbFree/"):
-            ref = ref[len(prefix):] if ref.startswith(prefix) else ref
+            if ref.startswith(prefix):
+                ref, base = ref[len(prefix):], ""
         if re.match(r"(https?:|mailto:|#|data:)", ref):
             continue
-        path = ref.split("#")[0].split("?")[0]
-        if not os.path.isfile(os.path.join(SITE, path if path not in ("", "./") else "index.html")):
+        path = os.path.join(SITE, base, ref.split("#")[0].split("?")[0])
+        if not os.path.isfile(os.path.join(path, "index.html") if os.path.isdir(path) else path):
             problems.append(f"{page}: missing file {ref}")
     for img in re.findall(r"<img\b[^>]*>", html):
         for attr in ("width=", "height=", "alt="):
