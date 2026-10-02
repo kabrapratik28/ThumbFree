@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await navigator.clipboard.writeText(url);
       copied.textContent = 'Link copied';
     } catch {
-      copied.textContent = url; // no clipboard here: the link, to copy by hand
+      copied.textContent = 'Copy this link: ' + url; // no clipboard here, or it said no: copying by hand works
     }
   });
 
