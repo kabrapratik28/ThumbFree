@@ -66,8 +66,9 @@ assert.equal(await said(page), '');
 assert.deepEqual(away, [], 'the page itself asks nothing of other servers');
 
 // 2. Step 1's link, then back: step 2 is next, step 1 says its link was opened (no tick), and that is said once.
+const group = await page.$eval('[data-step="1"] a.button', (a) => a.href); // the links live in the page only
 await Promise.all([page.waitForNavigation(), page.click('[data-step="1"] a.button')]);
-assert.equal(away[0], 'https://groups.google.com/g/thumbfree-testers', 'the group, in this tab');
+assert.equal(away[0], group, 'the group, in this tab');
 await back(page);
 assert.deepEqual(await root(page), { device: 'android', opened: '1', next: '2', js: true });
 assert.deepEqual(await highlighted(page), ['2']);
@@ -78,8 +79,9 @@ assert.equal(await shown(page, '.after'), false);
 
 // 3. Step 2's link, then back: no card is next, "After you install" shows; a reload says nothing again.
 away.length = 0;
+const playTest = await page.$eval('[data-step="2"] a.button', (a) => a.href);
 await Promise.all([page.waitForNavigation(), page.click('[data-step="2"] a.button')]);
-assert.equal(away[0], 'https://play.google.com/apps/testing/io.github.kabrapratik28.thumbfree', 'the Play test, in this tab');
+assert.equal(away[0], playTest, 'the Play test, in this tab');
 await back(page);
 assert.deepEqual(await root(page), { device: 'android', opened: '1 2', next: 'after', js: true });
 assert.deepEqual(await highlighted(page), []);
