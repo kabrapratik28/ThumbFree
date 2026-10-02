@@ -5,6 +5,7 @@
 | `decisions/` | Why the build and the engine are the way they are, with the measurements behind each choice |
 | `benchmarks/` | Dated speed and accuracy results, each with its method and caveats |
 | `brand/` | The brand kit: `common/` (logo, bubble art, colours, fonts, illustration style), `android/` (Google Play) and `ios/` (App Store) |
+| `design/` | The design boards the shipped screens were built from: onboarding v4 for Android and iPhone |
 | `privacy-policy.md` | The Android privacy policy's source text; the website publishes it as `android-privacy.html`. The iPhone app's pages come from `ios/docs/privacy.md` and `ios/docs/support.md` |
 
 ## Invariants
@@ -20,8 +21,9 @@
 - `privacy-policy.md` and its published copy, `android-privacy.html` on the public repository's `gh-pages` branch, say
   the same thing: change both together. Both match what the app does: its permissions, its one network use and what it
   keeps on the phone. The store listing, the welcome screen and Settings > About must not contradict them.
-- Code changes never touch `gh-pages`, the website. Maintainers commit under the project's name and email, never a
-  personal one.
+- Code changes never touch `gh-pages`, the website. Commits carry their author's own name and email.
+- `design/` holds only boards of screens as they ship. When a redesign ships, its boards replace the old ones in the
+  same change.
 - Screenshots and store images show made-up content only: the chat and notes scenes from the test APK, and sample
   history and Dictionary words.
 - Links between documents are relative, so they work on GitHub and in a clone.

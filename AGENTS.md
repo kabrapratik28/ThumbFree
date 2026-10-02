@@ -35,7 +35,7 @@ Core ML (`ios/ThumbFreeKit/`); `third_party/transcribe.cpp` and `third_party/pat
 | `third_party/transcribe.cpp` | The Android app's speech engine, a git submodule pinned to one upstream commit |
 | `third_party/patches/` | ThumbFree's patch series for that submodule, and `transcribe-patches.cmake`, the build step that applies it |
 | `testdata/public-bench/` | 11 public clips (JFK and LibriSpeech) with their reference texts, for the benchmark tools |
-| `docs/` | Decisions, benchmarks, brand kit (`common/`, `android/`, `ios/`), privacy policy |
+| `docs/` | Decisions, benchmarks, brand kit (`common/`, `android/`, `ios/`), design boards, privacy policy |
 | `tools/` | Tools for the whole repository: `check-agent-docs.py` for these files; `normalize-patches.py` and `v3-check.py` (the multilingual model through the patched engine, on a Mac) for the patches |
 
 ## Build
