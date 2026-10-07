@@ -11,8 +11,8 @@ public enum CleanupReplace {
         return seen >= min(typed.count, minimumSeen) && before.hasSuffix(typed.suffix(seen))
     }
 
-    /// The text before the take, when iOS shows the whole take and what precedes it (possibly nothing); nil when it shows
-    /// less, which the cursor formatter reads as unknown.
+    /// The text before the take, when iOS shows the whole take and what precedes it (possibly nothing); nil when it
+    /// shows less, which the cursor formatter reads as unknown.
     public static func beforeTake(before: String, typed: String) -> String? {
         guard before.hasSuffix(typed) else { return nil }
         return String(before.dropLast(typed.count))

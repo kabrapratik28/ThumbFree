@@ -2,16 +2,18 @@ import Foundation
 
 /// The files the keyboards and the app share in the App Group container. Keyboards only create command files, each
 /// with a unique name (`commands/<sentAt nanoseconds, 20 digits>-<id>.json`), so several keyboard processes never
-/// collide. The app only writes status.json and outbox.json, and deletes command files after handling them. Every
-/// write is atomic (Foundation writes a temporary file and renames it over the old one), so a reader never sees half a
-/// file.
+/// collide. The app only writes status.json, outbox.json and cleanups.json, and deletes command files after handling
+/// them. Every write is atomic (Foundation writes a temporary file and renames it over the old one), so a reader never
+/// sees half a file.
 public struct SharedStore: Sendable {
     public static let outboxLimit = 20
+    public static let cleanupsLimit = 10
 
     public let directory: URL
     private var commandsDirectory: URL { directory.appendingPathComponent("commands", isDirectory: true) }
     private var statusURL: URL { directory.appendingPathComponent("status.json") }
     private var outboxURL: URL { directory.appendingPathComponent("outbox.json") }
+    private var cleanupsURL: URL { directory.appendingPathComponent("cleanups.json") }
 
     public init(directory: URL) { self.directory = directory }
 
@@ -65,6 +67,17 @@ public struct SharedStore: Sendable {
     public func outbox() throws -> [OutboxItem] {
         guard FileManager.default.fileExists(atPath: outboxURL.path) else { return [] }
         return try JSONDecoder().decode([OutboxItem].self, from: Data(contentsOf: outboxURL))
+    }
+
+    /// App only: Clean up's answers. Keeps the newest 10 (newest last).
+    public func write(_ cleanups: [CleanupResult]) throws {
+        try ensureDirectoryExists()
+        try JSONEncoder().encode(Array(cleanups.suffix(Self.cleanupsLimit))).write(to: cleanupsURL, options: .atomic)
+    }
+
+    public func cleanups() throws -> [CleanupResult] {
+        guard FileManager.default.fileExists(atPath: cleanupsURL.path) else { return [] }
+        return try JSONDecoder().decode([CleanupResult].self, from: Data(contentsOf: cleanupsURL))
     }
 
     /// Command file names. Other names (a temporary file in the middle of a write) are not commands.

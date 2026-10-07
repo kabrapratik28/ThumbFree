@@ -40,6 +40,12 @@ public struct KeyboardCommand: Codable, Sendable, Equatable {
         case insertionHeldBack
         /// Asks the app to answer by writing status.json.
         case ping
+        /// Clean up: asks the app to tidy `text`, the take as the keyboard typed it, in `style` (nil: the app's
+        /// default). The app answers in cleanups.json under this command's id.
+        case clean
+        /// Clean up's replacement: written durably before the keyboard deletes the take; then whether the read-back
+        /// shows the answer. Records only (the app logs them): nothing is retried.
+        case cleanBegan, cleanConfirmed, cleanUnverified
     }
 
     public let id: UUID
@@ -48,13 +54,49 @@ public struct KeyboardCommand: Codable, Sendable, Equatable {
     /// Set on press, and for a cold take (the take whose press opened the app) also on the stop command.
     public let target: InsertTarget?
     public let sentAt: Date
+    /// Clean up's request: the take's text as typed, and the style; nil for every other command.
+    public let text: String?
+    public let style: CleanupStyle?
 
-    public init(id: UUID = UUID(), takeID: UUID, kind: Kind, target: InsertTarget? = nil, sentAt: Date = Date()) {
+    public init(id: UUID = UUID(), takeID: UUID, kind: Kind, target: InsertTarget? = nil, sentAt: Date = Date(),
+                text: String? = nil, style: CleanupStyle? = nil) {
         self.id = id
         self.takeID = takeID
         self.kind = kind
         self.target = target
         self.sentAt = sentAt
+        self.text = text
+        self.style = style
+    }
+}
+
+/// Whether Clean up can run now, as the app tells the keyboards: only `ready` shows the sparkle. `off`: Settings'
+/// switch; the others are Apple Intelligence's states (`SystemLanguageModel.availability`, `supportsLocale()`).
+public enum CleanupAvailability: String, Codable, Sendable {
+    case ready, off, appleIntelligenceOff, notEligible, notReady, unsupportedLanguage
+}
+
+/// The app's answer to one clean command (`requestID` is the command's id). `done` carries the text that passed the
+/// checks; `paused` is Apple's rate limit, with when it ends if iOS says (iOS 27); `failed` keeps the words as they
+/// are; `unavailable` means Apple Intelligence could not run. The app is the only writer of cleanups.json.
+public struct CleanupResult: Codable, Sendable, Equatable {
+    public enum State: String, Codable, Sendable { case done, failed, paused, unavailable }
+
+    public let requestID: UUID
+    public let takeID: UUID
+    public let state: State
+    public let text: String?
+    public let resetAt: Date?
+    public let createdAt: Date
+
+    public init(requestID: UUID, takeID: UUID, state: State, text: String? = nil, resetAt: Date? = nil,
+                createdAt: Date = Date()) {
+        self.requestID = requestID
+        self.takeID = takeID
+        self.state = state
+        self.text = text
+        self.resetAt = resetAt
+        self.createdAt = createdAt
     }
 }
 
@@ -80,10 +122,13 @@ public struct HostStatus: Codable, Sendable, Equatable {
     public var updatedAt: Date
     /// User-facing outcome text, for example "No speech heard." (TakeMessage.text). Never transcript text.
     public var message: String?
+    /// Whether Clean up can run; nil from an app without it, which shows no sparkle.
+    public var cleanup: CleanupAvailability?
 
     public init(session: SessionPhase = .off, engine: EnginePhase = .unloaded, micOn: Bool = false, takeID: UUID? = nil,
                 take: TakePhase = .idle, takeStartedAt: Date? = nil, level: Float = 0, expiresAt: Date? = nil,
-                updatedAt: Date = Date(), message: String? = nil) {
+                updatedAt: Date = Date(), message: String? = nil,
+                cleanup: CleanupAvailability? = nil) {
         self.session = session
         self.engine = engine
         self.micOn = micOn
@@ -94,6 +139,7 @@ public struct HostStatus: Codable, Sendable, Equatable {
         self.expiresAt = expiresAt
         self.updatedAt = updatedAt
         self.message = message
+        self.cleanup = cleanup
     }
 }
 

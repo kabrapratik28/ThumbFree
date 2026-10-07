@@ -346,7 +346,7 @@ public struct TakeReducer: Sendable, Equatable {
 }
 
 extension KeyboardCommand {
-    /// The reducer event for this command; nil for ping. Times come from the keyboard's clock, so IPC delay never turns
+    /// The reducer event for this command; nil for ping and Clean up's commands, which the app handles on their own. Times come from the keyboard's clock, so IPC delay never turns
     /// a tap into a hold.
     public var event: TakeEvent? {
         let ms = Int(exactly: (sentAt.timeIntervalSince1970 * 1000).rounded()) ?? 0
@@ -358,7 +358,7 @@ extension KeyboardCommand {
         case .insertionConfirmed: return .insertion(takeID, .confirmed)
         case .insertionUnverified: return .insertion(takeID, .unverified)
         case .insertionHeldBack: return .insertion(takeID, .heldBack)
-        case .ping: return nil
+        case .ping, .clean, .cleanBegan, .cleanConfirmed, .cleanUnverified: return nil
         }
     }
 }

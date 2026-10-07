@@ -1,14 +1,14 @@
 import Foundation
 
-/// How Clean up rewrites a take: Clean (the default) tidies it and keeps the speaker's words; the others then change its
-/// length or tone. The raw values are stored (settings, the keyboard's commands), so they never change.
+/// How Clean up rewrites a take: Clean (the default) tidies it and keeps the speaker's words; the others then change
+/// its length or tone. The raw values are stored (settings, the keyboard's commands), so they never change.
 public enum CleanupStyle: String, Codable, Sendable, CaseIterable {
     case clean, shorter, friendly, professional, simple
 }
 
-/// What Clean up asks the on-device model. Instruction v2 (issue #1) is the session's instructions, short rules and five
-/// examples in a "Text:" and "Cleaned text:" format; the take goes in the prompt in the same format. Each style other
-/// than Clean adds one line after the examples.
+/// What Clean up asks the on-device model. Instruction v2 (issue #1) is the session's instructions, short rules and
+/// five examples in a "Text:" and "Cleaned text:" format; the take goes in the prompt in the same format. Each style
+/// other than Clean adds one line after the examples.
 public enum CleanupPrompt {
     /// Instruction v2, word for word.
     public static let rules = """

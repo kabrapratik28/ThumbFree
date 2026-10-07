@@ -5,7 +5,8 @@ import Foundation
 /// any of those keeps the person's words as they are. Returns the answer to type, trimmed, or nil.
 public enum CleanupCheck {
     /// Openers of a reply about the text rather than the text itself.
-    static let chatter = ["sure", "here is", "here's", "here\u{2019}s", "i can't", "i can\u{2019}t", "i cannot", "as an ai"]
+    static let chatter = ["sure", "here is", "here's", "here\u{2019}s", "i can't", "i can\u{2019}t", "i cannot",
+                          "as an ai"]
 
     public static func accept(take: String, output: String?, style: CleanupStyle) -> String? {
         let take = take.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -30,9 +31,12 @@ public enum CleanupCheck {
     static func tidy(_ output: String, take: String) -> String {
         var text = output.trimmingCharacters(in: .whitespacesAndNewlines)
         let label = "cleaned text:"
-        if text.lowercased().hasPrefix(label) { text = String(text.dropFirst(label.count)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        if text.lowercased().hasPrefix(label) {
+            text = String(text.dropFirst(label.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         let quotes: [(Character, Character)] = [("\"", "\""), ("\u{201C}", "\u{201D}")]
-        for (open, close) in quotes where text.count > 1 && text.first == open && text.last == close && take.first != open {
+        for (open, close) in quotes where text.count > 1 && text.first == open && text.last == close
+            && take.first != open {
             text = String(text.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return text
