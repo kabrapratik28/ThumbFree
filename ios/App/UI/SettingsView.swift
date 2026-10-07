@@ -1,8 +1,8 @@
 import SwiftUI
 import TFCore
 
-/// The Settings tab, as on Android and adapted to iOS: Setup, Speech model, Session length (in place of the bubble's
-/// settings), History, Dictionary and About. Each model's Download, Cancel and Delete sit in its own row here rather
+/// The Settings tab, as on Android and adapted to iOS: Setup, Speech model, Clean up, Session length (in place of the
+/// bubble's settings), History, Dictionary and About. Each model's Download, Cancel and Delete sit in its own row here rather
 /// than on a separate page: two models fit one list, and a pushed page would only hide them one tap deeper.
 struct SettingsView: View {
     let host: SessionHost
@@ -52,6 +52,7 @@ struct SettingsView: View {
                          + "\n\nAfter you install or update ThumbFree, or update iOS, the first start takes about half a minute while ThumbFree prepares the model for this iPhone.")
                 }
                 .listRowBackground(Theme.card)
+                CleanupSection(settings: settings)
                 Section {
                     Picker("Keep the mic on for", selection: Binding(get: { settings.sessionMinutes }, set: { settings.sessionMinutes = $0 })) {
                         ForEach(AppSettings.sessionChoices, id: \.self) { Text(Self.minutes($0)).tag($0) }

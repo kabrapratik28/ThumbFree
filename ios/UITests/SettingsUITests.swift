@@ -62,6 +62,18 @@ import XCTest
         XCTAssertTrue(app.buttons["Try downloading Multilingual again"].waitForExistence(timeout: 10))
     }
 
+    // Clean up: the section says what Apple Intelligence allows on this iPhone (the Simulator cannot run the model), and
+    // offers the switch and the styles only where it can run or is getting ready.
+    func testCleanUpSectionSaysWhatThisIPhoneAllows() throws {
+        let app = ThumbFreeUI.launch()
+        app.tabBars.buttons["Settings"].tap()
+        let status = find("settings.cleanupStatus", in: app)
+        XCTAssertTrue(status.waitForExistence(timeout: 5), "no Clean up section")
+        let canRun = ["Ready", "Getting ready"].contains { status.label.hasPrefix($0) }
+        XCTAssertEqual(ThumbFreeUI.element("settings.cleanupShown", in: app).exists, canRun, status.label)
+        ThumbFreeUI.shot("settings-cleanup")
+    }
+
     /// Scrolls the list toward the element until it is on screen: down the page, or up for one `above` the screen (a Form
     /// builds only the rows near the screen, so a row not built yet is where the test says); a row a swipe carried past
     /// the top is scrolled back to. It stops looking once the row shows (each look queries the screen).
