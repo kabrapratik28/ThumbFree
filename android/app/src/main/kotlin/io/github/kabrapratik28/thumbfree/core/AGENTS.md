@@ -9,7 +9,7 @@ code in the other packages calls into it.
 | `insert/` | `InsertionJudge`: did the text land (VERIFIED, MISS or UNREADABLE) |
 | `models/` | `Catalog`, `Downloader`, `ModelStore`, `ModelLeases`, `ThreadPolicy`, `AsrPolicy` |
 | `session/` | `Session.reduce`, the dictation state machine, plus `Gesture`, bubble placement and style, `Preview` |
-| `text/` | Cleanup: custom words, filler removal, `normalize`, and the Unicode helpers they share |
+| `text/` | Cleanup: custom words, filler removal, `normalize`, and the Unicode helpers they share; the on-device model's Clean up prompt and checks (`CleanupPrompt`, `CleanupCheck`) |
 
 ## Invariants
 
@@ -27,6 +27,8 @@ code in the other packages calls into it.
 - A take or a retranscription holds a lease on its model; deleting a model needs it free (`ModelLeases`).
 - Cleanup runs custom words, then filler removal, then `normalize`, and fails open: if a step throws, the raw text comes
   back. `CustomWords.correct` never throws, and correcting its result again changes nothing.
+- `CleanupCheck` rejects a model's answer that could change the message (new words, a lost negation, lost digits,
+  another alphabet), and a rejection writes nothing.
 - Custom words' guards against near misses know English only, so other languages, and the multilingual model's takes,
   get exact matches only (`CustomWords.exactOnlyFor`).
 - `CommonWords.kt` is CC BY-SA 4.0 data from wordfreq. Regenerate it as its header says; don't edit it by hand.
