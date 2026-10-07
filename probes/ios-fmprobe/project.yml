@@ -1,0 +1,64 @@
+name: FMProbe
+options:
+  bundleIdPrefix: io.github.kabrapratik28
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""  # set your own team for a phone build
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  FMProbe:
+    type: application
+    platform: iOS
+    sources: [App]
+    info:
+      path: App/Info.plist
+      properties:
+        UILaunchScreen: {}
+        CFBundleDisplayName: FMProbe
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIBackgroundModes: [audio]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: io.github.kabrapratik28.fmprobe
+    dependencies:
+      - target: FMKeyboard
+  FMKeyboard:
+    type: app-extension
+    platform: iOS
+    sources: [Keyboard]
+    info:
+      path: Keyboard/Info.plist
+      properties:
+        CFBundleDisplayName: FMKeyboard
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: false
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: io.github.kabrapratik28.fmprobe.keyboard
+  FMProbeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: FMProbe
+    settings:
+      TEST_TARGET_NAME: FMProbe
+      PRODUCT_BUNDLE_IDENTIFIER: io.github.kabrapratik28.fmprobe.uitests
+      GENERATE_INFOPLIST_FILE: YES
+schemes:
+  FMProbe:
+    build:
+      targets:
+        FMProbe: all
+        FMProbeUITests: [test]
+    test:
+      targets: [FMProbeUITests]

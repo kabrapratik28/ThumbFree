@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="GenAI probe">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity android:name=".FloatActivity" android:exported="true" android:excludeFromRecents="true" android:taskAffinity="" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity android:name=".SheetActivity" android:exported="true" android:excludeFromRecents="true" android:taskAffinity="" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity android:name=".EvalActivity" android:exported="true" />
+        <receiver android:name=".ProbeReceiver" android:exported="true">
+            <intent-filter><action android:name="probe.RUN" /></intent-filter>
+        </receiver>
+    </application>
+</manifest>
