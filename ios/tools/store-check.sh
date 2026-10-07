@@ -22,7 +22,7 @@ fi
 # The Debug test launch arguments (AppEnvironment, AppSettings, ThumbFreeApp, TryItView, GuideView, FloatingGuide, KeyboardStatus), by the 8-byte pieces Swift splits
 # them into (`-TFReturnDelayMs` by its second piece: "TFReturn" also starts TFReturnedApps, a real setting), the fixture's
 # id and the fixed engine's text.
-hooks='TFResetS|TFAudioF|TFFakeEn|TFFakeTe|TFModelF|TFKeepSe|TFKeptSe|^DelayMs$|TFKeepAw|TFEndSes|TFGuideP|TFFieldT|TFAutoco|TFHoldDo|TFHoldSp|TFHoldEn|TFGuideB|TFSetupK|TFTrySta|TFOpenTr|test-fix|fellow americans'
+hooks='TFResetS|TFAudioF|TFFakeEn|TFFakeTe|TFFakeCl|TFModelF|TFKeepSe|TFKeptSe|^DelayMs$|TFKeepAw|TFEndSes|TFGuideP|TFFieldT|TFAutoco|TFHoldDo|TFHoldSp|TFHoldEn|TFGuideB|TFSetupK|TFTrySta|TFOpenTr|test-fix|fellow americans'
 
 # Every 64-bit immediate built by mov/movk, as the printable text in its bytes.
 immediates() {

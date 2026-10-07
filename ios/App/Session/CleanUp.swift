@@ -13,6 +13,11 @@ import TFCore
     static let timeout = Duration.seconds(20)
 
     private let shared: SharedStore
+    #if DEBUG
+    /// UI tests (Debug builds): `-TFFakeCleanup <text>` answers every request with that text (through the checks), and
+    /// Clean up reads as ready, so the keyboard's offer, replacement and Undo run on a Simulator, which has no model.
+    var fakeAnswer: String?
+    #endif
     private var results: [CleanupResult]
     private var queue: Task<Void, Never>?
     /// The model's availability, read at most every 5 s (`status.json` is written about once a second).
@@ -26,6 +31,9 @@ import TFCore
     /// What the keyboards are told: off by Settings' switch, else Apple Intelligence's state on this iPhone.
     func availability(shown: Bool) -> CleanupAvailability {
         guard shown else { return .off }
+        #if DEBUG
+        if fakeAnswer != nil { return .ready }
+        #endif
         let now = ContinuousClock.now
         if let known, now - known.at < .seconds(5) { return known.value }
         let value = Self.modelAvailability()
@@ -60,9 +68,22 @@ import TFCore
         guard let take = command.text else { return }
         let style = command.style ?? defaultStyle
         let previous = queue
+        #if DEBUG
+        let fake = fakeAnswer
+        #endif
         queue = Task { [weak self] in
             await previous?.value
             let started = ContinuousClock.now
+            #if DEBUG
+            if let fake {
+                try? await Task.sleep(for: .seconds(1))
+                let text = CleanupCheck.accept(take: take, output: fake, style: style)
+                let result = CleanupResult(requestID: command.id, takeID: command.takeID, state: text == nil ? .failed : .done,
+                                           text: text)
+                self?.answer(result, ms: (ContinuousClock.now - started) / .milliseconds(1))
+                return
+            }
+            #endif
             let result = await Self.clean(take, style: style, requestID: command.id, takeID: command.takeID)
             self?.answer(result, ms: (ContinuousClock.now - started) / .milliseconds(1))
         }

@@ -112,6 +112,9 @@ enum AppEnvironment {
         let settings = AppSettings(defaults: defaults)
         // Clean up: the app tells the keyboards whether it can run, and runs it for them in the background.
         let cleanUp = CleanUp(shared: shared)
+        #if DEBUG
+        cleanUp.fakeAnswer = defaults.string(forKey: "TFFakeCleanup")
+        #endif
         host.cleanupAvailability = { cleanUp.availability(shown: settings.cleanupShown) }
         host.onClean = { cleanUp.run($0, defaultStyle: settings.cleanupStyle) }
         settings.apply(to: host)

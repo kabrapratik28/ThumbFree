@@ -1,8 +1,10 @@
 import SwiftUI
+import TFCore
 import UIKit
 
 /// The bar above the Apple-style keys: a short status on the left and ThumbFree's mic (the small `BubbleArt` mark) at
-/// the right, tap to talk and tap again to stop, hold to talk. While a take records, both ends say so: the mic is a red
+/// the right, tap to talk and tap again to stop, hold to talk. After a take, Clean up's round sparkle sits just left of
+/// the mic, its size. While a take records, both ends say so: the mic is a red
 /// stop key and the status reads "● Recording 0:07  Speak now". While typing, Apple's three suggestions take the
 /// status's place. The delivery chip (Insert here, Copy, Dismiss) takes the bar's place when a take could not be typed.
 /// The keys themselves are the UIKit `KeyplaneView` below, laid out by `KeyboardViewController`; this view is only the
@@ -19,6 +21,11 @@ struct KeyboardBar: View {
     let searchEmoji: () -> Void
     let clearSearch: () -> Void
     let pickSuggestion: (Int) -> Void
+    /// Clean up: tidy (nil: the default style), Undo, and the style menu's open and Cancel.
+    let tidy: (CleanupStyle?) -> Void
+    let undoTidy: () -> Void
+    let openStyles: () -> Void
+    let closeStyles: () -> Void
 
     @GestureState private var micPressed = false
     @Environment(\.displayScale) private var displayScale
@@ -29,31 +36,50 @@ struct KeyboardBar: View {
         // It also moves the take's time on.
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let state = model.state
-            HStack(spacing: 10) {
-                // A search being typed keeps the bar (the chip waits until it ends); otherwise the chip comes first.
-                if emoji.query == nil, let chip = model.chip {
-                    chipView(chip)
-                } else if emoji.showsSearch, emoji.query != nil || state != .listening {
-                    // A take recording has the field's place until a search begins (the take matters more than a search
-                    // not yet begun); a search being typed keeps its field, and the red stop key shows the take.
-                    searchField
-                } else if state == .listening {
-                    recordingLine(seconds: model.recordingSeconds(now: context.date))
-                    Spacer(minLength: 0)
-                } else if let slots = suggestions.slots {
-                    suggestionRow(slots)
-                } else {
-                    Text(state.text)
-                        .font(.footnote)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8) // a backstop for the app's longer messages; the keyboard's own words fit
-                        .accessibilityIdentifier("keyboard.status")
-                    Spacer(minLength: 0)
+            // Clean up's style menu sits above the bar while it is open; the keyboard grows by its height.
+            VStack(spacing: 0) {
+                if model.choosingStyle { styleMenu.frame(height: Self.menuHeight) }
+                HStack(spacing: 10) {
+                    // A search being typed keeps the bar (the chip waits until it ends); otherwise the chip comes first.
+                    if emoji.query == nil, let chip = model.chip {
+                        chipView(chip)
+                    } else if emoji.showsSearch, emoji.query != nil || state != .listening {
+                        // A take recording has the field's place until a search begins (the take matters more than a
+                        // search not yet begun); a search being typed keeps its field, and the red stop key shows the take.
+                        searchField
+                    } else if state == .listening {
+                        recordingLine(seconds: model.recordingSeconds(now: context.date))
+                        Spacer(minLength: 0)
+                    } else if model.choosingStyle {
+                        Text(CleanupWords.chooseStyle).font(.footnote).foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                        Button(CleanupWords.cancel, action: closeStyles)
+                            .font(.body.weight(.semibold))
+                            .frame(minWidth: 44, maxHeight: .infinity)
+                            .accessibilityIdentifier("keyboard.cleanup.cancel")
+                    } else if let line = model.cleanLine(now: context.date) {
+                        Text(line)
+                            .font(.footnote)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                            .accessibilityIdentifier("keyboard.cleanup.line")
+                        Spacer(minLength: 0)
+                    } else if let slots = suggestions.slots {
+                        suggestionRow(slots)
+                    } else {
+                        Text(state.text)
+                            .font(.footnote)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8) // a backstop for the app's longer messages; the keyboard's own words fit
+                            .accessibilityIdentifier("keyboard.status")
+                        Spacer(minLength: 0)
+                    }
+                    if !emoji.showsSearch, let sparkle = model.sparkle(now: context.date) { sparkleKey(sparkle) }
+                    mic
                 }
-                mic
+                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
         }
         // The bar is 48 pt tall (36 pt in landscape), so its words stop growing at .xxLarge, one step below the largest
         // standard text size: the status and the chip are never cut.
@@ -224,6 +250,86 @@ struct KeyboardBar: View {
         .accessibilityAddTraits(.isStaticText)
         .accessibilityIdentifier("keyboard.status")
     }
+
+    // MARK: Clean up
+
+    /// How much taller the style menu makes the keyboard.
+    static let menuHeight: CGFloat = 46
+
+    /// Clean up's round button, just left of the mic and exactly its size: the same 4 pt inset square and touch area
+    /// (48 by 48 pt in portrait, 48 by 36 in landscape). Tap tidies in the default style, a hold opens the style menu;
+    /// after a tidy it is Undo, while the app works it shows the mic's busy arc and takes no tap.
+    @ViewBuilder private func sparkleKey(_ sparkle: KeyboardClient.Sparkle) -> some View {
+        let key = SparkleArt(mode: sparkle)
+            .padding(4)
+            .aspectRatio(1, contentMode: .fit)
+            .frame(minWidth: 48)
+            .contentShape(.rect)
+        switch sparkle {
+        case .offer:
+            key.gesture(LongPressGesture(minimumDuration: 0.5).exclusively(before: TapGesture()).onEnded { value in
+                switch value {
+                case .first: openStyles()
+                case .second: tidy(nil)
+                }
+            })
+            .accessibilityElement()
+            .accessibilityLabel(Text("Tidy"))
+            .accessibilityHint(Text("Hold to choose a style."))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { tidy(nil) }
+            .accessibilityAction(named: Text("Choose a style")) { openStyles() }
+            .accessibilityIdentifier("keyboard.cleanup")
+        case .working:
+            key.accessibilityElement()
+                .accessibilityLabel(Text(CleanupWords.working))
+                .accessibilityIdentifier("keyboard.cleanup")
+        case .undo:
+            key.onTapGesture(perform: undoTidy)
+                .accessibilityElement()
+                .accessibilityLabel(Text("Undo"))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { undoTidy() }
+                .accessibilityIdentifier("keyboard.cleanup.undo")
+        }
+    }
+
+    /// The five styles in one row above the bar, the largest type that fits (an iPhone 16 is 393 pt wide).
+    private var styleMenu: some View {
+        ViewThatFits(in: .horizontal) {
+            styleRow(size: 15)
+            styleRow(size: 14)
+            styleRow(size: 13)
+            ScrollView(.horizontal, showsIndicators: false) { styleRow(size: 13) }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 8)
+    }
+
+    private func styleRow(size: CGFloat) -> some View {
+        HStack(spacing: 5) {
+            ForEach(CleanupStyle.allCases, id: \.self) { style in
+                Button { tidy(style) } label: {
+                    Text(style.title)
+                        .font(.system(size: size, weight: style == .clean ? .semibold : .regular))
+                        .foregroundStyle(Self.keyText)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 10)
+                        .frame(height: 34)
+                        .background(Self.keyFace, in: .capsule)
+                        .shadow(color: .black.opacity(0.18), radius: 0, y: 1)
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("keyboard.cleanup.style.\(style.rawValue)")
+            }
+        }
+    }
+
+    /// The keys' own face and words (Apple's, sampled on the Simulator), for the style capsules.
+    private static let keyFace = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.42, alpha: 1) : .white })
+    private static let keyText = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? .white : .black })
 
     /// Plain text buttons, like the words in Apple's suggestion bar, and an xmark to dismiss, so the line keeps its words
     /// on a 375 pt iPhone. Each button is at least 44 pt wide and as tall as the bar.

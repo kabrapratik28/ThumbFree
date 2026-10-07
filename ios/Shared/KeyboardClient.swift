@@ -51,6 +51,7 @@ import UniformTypeIdentifiers
     /// speech model (the app's status says noModel), it only opens ThumbFree where the model is offered.
     func pressDown(_ proxy: UITextDocumentProxy) {
         pressing = true
+        forgetTake() // a new take: the last one can no longer be tidied
         guard fullAccess, shared != nil else { return }
         status = try? shared?.status()
         chip = nil
@@ -97,6 +98,8 @@ import UniformTypeIdentifiers
             self.chip = nil
         }
         deliverIfDue(proxy)
+        readCleanup(proxy)
+        followCursor(proxy)
     }
 
     /// Whole seconds the take has been recording, from the start the app's status carries (`HostStatus.takeStartedAt`, on
@@ -187,6 +190,175 @@ import UniformTypeIdentifiers
         let landed = now != before && seen >= min(payload.count, 16) && now.hasSuffix(String(payload.suffix(seen)))
         write(landed ? .insertionConfirmed : .insertionUnverified, item.takeID)
         if !landed { chip = Chip(item: item, canInsert: false) }
+        if landed, let documentID = FieldTraits.documentID(of: proxy) {
+            typedTake = TypedTake(takeID: item.takeID, typed: payload, documentID: documentID)
+            takeAtCursor = true
+        }
+    }
+
+    // MARK: Clean up
+
+    /// The take this keyboard typed last, which the sparkle may tidy: the text as it went in (`typed`), the field, and
+    /// after a tidy the text it replaced (`original`, which Undo puts back).
+    struct TypedTake: Equatable {
+        let takeID: UUID
+        var typed: String
+        let documentID: UUID
+        var original: String?
+    }
+
+    /// What the round button beside the mic shows: tidy, a request on its way (its spinner), or Undo.
+    enum Sparkle: Equatable { case offer, working, undo }
+
+    static let cleanupTimeout: TimeInterval = 25
+    static let messageSeconds: TimeInterval = 4
+
+    private(set) var typedTake: TypedTake?
+    /// The typed take sits right before the cursor, in its field (`CleanupReplace.matches`), as of the last look.
+    private(set) var takeAtCursor = false
+    /// The style menu is open (a hold on the sparkle).
+    private(set) var choosingStyle = false
+    private var cleanRequest: (id: UUID, sentAt: Date)?
+    private var cleanMessage: (text: String, until: Date)?
+    /// Apple's rate limit: until when, and whether iOS said (else a moment, 5 s).
+    private var pausedUntil: (date: Date, known: Bool)?
+    /// The controller lays the keyboard out again when the style menu opens or closes: it makes the keyboard taller.
+    var onStyleMenu: (() -> Void)?
+
+    /// The round button, if any: only with Full Access, while ThumbFree's session is live (a status under 5 s old)
+    /// and Clean up can run there, with no take going on, and the take this keyboard typed right before the cursor.
+    func sparkle(now: Date) -> Sparkle? {
+        guard fullAccess, let typedTake, takeAtCursor, !choosingStyle, let status, status.isFresh(now: now),
+              status.session == .ready, status.cleanup == .ready, status.take == .idle else { return nil }
+        if cleanRequest != nil { return .working }
+        return typedTake.original == nil ? .offer : .undo
+    }
+
+    /// What the bar's status place says for Clean up, if anything: the wait, Apple's pause (counting down when iOS
+    /// gave its end), or a short message after a try that left the words as they were.
+    func cleanLine(now: Date) -> String? {
+        if cleanRequest != nil { return CleanupWords.working }
+        if let pausedUntil, pausedUntil.date > now {
+            guard pausedUntil.known else { return CleanupWords.paused }
+            return CleanupWords.paused(ready: KeyState.clock(Int(pausedUntil.date.timeIntervalSince(now).rounded(.up))))
+        }
+        if let cleanMessage, cleanMessage.until > now { return cleanMessage.text }
+        return nil
+    }
+
+    /// The sparkle's tap (`style` nil: the default Settings keeps) or a style from the menu: asks the app, if the take
+    /// is still right before the cursor in its field. During Apple's pause it only says so again.
+    func tidy(style: CleanupStyle?, proxy: UITextDocumentProxy) {
+        closeStyleMenu()
+        guard let take = typedTake, take.original == nil, cleanRequest == nil else { return }
+        if let pausedUntil, pausedUntil.date > Date() { return }
+        guard atCursor(take, proxy) else { return leave(CleanupWords.changed) }
+        let text = take.typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        let command = KeyboardCommand(takeID: take.takeID, kind: .clean, text: text, style: style)
+        guard write(command) else { return say(CleanupWords.failed) }
+        cleanMessage = nil
+        cleanRequest = (command.id, command.sentAt)
+    }
+
+    /// Undo: the take as it was typed, back in place of the tidied words.
+    func undoTidy(_ proxy: UITextDocumentProxy) {
+        guard var take = typedTake, let original = take.original, cleanRequest == nil else { return }
+        guard atCursor(take, proxy), replace(take.typed, with: original, take: take.takeID, proxy: proxy) else {
+            return leave(CleanupWords.changed)
+        }
+        take.typed = original
+        take.original = nil
+        typedTake = take
+    }
+
+    func openStyleMenu() {
+        guard sparkle(now: Date()) == .offer else { return }
+        choosingStyle = true
+        onStyleMenu?()
+    }
+
+    func closeStyleMenu() {
+        guard choosingStyle else { return }
+        choosingStyle = false
+        onStyleMenu?()
+    }
+
+    /// A key typed, a new take or another field: the last take can no longer be tidied or undone.
+    func forgetTake() {
+        typedTake = nil
+        takeAtCursor = false
+        cleanRequest = nil
+        closeStyleMenu()
+    }
+
+    /// Whether the take still sits right before the cursor in its field; another field forgets it.
+    func followCursor(_ proxy: UITextDocumentProxy) {
+        guard let take = typedTake else { return }
+        guard FieldTraits.documentID(of: proxy) == take.documentID else { return forgetTake() }
+        takeAtCursor = CleanupReplace.matches(before: proxy.documentContextBeforeInput ?? "", typed: take.typed)
+    }
+
+    /// The app's answer to this keyboard's request, or the request's timeout.
+    private func readCleanup(_ proxy: UITextDocumentProxy) {
+        guard let request = cleanRequest else { return }
+        guard let result = (try? shared?.cleanups())?.last(where: { $0.requestID == request.id }) else {
+            if Date().timeIntervalSince(request.sentAt) > Self.cleanupTimeout {
+                cleanRequest = nil
+                say(CleanupWords.failed)
+            }
+            return
+        }
+        cleanRequest = nil
+        switch result.state {
+        case .done:
+            guard var take = typedTake, let cleaned = result.text else { return say(CleanupWords.failed) }
+            guard atCursor(take, proxy) else { return leave(CleanupWords.changed) }
+            let before = proxy.documentContextBeforeInput ?? ""
+            let head = CleanupReplace.beforeTake(before: before, typed: take.typed)
+            let caps = head.flatMap { FieldTraits.capsExpected(proxy.autocapitalizationType, before: $0) }
+            var payload = CursorFormatter.payload(text: cleaned, before: head, after: proxy.documentContextAfterInput ?? "",
+                                                  capsExpected: caps, field: FieldTraits.field(proxy.keyboardType),
+                                                  trailingSpace: false)
+            // iOS showed only the end of the take: keep the space it began with, which the formatter could not see.
+            if head == nil { payload = String(take.typed.prefix(while: \.isWhitespace)) + payload }
+            guard replace(take.typed, with: payload, take: take.takeID, proxy: proxy) else { return say(CleanupWords.failed) }
+            take.original = take.typed
+            take.typed = payload
+            typedTake = take
+        case .paused:
+            pausedUntil = (result.resetAt ?? Date().addingTimeInterval(5), result.resetAt != nil)
+        case .failed, .unavailable:
+            say(CleanupWords.failed)
+        }
+    }
+
+    /// The pin: the take's own field, with the take right before the cursor.
+    private func atCursor(_ take: TypedTake, _ proxy: UITextDocumentProxy) -> Bool {
+        FieldTraits.documentID(of: proxy) == take.documentID
+            && CleanupReplace.matches(before: proxy.documentContextBeforeInput ?? "", typed: take.typed)
+    }
+
+    /// One replacement, as an insertion: the record on disk first, the take deleted one character at a time, the new
+    /// text inserted, then read back. False only when the record could not be written (nothing changed then).
+    private func replace(_ old: String, with new: String, take: UUID, proxy: UITextDocumentProxy) -> Bool {
+        guard write(.cleanBegan, take) else { return false }
+        for _ in 0..<old.count { proxy.deleteBackward() }
+        proxy.insertText(new)
+        let landed = CleanupReplace.matches(before: proxy.documentContextBeforeInput ?? "", typed: new)
+        write(landed ? .cleanConfirmed : .cleanUnverified, take)
+        takeAtCursor = landed
+        return true
+    }
+
+    /// A short message in the status place; the take stays tidy-able.
+    private func say(_ text: String) {
+        cleanMessage = (text, Date().addingTimeInterval(Self.messageSeconds))
+    }
+
+    /// The text changed under the take: say so and forget it, so the sparkle goes.
+    private func leave(_ text: String) {
+        forgetTake()
+        say(text)
     }
 
     @discardableResult

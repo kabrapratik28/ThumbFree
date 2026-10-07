@@ -125,6 +125,7 @@ final class KeyboardViewController: UIInputViewController {
             keyplane.bottomAnchor.constraint(equalTo: root.bottomAnchor),
         ])
         barHost.didMove(toParent: self)
+        client.onStyleMenu = { [weak self] in self?.view.setNeedsLayout() } // the style menu makes the keyboard taller
         render()
     }
 
@@ -139,7 +140,29 @@ final class KeyboardViewController: UIInputViewController {
                     dismiss: { [weak self] in self?.client.dismiss(); self?.updateSuggestions() },
                     searchEmoji: { [weak self] in self?.startSearch() },
                     clearSearch: { [weak self] in self?.searchKey(nil) },
-                    pickSuggestion: { [weak self] in self?.pickSuggestion($0) })
+                    pickSuggestion: { [weak self] in self?.pickSuggestion($0) },
+                    tidy: { [weak self] in self?.tidy($0) },
+                    undoTidy: { [weak self] in self?.undoTidy() },
+                    openStyles: { [weak self] in self?.openStyles() },
+                    closeStyles: { [weak self] in self?.client.closeStyleMenu() })
+    }
+
+    // MARK: Clean up
+
+    private func tidy(_ style: CleanupStyle?) {
+        client.tidy(style: style, proxy: textDocumentProxy)
+    }
+
+    private func undoTidy() {
+        client.undoTidy(textDocumentProxy)
+        endTyping() // the take's words changed under the caret
+        followField()
+        render()
+    }
+
+    private func openStyles() {
+        keyplane.impact(light: true)
+        client.openStyleMenu()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -191,8 +214,10 @@ final class KeyboardViewController: UIInputViewController {
         let compact = traitCollection.verticalSizeClass == .compact
         let resultsRow: CGFloat = emojiResults == nil ? 0 : (compact ? 38 : 41)
         let letters: CGFloat = compact ? 188 : 260, emoji: CGFloat = compact ? 251 : 313
-        heightConstraint?.constant = emojiPicker != nil && emojiResults == nil ? emoji : letters + resultsRow
-        barHeightConstraint?.constant = compact ? 36 : 48
+        // Each constant is set once per pass: one set twice (changed, then changed back) lays the view out forever.
+        let menu = client.choosingStyle ? KeyboardBar.menuHeight : 0 // Clean up's style menu above the bar
+        heightConstraint?.constant = (emojiPicker != nil && emojiResults == nil ? emoji : letters + resultsRow) + menu
+        barHeightConstraint?.constant = (compact ? 36 : 48) + menu
         keyplaneTop?.constant = resultsRow
         render()
     }
@@ -239,6 +264,7 @@ final class KeyboardViewController: UIInputViewController {
         // pick keeps the search up, as Apple's does, and a tap right after one still ends it.
         if emojiBar.query != nil { endSearch() }
         followField() // a new field, or the user moved the caret: the automatic capital follows
+        client.followCursor(textDocumentProxy) // Clean up's sparkle shows only with the take right before the caret
         updateSuggestions()
         render()
     }
@@ -318,6 +344,7 @@ final class KeyboardViewController: UIInputViewController {
             isTyping = true
             lastCorrection = nil
             undo = nil
+            client.forgetTake() // an edit ends Clean up's offer and Undo for the last take
         }
         // Apple's autocorrection at a word's end: a space, a return or a punctuation mark.
         var corrected: (typed: String, fix: String)?
