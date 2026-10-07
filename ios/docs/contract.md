@@ -107,6 +107,26 @@ public enum CursorFormatter {
 public enum TextPipeline {
     public static func run(chunkTexts: [String], dictionary: [String], language: String?) -> (raw: String, text: String)
 }
+
+// Clean up (issue #1): what the on-device model is asked, what may replace a take, and where.
+public enum CleanupStyle: String, Codable, Sendable, CaseIterable { case clean, shorter, friendly, professional, simple }
+public enum CleanupPrompt {
+    public static let rules: String                                   // instruction v2, word for word
+    public static func instructions(_ style: CleanupStyle) -> String  // rules, plus one line for every style but Clean
+    public static func prompt(take: String) -> String                 // "Text: <take>\nCleaned text:"
+}
+/// The answer trimmed (an echoed "Cleaned text:" label and wrapping quotes dropped), or nil: empty or unchanged; a
+/// chatter opener the take lacks ("Sure", "Here is", "Here's", "I can't", "I cannot", "As an AI"); under 40% of the
+/// take's words; another main alphabet; a negation kind of the take missing ("not"/"n't", "never", "no longer"); a
+/// digit group of the take not in the answer's digits, in order; for Clean, more than max(2, 20% of the answer's words)
+/// words not in the take (a word with a digit is a number form, never new).
+public enum CleanupCheck { public static func accept(take: String, output: String?, style: CleanupStyle) -> String? }
+public enum CleanupReplace {
+    /// The text before the cursor ends with the typed take, as much as iOS shows: its last 16 characters or all of it.
+    public static func matches(before: String, typed: String) -> Bool
+    /// The text before the take when iOS shows all of it; nil (unknown to the cursor formatter) otherwise.
+    public static func beforeTake(before: String, typed: String) -> String?
+}
 ```
 
 ## Audio, session, IPC, history and models (`ThumbFreeKit/Sources/TFCore/{Audio,Session,IPC,History,Models}/`)
@@ -133,8 +153,8 @@ public final class WavWriter { public init(url: URL) throws; public func append(
 public enum TakePhase: String, Codable, Sendable { case idle, recording, stopping, transcribing, delivering }
 public struct TakeReducer { /* exact TakeState, TakeEvent, TakeEffect and reduce: ThumbFreeKit/Sources/TFCore/Session/TakeReducer.swift (it ignores presses naming an ended take, and the 2-minute silence stop covers any recording take). The delivering phase follows the Delivery table below (insertion commands and the app's 3 s timeouts). After a restart the app ignores presses sent before its launch; a launch link naming a take from before this launch starts a fresh cold take in its place instead of reusing the old id (see "Keyboard status and the stale link" below). */ }
 
-// IPC between keyboard(s) and app. Keyboards only create command files; the app only writes status.json and
-// outbox.json and deletes command files after handling them. Unique file names, so several keyboard processes
+// IPC between keyboard(s) and app. Keyboards only create command files; the app only writes status.json,
+// outbox.json and cleanups.json and deletes command files after handling them. Unique file names, so several keyboard processes
 // (one per host app) never collide. Handling is idempotent: a crash before the delete replays the command harmlessly.
 public struct InsertTarget: Codable, Sendable, Equatable {
     public let documentID: UUID      // textDocumentProxy.documentIdentifier at press
@@ -148,10 +168,21 @@ public struct KeyboardCommand: Codable, Sendable, Equatable {
         case insertionUnverified           // insertText ran but the read-back could not confirm it
         case insertionHeldBack             // not inserted: another field (documentID or contextHash differ), or no text proxy
         case ping
+        case clean                         // Clean up: tidy `text` (the take as typed) in `style` (nil: the app's default)
+        case cleanBegan, cleanConfirmed, cleanUnverified // Clean up's replacement: on disk before the take is deleted; the read-back
     }
     public let id: UUID; public let takeID: UUID; public let kind: Kind
     public let target: InsertTarget?     // set on press; for a cold take also on the stop command (see below)
     public let sentAt: Date
+    public let text: String?; public let style: CleanupStyle?   // a clean command's; nil for every other kind
+}
+public enum CleanupAvailability: String, Codable, Sendable { case ready, off, appleIntelligenceOff, notEligible, notReady, unsupportedLanguage }
+public struct CleanupResult: Codable, Sendable, Equatable {   // the app's answer to one clean command (requestID = its id)
+    public enum State: String, Codable, Sendable { case done, failed, paused, unavailable }
+    public let requestID: UUID; public let takeID: UUID; public let state: State
+    public let text: String?             // done: the answer, already through CleanupCheck
+    public let resetAt: Date?            // paused: Apple's rate limit ends then (iOS 27), nil when iOS gives no date
+    public let createdAt: Date
 }
 public enum SessionPhase: String, Codable, Sendable { case off, starting, ready, ending }
 public enum EnginePhase: String, Codable, Sendable { case unloaded, loading, warming, readyNeuralEngine, readyCPU, failed, noModel } // noModel: no speech model downloaded yet
@@ -161,6 +192,7 @@ public struct HostStatus: Codable, Sendable, Equatable {
     public var takeStartedAt: Date?   // when the live take began, on the wall clock as updatedAt; nil with no take, and from an app version without the field
     public var expiresAt: Date?; public var updatedAt: Date
     public var message: String?   // user-facing outcome text, for example "No speech heard."
+    public var cleanup: CleanupAvailability?   // Clean up's state; nil from an app without it (no sparkle)
 }
 public struct OutboxItem: Codable, Sendable, Equatable {
     public enum State: String, Codable, Sendable { case pending, typed, unverified, heldBack }
@@ -177,6 +209,8 @@ public struct SharedStore: Sendable {            // files in the App Group conta
     public func status() throws -> HostStatus?
     public func write(_ outbox: [OutboxItem]) throws             // outbox.json (newest last, at most 20)
     public func outbox() throws -> [OutboxItem]
+    public func write(_ cleanups: [CleanupResult]) throws        // cleanups.json (newest last, at most 10), app only
+    public func cleanups() throws -> [CleanupResult]
 }
 public enum DarwinName {
     public static let command = "io.github.kabrapratik28.thumbfree.command"
@@ -328,6 +362,26 @@ The keyboard's bottom row is Apple's: the layer key, the globe when shown, the e
 ### Keyboard parity with Apple's iOS 26 keyboard
 
 The keyboard follows the field's `keyboardType` (`KeyboardKind`): email, web address, Twitter and web search fields get Apple's bottom rows, ASCII-capable and numbers-and-punctuation fields have no emoji key (the second opens on 123), number and decimal fields get Apple's digit pad (phone pads never reach a custom keyboard: iOS shows its own), and a new field opens where Apple's keyboard opens. Apple's layouts with their key widths, and its long-press alternatives, are read from Apple's keyboard on a Simulator by `tools/dump-apple-keyboard.sh` into `tools/keyboard/apple-layouts.txt` and `tools/keyboard/apple-alternates.txt`; `KeyAlternates.lines` repeats the second file, and unit tests hold the layouts and the table to both files, so re-read both after each iOS release. The keys look like iOS 26's (one key color, symbols for shift, delete and return, a blank space bar, Apple's balloon popup). Gestures, as on Apple's: a long press opens a key's alternatives (`KeyAlternates`, `KeyPopup.Callout`); holding space turns it into a trackpad that moves the cursor with `adjustTextPosition(byCharacterOffset:)`, which counts UTF-16 units, and moves up or down only through line breaks the keyboard can see (`Trackpad`); 123, ABC and #+= (on 123) switch on touch and shift shows capitals while held, for the quick slide (`KeyLayer.slidesFrom`); delete held goes on to whole words (`DeleteRepeat`); a space or return on 123 or #+= goes back to the letters only once a key was typed there. UI tests give the try screen's box (`-TFOpenTry YES`) a keyboard type with `-TFFieldType <UIKeyboardType raw value>` (Debug builds only). UI-test identifiers: `keyboard.key.periodcom` for .com; the digit pad reuses `keyboard.key.<digit>`, `keyboard.key.period` and `keyboard.delete`. Details: a picked alternate marks its commit point like a tapped key (`markCommitPoint`, `KeyplaneView.pick`), so an apostrophe alternative chosen on 123 or #+= sends the layer back to letters and VoiceOver's refocus lands on the apostrophe, not on whatever was last tapped; starting the trackpad (`startTrackpad`) stops another finger's delete repeat and closes its open alternatives callout without typing anything, and the globe does nothing while the trackpad is on (`hitTest`, `globeTouched`); delete's pace and word length live in one `DeleteRepeat` (`Shared/Keyplane.swift`), shared by the keys and the emoji picker's delete; the 123 rule holds in Search Emoji too (`KeyboardViewController.searchKey` goes through the same `KeyLayer.after(_:typedHere:)` gate as the keys). More details: the 123 rule starts again whenever the letters come back, a search's start and end included (`layer`'s `didSet`; one `advanceLayer(after:)` serves the keys and the search); a caret move without a text change (`selectionDidChange`) is taken as one (`fieldChanged`), so it ends Search Emoji and a double space in progress too (on iOS 26.5 a tap that only moves the caret comes as `textDidChange`, in a text box and in a Safari text area alike); a slide from shift that another key rolls over types its capital once, before that key (`commitPending`); the search's results row sits under the keys, so the top row's balloons and alternatives draw over it; the emoji picker's delete keeps its own pace through the same helper, 400 ms and then an emoji every 80 ms, never a word (`DeleteRepeat.step(_:picker:)`); while the trackpad is on the bar takes no touches either, the mic included (`KeyplaneView.onTrackpad`); letting go of a long press away from the alternatives does as Apple's: from the row's top down to the key's bottom edge the alternative under the finger, above the row or just below the key the key itself, more than a key's height below the key nothing (`KeyPopup.Callout.index(at:)`, `cancels(at:)`); the heights were measured against Apple's on the iPhone 16 and 17 Pro Simulators (iOS 26.5) and already match: the letters (260 pt, 188 in landscape) are Apple's letters keyboard with its suggestions strip, whose place the bar takes, and the emoji picker (313 pt, 251 in landscape) is Apple's Emoji keyboard, now written as its own height rather than the letters' plus an amount; delete takes whole words once twenty characters are gone, the touch's own one included; a finger rolling from a letter onto delete leaves no balloon behind.
+
+### Clean up
+
+After a take the keyboard typed and confirmed (`KeyboardClient.typedTake`: the payload as it went in and the field's
+`documentIdentifier`), a round sparkle (`SparkleArt`, the mic's own geometry) sits just left of the mic while: Full
+Access, a fresh status with `session == .ready`, `take == .idle` and `cleanup == .ready`, and the typed take right
+before the cursor in its field (`CleanupReplace.matches`). A key typed, a new take or another field forgets the take.
+Tap: a `clean` command (the take trimmed, `style` nil); hold (0.5 s): a row of the five styles above the bar, the mic
+kept, Cancel. The app (`CleanUp`) runs one request at a time: `SystemLanguageModel(useCase: .general, guardrails:
+.permissiveContentTransformations)` (never Private Cloud Compute), `CleanupPrompt.instructions` as the session's
+instructions, `CleanupPrompt.prompt` as the prompt, greedy, a 20 s limit; `CleanupCheck.accept`; then cleanups.json and
+the status notification. Apple's rate limit (`LanguageModelError.rateLimited` on iOS 27 with `resetDate`,
+`GenerationError.rateLimited` on iOS 26) is `paused`. The keyboard reads its answer on each refresh (25 s timeout), checks
+the pin again, writes `cleanBegan`, deletes the take one `deleteBackward()` per character, inserts the answer through
+`CursorFormatter` against the text before the take (that text's spacing kept when iOS cuts it), reads it back and writes
+`cleanConfirmed` or `cleanUnverified`; the sparkle becomes Undo, which writes the take back the same way. The bar's status
+place says "Cleaning up…", "Apple paused Clean up. Ready in 0:40" (or "for a moment"), "Couldn't tidy this one. Your
+words are unchanged." or "The text changed, so it was left as is." Settings: availability, "Show ✨ after you speak"
+(`TFCleanupShown`, on) and "Tap ✨ uses" (`TFCleanupStyle`, Clean). Debug: `-TFFakeCleanup <text>` answers every
+request with that text and reads as ready (`CleanupUITests`; a Simulator has no model).
 
 ### Suggestions, autocorrect, text replacements and smart punctuation
 

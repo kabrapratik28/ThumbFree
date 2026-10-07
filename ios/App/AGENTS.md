@@ -17,6 +17,8 @@ Settings tabs in SwiftUI. `Intents/` and `Widgets/` add Start ThumbFree, a Short
 - The App Group is `group.io.github.kabrapratik28.thumbfree`; its `IPC/` folder is excluded from backups and every
   write in it is atomic (a temporary file, then a rename). The app handles each keyboard command once, then deletes it.
 - Only `Models/` uses the network, and only for the model download from `huggingface.co` at pinned revisions.
+- Clean up (`Session/CleanUp.swift`, the only file that imports FoundationModels) runs Apple's on-device system model
+  only, never Private Cloud Compute, one request at a time, and writes no answer that fails `CleanupCheck`.
 - A first run starts with the model for the iPhone's languages and saves that choice (`SpeechModels`). An installed
   model, a begun download or a saved choice is never changed by it, so an update keeps its model. The welcome's
   language choice is a choice too: a download it cancelled that still ends ready never takes over.

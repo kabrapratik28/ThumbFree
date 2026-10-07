@@ -10,13 +10,17 @@ model (`Keyplane`), `KeyboardClient`, suggestions, emoji, commands and delivery.
   from smaller bitmaps as memory runs low (`EmojiMemory`). The keyboard links only `TFCore`.
 - The keyboard never records, never loads a model and never goes online; it shows only the state the app sends it.
   In the App Group's `IPC/` folder it only creates `commands/<sentAt>-<id>.json` and its `keyboard-seen` mark; the app
-  alone writes `status.json` (once a second while live; over 5 s old means the app is gone) and `outbox.json`. Darwin
+  alone writes `status.json` (once a second while live; over 5 s old means the app is gone), `outbox.json` and
+  `cleanups.json`. Darwin
   notifications carry no data and may be lost or doubled: they only prompt a reread.
 - Delivery: the keyboard types a take by itself once, only into the field that pinned it (its `documentIdentifier` and
   a SHA-256 of the text around the cursor), and only if the pin came after the keyboard last appeared; the take that
   opened the app goes where the user taps stop. `insertionBegan` is on disk before `insertText`; a read-back answers
   `insertionConfirmed` or `insertionUnverified`. Anything else waits behind Insert here and Copy (`.localOnly`).
   Nothing is retried: an unknown outcome is "May already be in the field".
+- Clean up changes only the take this keyboard typed and confirmed, only after the user's tap, only while it sits right
+  before the cursor in its own field (`CleanupReplace.matches`), with `cleanBegan` on disk first; anything else leaves
+  the field alone. The sparkle is the mic's size, white, never yellow (docs/contract.md, "Clean up").
 - Read `documentIdentifier` only through `FieldTraits.documentID(of:)`: some apps return nil, and Swift's bridge traps.
 - Keys work as on Apple's iOS 26 keyboard: the layout follows the field (`KeyboardKind`; number fields get the digit
   pad), long-press alternatives in Apple's order (`KeyAlternates`), the space-bar trackpad, delete by words
