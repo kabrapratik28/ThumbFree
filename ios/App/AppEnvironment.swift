@@ -56,7 +56,8 @@ enum AppEnvironment {
             defaults.removeObject(forKey: SpeechModel.loadedKey)
             defaults.removeObject(forKey: SpeechModel.wifiOnlyKey)
             defaults.removeObject(forKey: SessionHost.textTakesKey)
-            for key in [AppSettings.sessionMinutesKey, AppSettings.keepDaysKey, AppSettings.keepCountKey] { defaults.removeObject(forKey: key) }
+            for key in [AppSettings.sessionMinutesKey, AppSettings.keepDaysKey, AppSettings.keepCountKey,
+                        AppSettings.cleanupShownKey, AppSettings.cleanupStyleKey] { defaults.removeObject(forKey: key) }
             #if DEBUG
             UserDefaults(suiteName: Brand.appGroupID)?.set(UUID().uuidString, forKey: LearnedWords.resetKey) // the keyboard's words too
             #endif
@@ -109,6 +110,10 @@ enum AppEnvironment {
         host.dictionary = dictionary.entries
         dictionary.onChange = { host.dictionary = $0 }
         let settings = AppSettings(defaults: defaults)
+        // Clean up: the app tells the keyboards whether it can run, and runs it for them in the background.
+        let cleanUp = CleanUp(shared: shared)
+        host.cleanupAvailability = { cleanUp.availability(shown: settings.cleanupShown) }
+        host.onClean = { cleanUp.run($0, defaultStyle: settings.cleanupStyle) }
         settings.apply(to: host)
         settings.onChange = { $0.apply(to: host) }
         host.applyDayRetention() // a day limit also applies with no new take (and each time the app becomes active)

@@ -64,6 +64,10 @@ import TFCore
     private(set) var coldTake: UUID?
     /// The Dictionary's entries (the app keeps them in step with `DictionaryStore`): every take's text goes through them.
     var dictionary: [String] = []
+    /// Clean up: what the keyboards are told about it (nil: nothing, no sparkle), and where a `clean` command goes.
+    /// The app sets both (`CleanUp`); tests leave them.
+    @ObservationIgnored var cleanupAvailability: @MainActor () -> CleanupAvailability? = { nil }
+    @ObservationIgnored var onClean: (@MainActor (KeyboardCommand) -> Void)?
 
     /// The dictate link's own (stale) take id, when it named a take from before this launch and a fresh one started in
     /// its place: a repeated link with that same stale id must resolve to the fresh take already running for it, not
@@ -607,6 +611,7 @@ import TFCore
     func publish() {
         // The take's start for the keyboards' time: its arming clock (the wall clock, as updatedAt), nil once it ends.
         status.takeStartedAt = armedAtMs.map { Date(timeIntervalSince1970: Double($0) / 1_000) }
+        status.cleanup = cleanupAvailability()
         status.updatedAt = Date()
         try? shared.write(status)
         DarwinObserver.post(DarwinName.status)
@@ -812,6 +817,17 @@ extension SessionHost {
     /// it. Replays are harmless: the reducer drops touches it already saw and events for other takes.
     func handleCommands(now: Date = Date()) {
         for command in (try? shared.pendingCommands()) ?? [] {
+            // Clean up's commands never touch the take machine: the request goes to `onClean`, the replacement's
+            // records are only logged (codes, never text).
+            if [.clean, .cleanBegan, .cleanConfirmed, .cleanUnverified].contains(command.kind) {
+                try? shared.remove(command)
+                if command.kind == .clean {
+                    onClean?(command)
+                } else {
+                    Self.log.notice("Clean up \(command.kind.rawValue, privacy: .public)")
+                }
+                continue
+            }
             if command.kind == .press {
                 // Proof our keyboard sent it, kept even once the command file is gone (a link naming this take can
                 // still trust it, once, for 60 s): every press this reads counts, including the ones just below that

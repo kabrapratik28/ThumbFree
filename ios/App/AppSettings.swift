@@ -2,12 +2,14 @@ import Foundation
 import Observation
 import TFCore
 
-/// Session length and how long History keeps takes (Settings), kept in UserDefaults and handed to the session host
-/// whenever they change.
+/// Session length, how long History keeps takes and Clean up's two choices (Settings), kept in UserDefaults and handed
+/// to the session host whenever they change.
 @MainActor @Observable final class AppSettings {
     static let sessionMinutesKey = "TFSessionMinutes"
     static let keepDaysKey = "TFKeepDays"
     static let keepCountKey = "TFKeepCount"
+    static let cleanupShownKey = "TFCleanupShown"
+    static let cleanupStyleKey = "TFCleanupStyle"
     /// The microphone stays on this long after the last take.
     static let sessionChoices = [2, 5, 15, 60]
     static let defaultSessionMinutes = 5
@@ -50,6 +52,30 @@ import TFCore
         }
         set {
             withMutation(keyPath: \.keepCount) { defaults.set(newValue ?? 0, forKey: Self.keepCountKey) }
+            onChange(self)
+        }
+    }
+
+    /// Clean up's sparkle after a take ("Show ✨ after you speak"); on by default.
+    var cleanupShown: Bool {
+        get {
+            access(keyPath: \.cleanupShown)
+            return defaults.object(forKey: Self.cleanupShownKey) as? Bool ?? true
+        }
+        set {
+            withMutation(keyPath: \.cleanupShown) { defaults.set(newValue, forKey: Self.cleanupShownKey) }
+            onChange(self)
+        }
+    }
+
+    /// The style a tap on the sparkle uses ("Tap ✨ uses"); Clean by default, and for a value this build does not know.
+    var cleanupStyle: CleanupStyle {
+        get {
+            access(keyPath: \.cleanupStyle)
+            return defaults.string(forKey: Self.cleanupStyleKey).flatMap(CleanupStyle.init(rawValue:)) ?? .clean
+        }
+        set {
+            withMutation(keyPath: \.cleanupStyle) { defaults.set(newValue.rawValue, forKey: Self.cleanupStyleKey) }
             onChange(self)
         }
     }
