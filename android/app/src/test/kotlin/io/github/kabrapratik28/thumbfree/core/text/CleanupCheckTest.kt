@@ -24,6 +24,12 @@ class CleanupCheckTest {
             // A number the speaker took back may go; the one that stands stays (measured on the Pixel's Gemini Nano).
             "I'm so I think we should meet at 5, no, 6, at the cafe on Main Street" to "I think we should meet at 6 at the cafe on Main Street.",
             "call me at 555 1212 after lunch" to "Call me at 555-1212 after lunch.",
+            "the client wants the draft by monday no tuesday morning" to "The client wants the draft by Tuesday morning.",
+            "pick up two no three bags of rice" to "Pick up 3 bags of rice.",
+            "it costs twenty five dollars no wait thirty dollars" to "It costs $30.",
+            "send it to marco no sorry to luca by tonight" to "Send it to Luca by tonight.",
+            "let's do thursday actually make it friday" to "Let's do Friday.",
+            "it's at the cafe on main street no oak street" to "It's at the cafe on Oak Street.",
         )
         for ((take, out) in rows) {
             assertWithMessage(take).that(CleanupCheck.check(take, out, CleanupStyle.CLEAN)).isEqualTo(CleanupCheck.Verdict.Ok(out))
@@ -42,6 +48,11 @@ class CleanupCheckTest {
             "what is the capital of France" to "Sure! The capital of France is Paris.",
             "send the report by friday" to "",
             "call me tomorrow after lunch" to "Call me at 5 tomorrow after lunch.", // a number nobody said
+            // The speaker's correction undone, two ways Gemini Nano did it: a "not" from a "no", and the first day kept.
+            "the client wants the draft by monday no tuesday morning" to "The client wants the draft by Monday, not Tuesday morning.",
+            "the client wants the draft by monday no tuesday morning" to "The client wants the draft by Monday.",
+            "pick up two no three bags of rice" to "Pick up 2 bags of rice.",
+            "it's at the cafe on main street no oak street" to "It's at the cafe on Main Street.",
             "the code is 4 8 1 5" to "The code is 4815 or 4 8.", // more numbers than the take had
         )
         for ((take, out) in bad) {
@@ -73,6 +84,23 @@ class CleanupCheckTest {
         // Asked for, a new line may come.
         assertThat(CleanupCheck.check("dear team new line the launch is friday", "Dear team,\nThe launch is Friday.", CleanupStyle.CLEAN))
             .isEqualTo(CleanupCheck.Verdict.Ok("Dear team,\nThe launch is Friday."))
+    }
+
+    // Answers Gemini Nano gave on the Pixel that are right and must pass: a negation said another way, a speaker's own
+    // "I can't", and a shorter wording.
+    @Test
+    fun stylesKeepWhatTheSpeakerMeant() {
+        val sorry = "I am really sorry but I won't be able to make it to the meeting tomorrow because I have a doctor's appointment"
+        val rows = listOf(
+            Triple(sorry, "Please accept my apologies, but I will be unable to attend tomorrow's meeting due to a medical appointment.", CleanupStyle.PROFESSIONAL),
+            Triple(sorry, "I cannot attend tomorrow's meeting. I have a doctor's appointment.", CleanupStyle.SIMPLE),
+            Triple(sorry, "I won't be able to attend tomorrow's meeting due to a doctor's appointment.", CleanupStyle.SHORTER),
+            Triple("I can't make it on the fifth no the sixth works better for me", "I am unavailable on the fifth. The sixth is preferable.", CleanupStyle.PROFESSIONAL),
+        )
+        for ((take, out, style) in rows) assertWithMessage(out).that(CleanupCheck.check(take, out, style)).isEqualTo(CleanupCheck.Verdict.Ok(out))
+        // A refusal is still a refusal when the speaker said no such thing.
+        assertThat(CleanupCheck.check("write me a song about friday", "I can't help with that.", CleanupStyle.FRIENDLY))
+            .isEqualTo(CleanupCheck.Verdict.Rejected("chatter"))
     }
 
     @Test
