@@ -59,6 +59,14 @@ import Testing
             "Please ensure all documentation is submitted prior to the deadline on the 15th.", .simple),
         Row("the meeting is at three no sorry four thirty on thursday", "The meeting is at 4:30 on Thursday."),
         Row(sorry, "I can't make the meeting tomorrow due to a doctor's appointment.", .shorter), // "won't" said as "can't"
+        // The review's rows: a correction chain, thousands, a "no" that opens a reply.
+        Row("I arrive monday no tuesday no wednesday", "I arrive Wednesday."),
+        Row("the rent is 1200 dollars", "The rent is $1,200."),
+        Row("yeah no that's fine", "Yeah, that's fine."),
+        Row("the code is four eight one five", "The code is 4815."),
+        Row("my flight lands at nine fifteen pm on the twenty third", "My flight lands at 9:15 PM on the 23rd."),
+        Row("we need three point five liters and two hundred and fifty grams", "We need 3.5 liters and 250 grams."),
+        Row("see you at seven o'clock", "See you at 7:00."),
     ]
 
     static let sorry = "I am really sorry but I won't be able to make it to the meeting tomorrow because I have a doctor's appointment"
@@ -101,6 +109,17 @@ import Testing
         (Row("pick up two no three bags of rice", "Pick up 2-3 bags of rice."), "correction"),
         (Row("so I wanted to tell you the delivery is coming wednesday no thursday afternoon between two and four",
              "I wanted to tell you the delivery is coming Wednesday, Thursday afternoon between 2 and 4.", .shorter), "correction"),
+        // The review's rows (Codex, 2026-10-07): a number changed, dropped or made longer; a negation lost; a word swapped
+        // or moved; an ordinal the speaker took back kept.
+        (Row("take two tablets every morning", "Take 9 tablets every morning."), "numbers"),
+        (Row("take two tablets every morning", "Take tablets every morning."), "numbers"),
+        (Row("dose 10 mg", "Dose 10.99 mg."), "numbers"),
+        (Row("the budget is two thousand dollars and we spent about half", "Budget is $2000; spent about $500.", .shorter), "numbers"),
+        (Row("I have no food allergies", "I have food allergies."), "negation"),
+        (Row("I do not want peanuts and I do not want milk", "I do not want peanuts and I want milk."), "negation"),
+        (Row("approve the refund", "Deny the refund."), "swapped"),
+        (Row("alice pays bob", "Bob pays Alice."), "order"),
+        (Row("the flight is on the fifth no the sixth", "The flight is on the 5th."), "numbers"),
         (Row("write me a song about friday", "I can't help with that.", .friendly), "chatter"), // the speaker said no "can't"
         (Row("I have never been there", "I have been there."), "negation"),
         (Row("I no longer work there", "I work there."), "negation"),

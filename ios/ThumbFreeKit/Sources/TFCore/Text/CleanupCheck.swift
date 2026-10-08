@@ -16,8 +16,9 @@ public enum CleanupVerdict: Equatable, Sendable {
 public enum CleanupCheck {
     /// Openers of a reply about the text rather than the text itself.
     static let chatter = ["sure", "here is", "here's", "i can't", "i cannot", "as an ai", "certainly", "of course"]
-    static let negations = ["not", "never", "no longer", "cannot", "unable", "unavailable", "nothing", "none", "nobody",
-                            "nowhere", "neither"]
+    /// Words that negate on their own; "n't" and a "no" that takes nothing back count too (`negations(in:)`).
+    static let negationWords: Set<String> = ["not", "never", "cannot", "unable", "unavailable", "nothing", "none",
+                                             "nobody", "nowhere", "neither", "nor"]
     /// Words Clean may drop or turn into marks and digits: function words, fillers and spoken punctuation. Every other
     /// word of the take must survive a Clean (one may go), but for what a correction replaced.
     static let functionWords: Set<String> = [
@@ -66,21 +67,22 @@ public enum CleanupCheck {
         if out.isEmpty { return .rejected("empty") }
         if out == raw { return .same }
         let lowerRaw = straight(raw.lowercased()), lowerOut = straight(out.lowercased())
-        let saidNo = negated(lowerRaw)
+        let takeWords = words(raw), outWords = words(out)
+        let rawNo = negations(in: takeWords), outNo = negations(in: outWords)
         // "I can't" opens a refusal, unless the speaker said they can't ("I won't be able to" may come back as "I cannot").
-        let openers = chatter.filter { !$0.hasPrefix("i can") || !saidNo }
+        let openers = chatter.filter { !$0.hasPrefix("i can") || rawNo == 0 }
         if openers.contains(where: { starts(lowerOut, with: $0) && !starts(lowerRaw, with: $0) }) { return .rejected("chatter") }
         // A paragraph the speaker didn't ask for: a label and a second version, say ("Warm and casual version:").
         if out.contains("\n"), !raw.contains("\n"), !newLines.contains(where: lowerRaw.contains) { return .rejected("lines") }
-        let takeWords = words(raw), outWords = words(out)
-        let known = Set(takeWords)
-        let added = outWords.filter { !known.contains($0) && !hasDigit($0) }.count
+        // Words compare with their contractions spelled out: "I do not" and "I don't" say the same.
+        let known = Set(takeWords.flatMap(expanded)), have = Set(outWords.flatMap(expanded))
+        let fresh = outWords.filter { !hasDigit($0) && !expanded($0).allSatisfy(known.contains) }
         let tone = style == .friendly || style == .professional || style == .simple
         // A tone may reword most of it; a hold shows its answer first. Shorter may say "can't attend" for "won't be able
         // to make it".
         let addedLimit = tone ? max(6, outWords.count * 7 / 10)
             : style == .shorter ? max(4, outWords.count / 3) : max(2, outWords.count / 5)
-        if added > addedLimit { return .rejected("new_words") }
+        if fresh.count > addedLimit { return .rejected("new_words") }
         // Clean checks the words that carry meaning instead: a self-correction can take most of a short take away
         // ("twenty five dollars no wait thirty dollars" is "$30").
         if style != .clean, Double(outWords.count) < Double(takeWords.count) * (style == .shorter ? 0.25 : 0.4) {
@@ -89,24 +91,28 @@ public enum CleanupCheck {
         if style == .clean {
             // What a correction replaced may go: the three words before "no", "sorry", "actually"...
             let replaced = Set(takeWords.indices.filter { next(takeWords, after: $0).contains(where: corrections.contains) })
-            let meaningful = Set(takeWords.indices.filter { i in
-                let word = takeWords[i]
-                return !replaced.contains(i) && !corrections.contains(word) && !functionWords.contains(word)
-                    && !numberWords.contains(word) && !hasDigit(word)
-            }.map { takeWords[$0] })
-            let have = Set(outWords)
-            let missing = meaningful.filter { !have.contains($0) }.count
-            if Double(missing) > max(1, Double(meaningful.count) * 0.3) { return .rejected("dropped_words") }
+            let meaningful = takeWords.indices.filter { i in
+                !replaced.contains(i) && carriesMeaning(takeWords[i]) && !hasDigit(takeWords[i])
+            }.map { takeWords[$0] }
+            let missing = Set(meaningful).filter { !expanded($0).allSatisfy(have.contains) }
+            if Double(missing.count) > max(1, Double(Set(meaningful).count) * 0.3) { return .rejected("dropped_words") }
+            // A word in place of one of the take's: "Approve the refund" as "Deny the refund". Clean adds no words.
+            if !missing.isEmpty, fresh.contains(where: { $0.count > 1 && carriesMeaning($0) }) { return .rejected("swapped") }
+            // The words keep their order: "Alice pays Bob" is not "Bob pays Alice".
+            let order = meaningful.flatMap(expanded).filter { carriesMeaning($0) && have.contains($0) }
+            if !inOrder(order, outWords.flatMap(expanded)) { return .rejected("order") }
         }
         if let script = mainScript(raw), let other = mainScript(out), script != other { return .rejected("script") }
-        if saidNo && !negated(lowerOut) { return .rejected("negation") }
+        // Every negation stays: "I do not want peanuts and I do not want milk" keeps both "not"s.
+        if outNo < rawNo { return .rejected("negation") }
         // A "no" that corrects the speaker is no "not": "by monday no tuesday" once came back as "by Monday, not
         // Tuesday". A tone may add an idiom ("Can't wait!"), and a hold shows its answer first.
-        if !tone && !saidNo && negated(lowerOut) { return .rejected("negation_added") }
+        if !tone && outNo > rawNo { return .rejected("negation_added") }
         if !numbersKept(takeWords, out) { return .rejected("digits") }
-        if !finalsKept(takeWords, outWords, out, anyWord: !tone, saysNo: negated(lowerOut)) {
+        if !finalsKept(takeWords, outWords, out, anyWord: !tone, saysNo: outNo > 0) {
             return .rejected("correction")
         }
+        if !CleanupNumbers.match(take: raw, output: out, ordered: style == .clean) { return .rejected("numbers") }
         return .ok(out)
     }
 
@@ -187,29 +193,86 @@ public enum CleanupCheck {
         return count
     }
 
-    /// The text (lowercased, straight apostrophes) holds a negation: "n't", or one of `negations` as whole words.
-    static func negated(_ lower: String) -> Bool {
-        lower.contains("n't") || negations.contains { word in
-            var from = lower.startIndex
-            while let found = lower.range(of: word, range: from..<lower.endIndex) {
-                let before = found.lowerBound == lower.startIndex || !lower[lower.index(before: found.lowerBound)].isLetter
-                let after = found.upperBound == lower.endIndex || !lower[found.upperBound].isLetter
-                if before && after { return true }
-                from = found.upperBound
-            }
-            return false
+    /// How many negations the words hold: "n't", "not", "never", "nothing"..., and each "no" but one that takes
+    /// something back ("monday no tuesday") or opens a reply ("yeah no").
+    static func negations(in words: [String]) -> Int {
+        words.indices.filter { i in
+            let word = words[i]
+            if word.hasSuffix("n't") || negationWords.contains(word) { return true }
+            guard word == "no" else { return false }
+            if i > 0, ["yes", "yeah", "yep", "okay", "ok", "oh", "no"].contains(words[i - 1]) { return false }
+            return !takesBack(words, i)
+        }.count
+    }
+
+    /// The "no" at `i` takes something back: another correction word follows ("no wait", "no sorry"); or a date, time,
+    /// number or ordinal among the three words before it has one of its kind among the three after ("seven no eight",
+    /// "monday no tuesday", "the fifth no the sixth"); or a word before it comes again after ("main street no oak street").
+    static func takesBack(_ words: [String], _ i: Int) -> Bool {
+        let before = words[max(0, i - 3)..<i], after = next(words, after: i)
+        if let first = after.first, corrections.contains(first) || (first == "i" && after.dropFirst().first == "mean") {
+            return true
         }
+        func kind(_ word: String) -> Int? {
+            whenWords.contains(word) ? 1 : isDated(word) || CleanupNumbers.ordinals[word] != nil ? 2 : nil
+        }
+        let kinds = Set(before.compactMap(kind))
+        if after.contains(where: { kind($0).map(kinds.contains) ?? false }) { return true }
+        return before.contains { $0.count > 1 && carriesMeaning($0) && after.contains($0) }
+    }
+
+    /// A word with its contraction spelled out ("don't" is do and not, "I'm" is I and am, "OK" is okay). A "'s" is
+    /// spelled out only after a pronoun: "Lucia's" stays Lucia's.
+    static func expanded(_ word: String) -> [String] {
+        if let words = spelledOut[word] { return words }
+        if word.hasSuffix("n't") { return [String(word.dropLast(3)), "not"] }
+        for (ending, full) in [("'m", "am"), ("'re", "are"), ("'ll", "will"), ("'ve", "have"), ("'d", "would")]
+        where word.hasSuffix(ending) {
+            return [String(word.dropLast(ending.count)), full]
+        }
+        let stem = String(word.dropLast(2))
+        if word.hasSuffix("'s"), ["it", "that", "there", "here", "what", "he", "she", "who", "where", "how"].contains(stem) {
+            return [stem, "is"]
+        }
+        return [word]
+    }
+
+    static let spelledOut: [String: [String]] = [
+        "can't": ["can", "not"], "won't": ["will", "not"], "shan't": ["shall", "not"], "cannot": ["can", "not"],
+        "let's": ["let", "us"], "ok": ["okay"], "gonna": ["going", "to"], "wanna": ["want", "to"], "gotta": ["got", "to"],
+    ]
+
+    /// Each word comes first in `words` after the one before it did: the first time each is said, in order.
+    static func inOrder(_ order: [String], _ words: [String]) -> Bool {
+        var firsts: [String: Int] = [:]
+        for (i, word) in words.enumerated() where firsts[word] == nil { firsts[word] = i }
+        var seen = Set<String>(), last = -1
+        for word in order where seen.insert(word).inserted {
+            guard let at = firsts[word] else { continue }
+            if at < last { return false }
+            last = at
+        }
+        return true
     }
 
     /// The take's digit groups all stay, in order (555 1212 may become 555-1212, never 555 alone), except one the speaker
     /// took back ("at 5, no, 6"); and the answer writes no more numbers than the take said in digits or number words.
     static func numbersKept(_ takeWords: [String], _ out: String) -> Bool {
         let kept = takeWords.indices.flatMap { corrected(takeWords, $0) ? [] : digitGroups(takeWords[$0]) }
-        let given = digitGroups(out)
+        let given = digitGroups(withoutThousands(out))
         let said = takeWords.reduce(0) { $0 + (numberWords.contains($1) ? 1 : digitGroups($1).count) }
         var next = 0
         for group in given where next < kept.count && kept[next] == group { next += 1 }
         return next == kept.count && numberCount(out) <= said
+    }
+
+    /// The text without thousands commas: "1,200" is 1200.
+    static func withoutThousands(_ text: String) -> String {
+        let chars = Array(text)
+        func digit(_ i: Int) -> Bool { i >= 0 && i < chars.count && chars[i].isASCII && chars[i].isNumber }
+        return String(chars.indices.compactMap { i in
+            chars[i] == "," && digit(i - 1) && (1...3).allSatisfy { digit(i + $0) } && !digit(i + 4) ? nil : chars[i]
+        })
     }
 
     /// What the speaker said last stays, and a date or number it replaced goes. After a correction word, the first date,
@@ -231,10 +294,12 @@ public enum CleanupCheck {
                 }
             }
             if hasDigit(word) { return digitGroups(word).allSatisfy(digits.contains) }
-            return saysNo && (word.contains("n't") || negations.contains(word))
+            return saysNo && (word.hasSuffix("n't") || negationWords.contains(word))
         }
         for (i, word) in takeWords.enumerated() where corrections.contains(word) {
             let before = takeWords[max(0, i - 3)..<i], after = next(takeWords, after: i)
+            // A chain ("monday no tuesday no wednesday"): the last correction word decides.
+            if after.contains(where: corrections.contains) { continue }
             let fresh = after.filter { !before.contains($0) }
             let dated = fresh.first(where: isDated)
             let plain = anyWord ? fresh.first(where: carriesMeaning) : nil
