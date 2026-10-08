@@ -372,4 +372,33 @@ import TFCore
         #expect(SessionScreen.mode(for: HostStatus(session: .ready, micOn: true)) == .idle)
         #expect(SessionScreen.mode(for: HostStatus(message: "No speech heard.")) == .idle)
     }
+
+    // MARK: Clean up
+
+    // The review: a Clean up request runs even when its Darwin notice was lost (the live session's timer reads Clean
+    // up's commands each second), and a tidy confirmed in place is counted for the try's cue.
+    @Test func cleanupCommandsRunWithoutTheirNotice() throws {
+        let host = host()
+        var asked: [UUID] = []
+        host.onClean = { asked.append($0.id) }
+        let take = UUID()
+        let clean = KeyboardCommand(takeID: take, kind: .clean, text: "see you at six no seven")
+        try shared.append(clean)
+        try keyboard(.cleanBegan, take, at: Date())
+        try keyboard(.cleanConfirmed, take, at: Date())
+        host.handleCleanupCommands()
+        #expect(asked == [clean.id])
+        #expect(host.tidies == 1)
+        #expect(try shared.pendingCommands().isEmpty)
+    }
+
+    // The review: Clear all and the retention rule tell Clean up which takes went, so their tidied words go too.
+    @Test func deletedTakesAreForwardedToCleanUp() throws {
+        let host = host()
+        var forgotten: [UUID] = []
+        host.onForget = { forgotten += $0 }
+        let ids = [UUID(), UUID()]
+        try host.deleteTakes(ids)
+        #expect(forgotten == ids)
+    }
 }

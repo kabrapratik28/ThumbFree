@@ -117,6 +117,7 @@ enum AppEnvironment {
         #endif
         host.cleanupAvailability = { cleanUp.availability(shown: settings.cleanupShown) }
         host.onClean = { cleanUp.run($0, defaultStyle: settings.cleanupStyle) }
+        host.onForget = { cleanUp.forget($0) }
         settings.apply(to: host)
         settings.onChange = { $0.apply(to: host) }
         host.applyDayRetention() // a day limit also applies with no new take (and each time the app becomes active)

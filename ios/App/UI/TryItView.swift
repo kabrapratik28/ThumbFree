@@ -31,6 +31,8 @@ struct TryItView: View {
     @State private var text = ""
     /// The take's words when the try worked: Clean up's beat sees a tidy (or its Undo) as a change from them.
     @State private var wordsAtWorked: String?
+    /// The keyboards' confirmed tidies when the try worked (`SessionHost.tidies`).
+    @State private var tidiesAtWorked = 0
     @FocusState private var typing: Bool
     /// The keyboard's mark when the screen came up: another one is the ThumbFree keyboard coming up in the box.
     @State private var markAtStart: Date?
@@ -170,7 +172,10 @@ struct TryItView: View {
         // Not while the take records: VoiceOver's voice would go into it.
         .onChange(of: stage) { _, now in
             if now != .recording { AccessibilityNotification.Announcement(Self.spoken(now)).post() }
-            if now == .worked { wordsAtWorked = text }
+            if now == .worked {
+                wordsAtWorked = text
+                tidiesAtWorked = host.tidies
+            }
         }
     }
 
@@ -269,10 +274,11 @@ struct TryItView: View {
     /// up so its sparkle can tidy them; elsewhere the try is as it was.
     private var cleanupBeat: Bool { stage == .worked && host.status.cleanup == .ready }
 
-    /// The words in the box changed since the try worked: the sparkle tidied them (Undo puts them back).
+    /// The sparkle tidied the words since the try worked (a keyboard confirmed a tidy in place) and they still differ from
+    /// the take's: a key typed by hand is no tidy, and Undo brings the take's words back.
     private var tidied: Bool {
         guard let wordsAtWorked else { return false }
-        return text != wordsAtWorked && !text.allSatisfy(\.isWhitespace)
+        return host.tidies > tidiesAtWorked && text != wordsAtWorked && !text.allSatisfy(\.isWhitespace)
     }
 
     /// The cue under the line: how to use the sparkle, then what Undo does.

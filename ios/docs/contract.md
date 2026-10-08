@@ -119,21 +119,25 @@ public enum CleanupPrompt {                                            // the An
     public static func prompt(take: String, style: CleanupStyle) -> String // "Text: <take>\n<label>"
 }
 public enum CleanupVerdict: Equatable, Sendable { case ok(String), same, rejected(String) } // rejected: the check's code
-/// Android's CleanupCheck with its test rows, and rows from tuning on Apple's model. The answer is trimmed (an echoed
-/// label and wrapping quotes dropped); equal to the take: same. Rejected, in order: empty; chatter (an opener the take lacks:
-/// "Sure", "Here is", "Here's", "I can't", "I cannot", "As an AI", "Certainly", "Of course"; the "I can" ones only when
-/// the take has no negation); lines (a new line the take neither has nor asks for); new_words (words not in the take, a
-/// word with a digit never counts: more than max(2, n/5) of the answer's n words, max(4, n/3) for Shorter, max(6, 7n/10)
-/// for Friendly, Professional and Simple); dropped (not Clean: fewer than 40% of the take's words, 25% for Shorter);
-/// dropped_words (Clean: more than max(1, 30%) of the take's meaningful words missing, not function words, fillers,
-/// spoken punctuation, number words, digits, correction words or the 3 words before one); script; negation (a "not",
-/// "n't", "never", "no longer", "cannot", "unable", "nothing", "none"... lost); negation_added (Clean and Shorter: one
-/// the take lacks, as from "monday no tuesday"); digits (the take's digit groups in order, a group taken back by "no",
-/// "sorry", "mean", "actually", "wait" or "rather" and another number within 3 words exempt, and no more numbers, 7:30
-/// or 1,200 once, than the take's digit groups plus number words); correction (after a correction word, the first date,
-/// time or number among the next 3 words not among the 3 before, else for Clean and Shorter the first meaningful word,
-/// is in the answer, a number word as its digits, a negation as any negation; the date or number of the same kind just
-/// before it is gone).
+/// Android's CleanupCheck with its test rows, and rows from tuning on Apple's model and from review. The answer is
+/// trimmed (an echoed label and wrapping quotes dropped); equal to the take: same. Words compare with contractions spelled
+/// out ("don't" is do and not). Rejected, in order: empty; chatter (an opener the take lacks: "Sure", "Here is", "Here's",
+/// "I can't", "I cannot", "As an AI", "Certainly", "Of course"; the "I can" ones only when the take has no negation);
+/// lines (a new line the take neither has nor asks for); new_words (words not in the take, a word with a digit never
+/// counts: more than max(2, n/5) of the answer's n words, max(4, n/3) for Shorter, max(6, 7n/10) for Friendly,
+/// Professional and Simple); dropped (not Clean: fewer than 40% of the take's words, 25% for Shorter); for Clean,
+/// dropped_words (more than max(1, 30%) of the take's meaningful words missing, not function words, fillers, spoken
+/// punctuation, number words, digits, correction words or the 3 words before one), swapped (a meaningful word missing and
+/// a new one in its place) and order (the meaningful words kept, first mention each, in the take's order); script;
+/// negation (fewer negations: "n't", "not", "never", "cannot", "unable", "nothing", "none", "nor"... and a "no" that is no
+/// correction and opens no reply); negation_added (Clean and Shorter: more negations, as from "monday no tuesday");
+/// digits (the take's digit groups in order, a group taken back by "no", "sorry", "mean", "actually", "wait" or "rather"
+/// and another number within 3 words exempt, and no more numbers, 7:30 or 1,200 once, than the take's digit groups plus
+/// number words); correction (after the last correction word of a chain, the first date, time or number among the next 3
+/// words not among the 3 before, else for Clean and Shorter the first meaningful word, is in the answer, a number word as
+/// its digits, a negation as any negation; the date or number of the same kind just before it is gone); numbers
+/// (`CleanupNumbers`: the values the answer writes, digits or words, are the take's, in order for Clean and in any order
+/// for a rewrite; one the speaker took back may stay or go, and so may a lone "one" in a rewrite).
 public enum CleanupCheck { public static func check(take: String, output: String?, style: CleanupStyle) -> CleanupVerdict }
 public enum CleanupReplace {
     /// The text before the cursor ends with the typed take, as much as iOS shows: its last 16 characters or all of it.
@@ -379,23 +383,32 @@ The keyboard follows the field's `keyboardType` (`KeyboardKind`): email, web add
 
 ### Clean up
 
-After a take the keyboard typed and confirmed (`KeyboardClient.typedTake`: the payload as it went in and the field's
-`documentIdentifier`), a round sparkle (`SparkleArt`, the mic's own geometry) sits just left of the mic while: Full
-Access, a fresh status with `session == .ready`, `take == .idle` and `cleanup == .ready`, and the typed take right
-before the cursor in its field (`CleanupReplace.matches`). A key typed, a new take or another field forgets the take.
-Tap: a `clean` command (the take trimmed, `style` nil); hold (0.5 s): a row of the five styles above the bar, the mic
-kept, Cancel. The app (`CleanUp`) runs one request at a time: `SystemLanguageModel(useCase: .general, guardrails:
-.permissiveContentTransformations)` (never Private Cloud Compute), `CleanupPrompt.instructions` as the session's
-instructions, `CleanupPrompt.prompt` as the prompt, greedy, a 20 s limit; `CleanupCheck.check`; then cleanups.json and
-the status notification. Apple's rate limit (`LanguageModelError.rateLimited` on iOS 27 with `resetDate`,
-`GenerationError.rateLimited` on iOS 26) is `paused`. The keyboard reads its answer on each refresh (25 s timeout), checks
-the pin again, writes `cleanBegan`, deletes the take one `deleteBackward()` per character, inserts the answer through
-`CursorFormatter` against the text before the take (that text's spacing kept when iOS cuts it), reads it back and writes
-`cleanConfirmed` or `cleanUnverified`; the sparkle becomes Undo, which writes the take back the same way. The bar's status
-place says "Cleaning up…", "Apple paused Clean up. Ready in 0:40" (or "for a moment"), "Nothing to tidy. Your words
-are unchanged.", "Couldn't tidy this one. Your words are unchanged." or "The text changed, so it was left as is." Settings: availability, "Show ✨ after you speak"
-(`TFCleanupShown`, on) and "Tap ✨ uses" (`TFCleanupStyle`, Clean). Debug: `-TFFakeCleanup <text>` answers every
-request with that text and reads as ready (`CleanupUITests`; a Simulator has no model).
+After a take the keyboard typed and confirmed (`KeyboardClient.typedTake`: the payload as it went in, the field's
+`documentIdentifier` and the text after the cursor then), a round sparkle (`SparkleArt`, the mic's own geometry) sits
+just left of the mic while: Full Access, a fresh status with `session == .ready`, `take == .idle` and `cleanup ==
+.ready`, and the pin holds: the take's field, nothing selected, the same text after the cursor, and the typed take right
+before the cursor (`CleanupReplace.matches`). A key typed, a new take, the keyboard going off screen, or any check of the
+pin that fails (on every outside change) forgets the take for good. Tap: a `clean` command (the take trimmed, `style`
+nil); hold (0.5 s): a row of the five styles above the bar, the mic kept, Cancel. The app (`CleanUp`) runs one request at
+a time: `SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)` (never Private Cloud
+Compute), `CleanupPrompt.instructions` as the session's instructions, `CleanupPrompt.prompt` as the prompt, greedy, a
+20 s limit within a deadline 24 s after the keyboard sent it (queue time included; past it, `failed` with no model
+call); `CleanupCheck.check`; then cleanups.json and the status notification. While the session is live the app also
+reads Clean up's commands each second, so a lost Darwin notice delays a request by a second at most. A take deleted from
+History (Delete, Clear all, the retention rule) leaves cleanups.json, and a request still running for it writes nothing.
+Apple's rate limit (`LanguageModelError.rateLimited` on iOS 27 with `resetDate`, `GenerationError.rateLimited` on iOS 26)
+is `paused`. The keyboard reads its answer on each refresh and once more when its 25 s wait ends (an answer past the wait
+never counts), checks the pin again, writes `cleanBegan`, deletes the take one `deleteBackward()` per character,
+inserts the answer through `CursorFormatter` against the text before the take (that text's spacing kept when iOS cuts
+it), reads it back and writes `cleanConfirmed` (the insert changed the text before the cursor, which ends with it) or
+`cleanUnverified`. Only a confirmed tidy turns the sparkle into Undo, which writes the take back the same way and needs no
+session or model; an unverified one forgets the take. The bar's status place says "Cleaning up…", "Apple paused Clean
+up. Ready in 0:40" (or "for a moment"), "Nothing to tidy. Your words are unchanged.", "Couldn't tidy this one. Your words
+are unchanged.", "The text changed, so it was left as is." or "Couldn't confirm the change. Check the text." Settings:
+availability (read again every 5 s while shown), "Show ✨ after you speak" (`TFCleanupShown`, on) and "Tap ✨ uses"
+(`TFCleanupStyle`, Clean). The try's cue says Tidied only after a keyboard confirmed a tidy (`SessionHost.tidies`).
+Debug: `-TFFakeCleanup <text>` answers every request with that text and reads as ready (`CleanupUITests`; a Simulator has
+no model).
 
 ### Suggestions, autocorrect, text replacements and smart punctuation
 

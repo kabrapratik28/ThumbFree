@@ -10,8 +10,11 @@ import TFCore
 /// time.
 @MainActor final class CleanUp {
     nonisolated private static let log = Logger(subsystem: Brand.bundleID, category: "cleanup")
-    /// A request that takes longer is answered as failed, so one stuck call never holds up the next.
-    static let timeout = Duration.seconds(20)
+    /// A model call that takes longer is answered as failed, so one stuck call never holds up the next.
+    static let timeout: TimeInterval = 20
+    /// Every request is answered within 24 s of the keyboard sending it, time in the queue included: the keyboard stops
+    /// waiting at 25 s.
+    static let deadline: TimeInterval = 24
 
     private let shared: SharedStore
     #if DEBUG
@@ -20,6 +23,8 @@ import TFCore
     var fakeAnswer: String?
     #endif
     private var results: [CleanupResult]
+    /// Takes deleted from History: their answers are gone and a late one is never written.
+    private var forgotten: Set<UUID> = []
     private var queue: Task<Void, Never>?
     /// The model's availability, read at most every 5 s (`status.json` is written about once a second).
     private var known: (value: CleanupAvailability, at: ContinuousClock.Instant)?
@@ -68,6 +73,7 @@ import TFCore
     func run(_ command: KeyboardCommand, defaultStyle: CleanupStyle) {
         guard let take = command.text else { return }
         let style = command.style ?? defaultStyle
+        let deadline = command.sentAt.addingTimeInterval(Self.deadline)
         let previous = queue
         #if DEBUG
         let fake = fakeAnswer
@@ -75,6 +81,13 @@ import TFCore
         queue = Task { [weak self] in
             await previous?.value
             let started = ContinuousClock.now
+            // Past its deadline (behind another request, or on disk while the app was away) the keyboard has stopped
+            // waiting: the model is not asked.
+            let left = deadline.timeIntervalSinceNow
+            guard left > 1 else {
+                self?.answer(CleanupResult(requestID: command.id, takeID: command.takeID, state: .failed), ms: 0)
+                return
+            }
             #if DEBUG
             if let fake {
                 try? await Task.sleep(for: .seconds(1))
@@ -84,13 +97,15 @@ import TFCore
                 return
             }
             #endif
-            let result = await Self.clean(take, style: style, requestID: command.id, takeID: command.takeID)
+            let result = await Self.clean(take, style: style, requestID: command.id, takeID: command.takeID,
+                                          limit: min(Self.timeout, left))
             self?.answer(result, ms: (ContinuousClock.now - started) / .milliseconds(1))
         }
     }
 
-    /// One call to the model, with the timeout. Logs nothing: the caller logs the outcome without the text.
-    nonisolated static func clean(_ take: String, style: CleanupStyle, requestID: UUID, takeID: UUID) async -> CleanupResult {
+    /// One call to the model, given up after `limit` seconds. Logs nothing: the caller logs the outcome without the text.
+    nonisolated static func clean(_ take: String, style: CleanupStyle, requestID: UUID, takeID: UUID,
+                                  limit: TimeInterval) async -> CleanupResult {
         let model = Self.model()
         guard case .available = model.availability, model.supportsLocale() else {
             return CleanupResult(requestID: requestID, takeID: takeID, state: .unavailable)
@@ -104,7 +119,7 @@ import TFCore
                     return response.content
                 }
                 group.addTask {
-                    try await Task.sleep(for: timeout)
+                    try await Task.sleep(for: .seconds(limit))
                     return nil
                 }
                 let first = try await group.next() ?? nil
@@ -139,16 +154,31 @@ import TFCore
         return (false, nil)
     }
 
+    /// Takes deleted from History (Delete, Clear all, the retention rule): their tidied words leave memory and the App
+    /// Group, and a request still running for one writes nothing.
+    func forget(_ takeIDs: [UUID]) {
+        forgotten.formUnion(takeIDs)
+        let kept = results.filter { !forgotten.contains($0.takeID) }
+        guard kept.count != results.count else { return }
+        results = kept
+        save()
+    }
+
     /// Keeps the answer with the last ones and tells the keyboards to read them.
     private func answer(_ result: CleanupResult, ms: Double) {
+        guard !forgotten.contains(result.takeID) else { return }
         results = Array((results + [result]).suffix(SharedStore.cleanupsLimit))
+        save()
+        DarwinObserver.post(DarwinName.status)
+        Self.log.notice("Clean up \(result.state.rawValue, privacy: .public) in \(Int(ms), privacy: .public) ms")
+    }
+
+    private func save() {
         do {
             try shared.write(results)
         } catch {
             let code = error as NSError
-            Self.log.error("Clean up answer not written (\(code.domain, privacy: .public) \(code.code, privacy: .public))")
+            Self.log.error("Clean up answers not written (\(code.domain, privacy: .public) \(code.code, privacy: .public))")
         }
-        DarwinObserver.post(DarwinName.status)
-        Self.log.notice("Clean up \(result.state.rawValue, privacy: .public) in \(Int(ms), privacy: .public) ms")
     }
 }

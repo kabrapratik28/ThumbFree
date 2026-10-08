@@ -3,7 +3,7 @@ import TFCore
 
 /// Settings' Clean up section: whether Apple Intelligence can run it on this iPhone (with the one fix when it is off),
 /// "Show ✨ after you speak" and "Tap ✨ uses". The model's state is read again each time Settings comes back to the
-/// front, so turning Apple Intelligence on in iOS's Settings shows here at once.
+/// front, so turning Apple Intelligence on in iOS's Settings shows here at once, and every 5 s while it shows.
 struct CleanupSection: View {
     let settings: AppSettings
     @State private var model = CleanUp.modelAvailability()
@@ -43,6 +43,13 @@ struct CleanupSection: View {
         }
         .listRowBackground(Theme.card)
         .onChange(of: scenePhase) { _, phase in if phase == .active { model = CleanUp.modelAvailability() } }
+        // While the section shows too: Apple Intelligence may finish getting ready with Settings open.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                model = CleanUp.modelAvailability()
+            }
+        }
     }
 
     /// The model's state, in a sentence, with Open Settings when Apple Intelligence is only switched off.

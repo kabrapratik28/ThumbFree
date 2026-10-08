@@ -68,6 +68,10 @@ import TFCore
     /// The app sets both (`CleanUp`); tests leave them.
     @ObservationIgnored var cleanupAvailability: @MainActor () -> CleanupAvailability? = { nil }
     @ObservationIgnored var onClean: (@MainActor (KeyboardCommand) -> Void)?
+    /// Takes deleted from History, so Clean up drops their tidied words.
+    @ObservationIgnored var onForget: (@MainActor ([UUID]) -> Void)?
+    /// How many tidies (and their Undos) the keyboards confirmed in place: the try's cue says Tidied only after one.
+    private(set) var tidies = 0
 
     /// The dictate link's own (stale) take id, when it named a take from before this launch and a fresh one started in
     /// its place: a repeated link with that same stale id must resolve to the fresh take already running for it, not
@@ -253,6 +257,7 @@ import TFCore
         guard let record = try history.record(id), !record.status.isLive, id != reducer.state.takeID,
               !retranscribing.contains(id) else { return }
         try dropOutbox([id])
+        onForget?([id])
         try history.delete(id)
         historyChanges += 1
     }
@@ -271,6 +276,7 @@ import TFCore
         let ids = ids.filter { $0 != reducer.state.takeID && !retranscribing.contains($0) }
         guard !ids.isEmpty else { return 0 }
         try dropOutbox(ids)
+        onForget?(ids)
         let gone = ids.filter { (try? history.delete($0)) != nil }
         historyChanges += 1
         return gone.count
@@ -751,6 +757,7 @@ import TFCore
         if reducer.state != .idle || status.session != .off, now - lastTickMs >= 1_000 {
             lastTickMs = now
             savePartial()
+            handleCleanupCommands() // a request whose notice was lost still runs (or meets its deadline)
             if case .recording(let id, _, _) = reducer.state {
                 send(.tick(id, recordedMs: capture.recordedMs, msSinceSpeech: capture.msSinceSpeech)) // send publishes
             } else {
@@ -812,20 +819,34 @@ extension SessionHost {
     /// about 150 ms after the press, or a little longer when iOS has to launch it.
     static let seenPressSeconds: TimeInterval = 60
 
+    static let cleanupKinds: Set<KeyboardCommand.Kind> = [.clean, .cleanBegan, .cleanConfirmed, .cleanUnverified]
+
+    /// Clean up's commands alone, each second of a live session, so a request whose Darwin notice was lost still runs.
+    func handleCleanupCommands() {
+        for command in (try? shared.pendingCommands()) ?? [] where Self.cleanupKinds.contains(command.kind) {
+            handleCleanup(command)
+        }
+    }
+
+    /// Clean up's commands never touch the take machine: the request goes to `onClean`, the replacement's records are
+    /// only counted and logged (codes, never text).
+    private func handleCleanup(_ command: KeyboardCommand) {
+        try? shared.remove(command)
+        if command.kind == .clean {
+            onClean?(command)
+            return
+        }
+        if command.kind == .cleanConfirmed { tidies += 1 }
+        Self.log.notice("Clean up \(command.kind.rawValue, privacy: .public)")
+    }
+
     /// Handles the keyboards' command files oldest first, removing each before its work runs: a
     /// keyboard that still sees its press 150 ms later opens the link, so a slow start must not look like no session took
     /// it. Replays are harmless: the reducer drops touches it already saw and events for other takes.
     func handleCommands(now: Date = Date()) {
         for command in (try? shared.pendingCommands()) ?? [] {
-            // Clean up's commands never touch the take machine: the request goes to `onClean`, the replacement's
-            // records are only logged (codes, never text).
-            if [.clean, .cleanBegan, .cleanConfirmed, .cleanUnverified].contains(command.kind) {
-                try? shared.remove(command)
-                if command.kind == .clean {
-                    onClean?(command)
-                } else {
-                    Self.log.notice("Clean up \(command.kind.rawValue, privacy: .public)")
-                }
+            if Self.cleanupKinds.contains(command.kind) {
+                handleCleanup(command)
                 continue
             }
             if command.kind == .press {
