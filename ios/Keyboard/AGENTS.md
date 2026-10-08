@@ -34,7 +34,7 @@ model (`Keyplane`), `KeyboardClient`, suggestions, emoji, commands and delivery.
   allows, with Apple's undo, but never the user's words: kept words, text replacements, contacts' words (`Lexicon`) and
   the Dictionary (`TFDictionary` in the App Group). The bar's status place goes to the delivery chip, the recording
   line, the emoji search, then suggestions.
-- The keyboard's own stores (`TFEmojiUsage`, `TFEmojiTones`, `TFLearnedWords`) stay in its own
+- The keyboard's own stores (`TFEmojiUsage`, `TFEmojiTones`, `TFLearnedWords`, `TFCleanupHintSeen`) stay in its own
   `UserDefaults.standard`: never the App Group, never logged.
 - Automatic return (`HostArbiter*`) reads the host's bundle id through the keyboard arbiter, a private UIKit interface,
   so it compiles only with `TF_AUTO_RETURN` and puts the id in the dictate link. The app trusts it only when the

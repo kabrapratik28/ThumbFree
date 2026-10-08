@@ -213,6 +213,11 @@ import UniformTypeIdentifiers
     static let cleanupTimeout: TimeInterval = 25
     static let messageSeconds: TimeInterval = 4
 
+    /// The first-time label beside the sparkle ("Tap to tidy · Hold for styles") was seen: the sparkle was used or the
+    /// label dismissed. Kept in the keyboard's own defaults.
+    static let hintSeenKey = "TFCleanupHintSeen"
+    private(set) var hintSeen = UserDefaults.standard.bool(forKey: KeyboardClient.hintSeenKey)
+
     private(set) var typedTake: TypedTake?
     /// The typed take sits right before the cursor, in its field (`CleanupReplace.matches`), as of the last look.
     private(set) var takeAtCursor = false
@@ -249,6 +254,7 @@ import UniformTypeIdentifiers
     /// The sparkle's tap (`style` nil: the default Settings keeps) or a style from the menu: asks the app, if the take
     /// is still right before the cursor in its field. During Apple's pause it only says so again.
     func tidy(style: CleanupStyle?, proxy: UITextDocumentProxy) {
+        seeHint()
         closeStyleMenu()
         guard let take = typedTake, take.original == nil, cleanRequest == nil else { return }
         if let pausedUntil, pausedUntil.date > Date() { return }
@@ -271,8 +277,19 @@ import UniformTypeIdentifiers
         typedTake = take
     }
 
+    /// Reads the first-time label's flag again, when the keyboard comes on screen.
+    func loadHint() { hintSeen = UserDefaults.standard.bool(forKey: Self.hintSeenKey) }
+
+    /// The first-time label goes for good.
+    func seeHint() {
+        guard !hintSeen else { return }
+        hintSeen = true
+        UserDefaults.standard.set(true, forKey: Self.hintSeenKey)
+    }
+
     func openStyleMenu() {
         guard sparkle(now: Date()) == .offer else { return }
+        seeHint()
         choosingStyle = true
         onStyleMenu?()
     }

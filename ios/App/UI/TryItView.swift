@@ -29,6 +29,8 @@ struct TryItView: View {
     var inWelcome = false
 
     @State private var text = ""
+    /// The take's words when the try worked: Clean up's beat sees a tidy (or its Undo) as a change from them.
+    @State private var wordsAtWorked: String?
     @FocusState private var typing: Bool
     /// The keyboard's mark when the screen came up: another one is the ThumbFree keyboard coming up in the box.
     @State private var markAtStart: Date?
@@ -89,6 +91,7 @@ struct TryItView: View {
                             .padding(.top, 6)
                             .accessibilityIdentifier("try.note")
                     }
+                    if cleanupBeat { cleanupCue }
                     // At the accessibility sizes the page scrolls, and the words matter more than a drawing. The box stays
                     // one view through every stage, so it keeps the keyboard.
                     if stage == .switchKeyboard, !dynamicTypeSize.isAccessibilitySize { helper }
@@ -107,6 +110,7 @@ struct TryItView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
                 .padding(.bottom, 8)
+            if cleanupBeat, !tidied { SparklePointer().padding(.bottom, 2) }
         }
         .background { Theme.paper.ignoresSafeArea() } // under the keyboard too, which shows the page's color through it
         .foregroundStyle(Theme.ink)
@@ -164,7 +168,10 @@ struct TryItView: View {
         }
         .onChange(of: host.status.take) { _, take in if take == .recording { boxAtRecording = text } }
         // Not while the take records: VoiceOver's voice would go into it.
-        .onChange(of: stage) { _, now in if now != .recording { AccessibilityNotification.Announcement(Self.spoken(now)).post() } }
+        .onChange(of: stage) { _, now in
+            if now != .recording { AccessibilityNotification.Announcement(Self.spoken(now)).post() }
+            if now == .worked { wordsAtWorked = text }
+        }
     }
 
     // MARK: The rules
@@ -253,7 +260,40 @@ struct TryItView: View {
     /// The box has the keyboard while the try goes on: not while something stops it, and not once a take worked and is
     /// over, so the keyboard has typed its words before it goes down.
     private var wantsKeyboard: Bool {
-        blocker == nil && !(stage == .worked && host.status.take == .idle)
+        blocker == nil && !(stage == .worked && host.status.take == .idle && !cleanupBeat)
+    }
+
+    // MARK: Clean up's beat (issue #1, onboarding O1)
+
+    /// Once the take's words show, where Apple Intelligence is ready (the status the keyboards read), the keyboard stays
+    /// up so its sparkle can tidy them; elsewhere the try is as it was.
+    private var cleanupBeat: Bool { stage == .worked && host.status.cleanup == .ready }
+
+    /// The words in the box changed since the try worked: the sparkle tidied them (Undo puts them back).
+    private var tidied: Bool {
+        guard let wordsAtWorked else { return false }
+        return text != wordsAtWorked && !text.allSatisfy(\.isWhitespace)
+    }
+
+    /// The cue under the line: how to use the sparkle, then what Undo does.
+    @ViewBuilder private var cleanupCue: some View {
+        Group {
+            if tidied {
+                Label {
+                    Text("Tidied. Undo brings back your words.")
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.success)
+                }
+            } else {
+                Text("Tap \(Image(systemName: "sparkles")) to tidy it. Hold it for styles.")
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(Theme.inkSoft)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.top, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("try.cleanup")
     }
 
     // MARK: Parts
@@ -315,7 +355,9 @@ struct TryItView: View {
     /// The box the keyboard types into, the only real text box in the onboarding: a tap anywhere in it starts typing.
     /// The example is its placeholder; its edge thickens in the brand color while it has the keyboard.
     private var box: some View {
-        TextField("Try: I’ll be there in ten minutes.", text: $text, axis: .vertical)
+        // With Clean up ready, the example holds a self-correction, so the sparkle's tidy shows a change.
+        let example: LocalizedStringKey = host.status.cleanup == .ready ? "Try: See you at six, no, seven." : "Try: I’ll be there in ten minutes."
+        return TextField(example, text: $text, axis: .vertical)
             .lineLimit(2...4)
             .keyboardType(Self.fieldType)
             .autocorrectionDisabled(Self.autocorrectionOff)
@@ -454,6 +496,30 @@ private struct SpeechPanel: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Clean up's beat: a Tap pill and an arrow just above the keyboard, over the bar's sparkle, which sits just left of the
+/// mic (the app cannot draw on the keyboard itself). The arrow nudges down once every 1.3 s; still with Reduce Motion.
+private struct SparklePointer: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack {
+            Spacer()
+            VStack(spacing: 3) {
+                CuePill(text: "Tap")
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Theme.ink)
+                    .phaseAnimator(reduceMotion ? [0] : [0, 4]) { arrow, offset in arrow.offset(y: offset) } animation: { _ in
+                        .easeInOut(duration: 0.65)
+                    }
+            }
+            .frame(width: 48)
+            .padding(.trailing, 68) // the sparkle's middle: 10 pt bar inset, the 48 pt mic, 10 pt between them
+        }
         .accessibilityHidden(true)
     }
 }

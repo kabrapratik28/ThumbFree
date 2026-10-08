@@ -12,6 +12,8 @@ enum CleanupWords {
     /// Apple's rate limit with its end: "Apple paused Clean up. Ready in 0:40".
     static func paused(ready clock: String) -> String { String(localized: "Apple paused Clean up. Ready in \(clock)") }
     static let chooseStyle = String(localized: "Tidy as")
+    /// The first time the sparkle shows, beside it.
+    static let hint = String(localized: "Tap to tidy · Hold for styles")
     static let cancel = String(localized: "Cancel")
 }
 

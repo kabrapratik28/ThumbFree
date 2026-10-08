@@ -191,7 +191,13 @@ import XCTest
         mic.tap()
         XCTAssertTrue(ThumbFreeUI.wait(for: field(app), toContain: "ask not what your country can do for you", timeout: 120))
         XCTAssertTrue(ThumbFreeUI.wait(for: line(app), toContain: "Your words appeared. You’re ready.", timeout: 5))
-        XCTAssertTrue(mic.waitForNonExistence(timeout: 5), "the keyboard stayed up")
+        // Where Apple Intelligence is ready (a Mac that has it reports it to its Simulators), Clean up's beat keeps the
+        // keyboard up for the sparkle (CleanupUITests); elsewhere it goes down.
+        if ThumbFreeUI.element("try.cleanup", in: app).waitForExistence(timeout: 2) {
+            XCTAssertTrue(mic.exists, "Clean up's beat took the keyboard down")
+        } else {
+            XCTAssertTrue(mic.waitForNonExistence(timeout: 5), "the keyboard stayed up")
+        }
         XCTAssertTrue((field(app).value as? String ?? "").contains("ask not what your country can do for you"), "the words left the box")
         ThumbFreeUI.shot("try-worked")
         app.buttons["try.done"].tap()

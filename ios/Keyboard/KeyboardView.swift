@@ -26,6 +26,7 @@ struct KeyboardBar: View {
     let undoTidy: () -> Void
     let openStyles: () -> Void
     let closeStyles: () -> Void
+    let dismissHint: () -> Void
 
     @GestureState private var micPressed = false
     @Environment(\.displayScale) private var displayScale
@@ -64,6 +65,20 @@ struct KeyboardBar: View {
                             .minimumScaleFactor(0.8)
                             .accessibilityIdentifier("keyboard.cleanup.line")
                         Spacer(minLength: 0)
+                    } else if !model.hintSeen, model.sparkle(now: context.date) == .offer {
+                        // The first time the sparkle shows: what its tap and hold do, until it is used or dismissed.
+                        Text(CleanupWords.hint)
+                            .font(.footnote)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .accessibilityIdentifier("keyboard.cleanup.hint")
+                        Spacer(minLength: 0)
+                        Button(action: dismissHint) {
+                            Image(systemName: "xmark").frame(minWidth: 44, maxHeight: .infinity).contentShape(.rect)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(Text("Dismiss"))
+                        .accessibilityIdentifier("keyboard.cleanup.hintDismiss")
                     } else if let slots = suggestions.slots {
                         suggestionRow(slots)
                     } else {

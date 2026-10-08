@@ -144,7 +144,8 @@ final class KeyboardViewController: UIInputViewController {
                     tidy: { [weak self] in self?.tidy($0) },
                     undoTidy: { [weak self] in self?.undoTidy() },
                     openStyles: { [weak self] in self?.openStyles() },
-                    closeStyles: { [weak self] in self?.client.closeStyleMenu() })
+                    closeStyles: { [weak self] in self?.client.closeStyleMenu() },
+                    dismissHint: { [weak self] in self?.client.seeHint() })
     }
 
     // MARK: Clean up
@@ -186,10 +187,12 @@ final class KeyboardViewController: UIInputViewController {
         let group = UserDefaults(suiteName: Brand.appGroupID)
         if let token = group?.string(forKey: LearnedWords.resetKey), token != UserDefaults.standard.string(forKey: LearnedWords.resetKey) {
             UserDefaults.standard.removeObject(forKey: LearnedWords.key) // a UI test's clean start
+            UserDefaults.standard.removeObject(forKey: KeyboardClient.hintSeenKey) // and Clean up's first-time label again
             UserDefaults.standard.set(token, forKey: LearnedWords.resetKey)
         }
         #endif
         speller.learned = LearnedWords(stored: UserDefaults.standard.stringArray(forKey: LearnedWords.key))
+        client.loadHint()
         suggestedFor = nil
         requestLexicon()
         refresh()
