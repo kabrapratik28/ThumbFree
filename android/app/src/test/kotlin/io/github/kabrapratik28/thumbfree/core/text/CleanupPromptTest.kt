@@ -19,6 +19,7 @@ class CleanupPromptTest {
             val prompt = CleanupPrompt.build("see you at seven", style)
             assertThat(prompt).contains("Style: " + CleanupPrompt.styleLine(style))
             assertThat(prompt.indexOf("Style:")).isLessThan(prompt.indexOf("Text: see you at seven"))
+            assertThat(prompt).endsWith("Text: see you at seven\nRewritten text:")
         }
     }
 }

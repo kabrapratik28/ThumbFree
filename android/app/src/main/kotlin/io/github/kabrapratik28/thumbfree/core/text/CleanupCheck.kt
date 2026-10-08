@@ -25,6 +25,8 @@ object CleanupCheck {
         "actually", "mean", "know", "comma", "period", "question", "mark", "exclamation", "colon", "new", "line",
         "paragraph", "dot",
     )
+    private val NEW_LINES = listOf("new line", "newline", "new paragraph", "next line")
+    private val CORRECTIONS = setOf("no", "sorry", "mean", "actually", "wait", "rather")
     private val NUMBER_WORDS = setOf(
         "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
         "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty",
@@ -40,6 +42,8 @@ object CleanupCheck {
         if (out == raw) return Verdict.Same
         val lowerOut = out.lowercase()
         if (CHATTER.any { lowerOut.startsWith(it) && !raw.lowercase().startsWith(it) }) return Verdict.Rejected("chatter")
+        // A second paragraph the speaker didn't ask for: a label and two versions, say ("Warm and casual version:").
+        if ('\n' in out && '\n' !in raw && NEW_LINES.none { it in raw.lowercase() }) return Verdict.Rejected("lines")
         val takeWords = words(raw)
         val outWords = words(out)
         val known = takeWords.toSet()
@@ -56,7 +60,7 @@ object CleanupCheck {
         }
         if (script(raw) != script(out)) return Verdict.Rejected("script")
         if (negated(raw) && !negated(out)) return Verdict.Rejected("negation")
-        if (!isSubsequence(raw.filter(Char::isDigit), out.filter(Char::isDigit))) return Verdict.Rejected("digits")
+        if (!numbersKept(takeWords, out)) return Verdict.Rejected("digits")
         return Verdict.Ok(out)
     }
 
@@ -74,7 +78,7 @@ object CleanupCheck {
     /** The model's answer without an echoed label or one pair of surrounding quotes. */
     private fun tidy(output: String): String {
         var out = output.trim()
-        if (out.startsWith("Cleaned text:", ignoreCase = true)) out = out.substring("Cleaned text:".length).trim()
+        for (label in listOf("Cleaned text:", "Rewritten text:")) if (out.startsWith(label, ignoreCase = true)) out = out.substring(label.length).trim()
         if (out.length >= 2 && out.first() == '"' && out.last() == '"') out = out.substring(1, out.length - 1).trim()
         return out
     }
@@ -92,9 +96,28 @@ object CleanupCheck {
         text.codePoints().filter(Character::isLetter).boxed().toList()
             .groupingBy { Character.UnicodeScript.of(it) }.eachCount().maxByOrNull { it.value }?.key
 
-    private fun isSubsequence(small: String, big: String): Boolean {
+    /**
+     * The take's numbers all stay, in order, as digit groups (555 1212 may become 555-1212, never 555-121), except one
+     * the speaker took back ("at 5, no, 6"); and the answer has no more numbers than the take said in digits or words.
+     */
+    private fun numbersKept(takeWords: List<String>, out: String): Boolean {
+        val digits = Regex("\\p{Nd}+")
+        val kept = takeWords.flatMapIndexed { i, word -> if (corrected(takeWords, i)) emptyList() else digits.findAll(word).map { it.value }.toList() }
+        val given = digits.findAll(out).map { it.value }.toList()
+        val said = takeWords.sumOf { word -> if (word in NUMBER_WORDS) 1 else digits.findAll(word).count() }
+        return isSubsequence(kept, given) && given.size <= said
+    }
+
+    /** The number at [i] is taken back: a correction word ("no", "sorry", "I mean") follows it, then another number. */
+    private fun corrected(words: List<String>, i: Int): Boolean {
+        if (words[i].none(Char::isDigit)) return false
+        val marker = (i + 1..minOf(i + 3, words.lastIndex)).firstOrNull { words[it] in CORRECTIONS } ?: return false
+        return (marker + 1..minOf(marker + 3, words.lastIndex)).any { j -> words[j] in NUMBER_WORDS || words[j].any(Char::isDigit) }
+    }
+
+    private fun isSubsequence(small: List<String>, big: List<String>): Boolean {
         var i = 0
-        for (c in big) if (i < small.length && small[i] == c) i++
-        return i == small.length
+        for (item in big) if (i < small.size && small[i] == item) i++
+        return i == small.size
     }
 }

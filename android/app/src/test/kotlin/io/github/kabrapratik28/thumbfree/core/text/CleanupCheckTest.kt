@@ -21,6 +21,9 @@ class CleanupCheckTest {
             "it costs twenty five dollars and ten percent off" to "It costs $25 and 10% off.",
             "Hi Maya! Yes, yes, I booked a table for, like, seven, no, seven thirty at Lucia's on Main Street. See you there!" to
                 "Hi Maya! Yes, I booked a table for 7:30 at Lucia's on Main Street. See you there!",
+            // A number the speaker took back may go; the one that stands stays (measured on the Pixel's Gemini Nano).
+            "I'm so I think we should meet at 5, no, 6, at the cafe on Main Street" to "I think we should meet at 6 at the cafe on Main Street.",
+            "call me at 555 1212 after lunch" to "Call me at 555-1212 after lunch.",
         )
         for ((take, out) in rows) {
             assertWithMessage(take).that(CleanupCheck.check(take, out, CleanupStyle.CLEAN)).isEqualTo(CleanupCheck.Verdict.Ok(out))
@@ -38,6 +41,8 @@ class CleanupCheckTest {
             "hello how are you doing today my friend" to "Привет, как дела сегодня, мой друг?",
             "what is the capital of France" to "Sure! The capital of France is Paris.",
             "send the report by friday" to "",
+            "call me tomorrow after lunch" to "Call me at 5 tomorrow after lunch.", // a number nobody said
+            "the code is 4 8 1 5" to "The code is 4815 or 4 8.", // more numbers than the take had
         )
         for ((take, out) in bad) {
             assertWithMessage(take).that(CleanupCheck.check(take, out, CleanupStyle.CLEAN))
@@ -56,6 +61,18 @@ class CleanupCheckTest {
     fun stripsQuotesAndAnEchoedLabel() {
         assertThat(CleanupCheck.check("are you coming tonight", "Cleaned text: \"Are you coming tonight?\"", CleanupStyle.CLEAN))
             .isEqualTo(CleanupCheck.Verdict.Ok("Are you coming tonight?"))
+    }
+
+    // Gemini Nano once answered Friendly with the cleaned text, a label and the rewrite: a paragraph nobody asked for.
+    @Test
+    fun aSecondVersionIsRejected() {
+        val take = "Okay so I wanted to check if you are free on Friday for the project review"
+        val answer = "Okay, so I wanted to check if you're free on Friday for the project review.\n\nWarm and casual version:\n\n" +
+            "Hey! Just checking if you're free to chat about the project on Friday? Let me know!"
+        assertThat(CleanupCheck.check(take, answer, CleanupStyle.FRIENDLY)).isEqualTo(CleanupCheck.Verdict.Rejected("lines"))
+        // Asked for, a new line may come.
+        assertThat(CleanupCheck.check("dear team new line the launch is friday", "Dear team,\nThe launch is Friday.", CleanupStyle.CLEAN))
+            .isEqualTo(CleanupCheck.Verdict.Ok("Dear team,\nThe launch is Friday."))
     }
 
     @Test

@@ -33,9 +33,16 @@ Cleaned text: What time does the store close?"""
         CleanupStyle.SIMPLE -> "Then use plain words and short sentences. Keep every fact, name and number."
     }
 
+    /**
+     * Clean ends on "Cleaned text:", as in the examples. A style asks for one rewritten version and ends on its own label:
+     * with Clean's label, Gemini Nano answered with the cleaned text, a label, and then the rewrite.
+     */
     fun build(take: String, style: CleanupStyle): String = buildString {
         append(RULES)
-        if (style != CleanupStyle.CLEAN) append("\n\nStyle: ").append(styleLine(style))
-        append("\n\nText: ").append(take.trim()).append("\nCleaned text:")
+        if (style != CleanupStyle.CLEAN) {
+            append("\n\nStyle: ").append(styleLine(style))
+            append(" Reply with the rewritten text only: one version, no label, no notes.")
+        }
+        append("\n\nText: ").append(take.trim()).append(if (style == CleanupStyle.CLEAN) "\nCleaned text:" else "\nRewritten text:")
     }
 }
