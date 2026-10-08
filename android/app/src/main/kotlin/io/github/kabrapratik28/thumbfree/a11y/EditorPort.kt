@@ -6,6 +6,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.PersistableBundle
 import android.text.TextUtils
+import android.util.Log
+import android.view.inputmethod.SurroundingText
 import android.view.accessibility.AccessibilityNodeInfo
 import io.github.kabrapratik28.thumbfree.core.insert.Surrounding
 import io.github.kabrapratik28.thumbfree.core.text.FieldKind
@@ -25,6 +27,18 @@ data class Pin(val packageName: String, val windowId: Int, val nodeKey: String, 
         internal set
 }
 
+/** How Clean up's one write ended ([EditorPort.replaceBeforeCursor]). */
+enum class Replaced {
+    /** Written, and the read back shows the new words right before the cursor, after the same words as before. */
+    DONE,
+
+    /** Nothing written: the old words were not right before a cursor with nothing selected, or the field changed. */
+    UNCHANGED,
+
+    /** Written, but the read back did not show the new words in the old ones' place. */
+    UNSURE,
+}
+
 /** What [Inserter] needs from the focused editor. A call that takes a [Pin] uses only that pin's own input connection. */
 interface EditorPort {
     fun cachedPin(): Pin?                                // EditorSession.snapshot (no IPC) plus the node of its session's last focus event; null without a snapshot
@@ -39,6 +53,7 @@ interface EditorPort {
     suspend fun awaitSelectionChange(timeoutMs: Long): Boolean
     fun copyToClipboard(text: String): Boolean           // EXTRA_IS_SENSITIVE; false when the clip reads back different (a denied read counts as written)
     fun paste(): Boolean                                 // ACTION_PASTE on the focused node; false for a password node
+    fun replaceBeforeCursor(pin: Pin, old: String, new: String): Replaced   // blocking IPC: [old] right before the cursor becomes [new], one write
 }
 
 /** The real port over DictationAccessibilityService.instance and its EditorSession. */
@@ -139,9 +154,76 @@ class AccessibilityEditorPort(private val context: Context) : EditorPort {
         return readBack.getItemAt(0).text?.toString() == text
     }
 
+    /**
+     * Clean up's one write, after the user's tap: [old] must sit right before a cursor with nothing selected, in [pin]'s
+     * own field. It is selected, the selection is read back to cover exactly [old], and [new] is committed over it, never
+     * deleted first, so a write that fails loses no words. Then one read back: the words that were before [old], then
+     * [new], right before the cursor. An app that ignored the selection shows both, which reads as UNSURE.
+     */
+    override fun replaceBeforeCursor(pin: Pin, old: String, new: String): Replaced {
+        fun refuse(why: String): Replaced {
+            Log.i("ThumbFree", "cleanup_replace refused=$why") // a code, never text
+            return Replaced.UNCHANGED
+        }
+        val connection = connection(pin) ?: return refuse("connection")
+        val window = connection.getSurroundingText(old.length + REPLACE_CONTEXT, 0, 0) ?: return refuse("read")
+        val text = window.text.toString()
+        val cursor = window.selectionStart
+        // A selection, or another app's bad indexes: nothing is written.
+        if (cursor != window.selectionEnd || cursor !in old.length..text.length) return refuse("selection")
+        val before = text.substring(0, cursor)
+        if (!before.endsWith(old)) return refuse("text")
+        if (!sameNode(pin)) return refuse("node")
+        val kept = before.dropLast(old.length)
+        // Where the window starts in the field. Some apps (Compose's fields, for one) give no offset: the cursor's index
+        // in the focused node's text tells it then.
+        val origin = if (window.offset >= 0) window.offset else (nodeCursor()?.minus(cursor) ?: return refuse("offset"))
+        val start = origin + kept.length
+        val end = start + old.length
+        connection.setSelection(start, end)
+        // A web page applies a selection a moment later, so the reads ask again for up to 300 ms.
+        val covers = settled { connection.getSurroundingText(0, 0, 0)?.let { it.selected() == old } == true }
+        if (!covers) {
+            connection.setSelection(end, end) // the cursor back where it was
+            return refuse("covers")
+        }
+        connection.commitText(new, 1, null)
+        val landed = settled {
+            connection.getSurroundingText(kept.length + new.length, 0, 0)?.let { it.selectionStart == it.selectionEnd && it.beforeCursor() == kept + new } == true
+        }
+        return if (landed) Replaced.DONE else Replaced.UNSURE
+    }
+
+    /** [check] now, or again every 50 ms for up to 300 ms; blocking, off the main thread like every port call. */
+    private fun settled(check: () -> Boolean): Boolean {
+        repeat(7) { tries ->
+            if (check()) return true
+            if (tries < 6) Thread.sleep(50)
+        }
+        return false
+    }
+
+    private fun SurroundingText.selected(): String? =
+        if (selectionStart in 0..selectionEnd && selectionEnd <= text.length) text.substring(selectionStart, selectionEnd).toString() else null
+
+    private fun SurroundingText.beforeCursor(): String? =
+        if (selectionStart in 0..text.length) text.substring(0, selectionStart).toString() else null
+
+    /** The cursor's index in the focused field's text, read again from its node; null for a selection or no node. */
+    private fun nodeCursor(): Int? {
+        val node = service?.focusedEditable() ?: return null
+        if (!node.refresh()) return null
+        return node.textSelectionStart.takeIf { it >= 0 && it == node.textSelectionEnd }
+    }
+
     // Checked on the node that gets the paste: focus can reach a password field after Insert here's own check.
     override fun paste(): Boolean {
         val node = service?.focusedEditable() ?: return false
         return !FieldKind.isPassword(node.inputType, node.isPassword) && node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+    }
+
+    private companion object {
+        /** How many characters before the old words the read back compares, to catch an app that ignored the selection. */
+        const val REPLACE_CONTEXT = 32
     }
 }

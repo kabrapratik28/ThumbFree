@@ -19,11 +19,13 @@ class FakeEditorPort : EditorPort {
     var pastes = true
     var field = 1                                        // the generation of the field that holds the session
     var switchOn: String? = null                         // focus moves to a new field as this call starts (once)
+    val replaceAnswers = ArrayDeque<Replaced>()          // one answer per replaceBeforeCursor, then DONE
 
     val calls = mutableListOf<String>()
     val committed = mutableListOf<String>()
     val received = mutableMapOf<Int, String>()           // field to the text that reached it
     val copied = mutableListOf<String>()
+    val replaced = mutableListOf<Pair<String, String>>() // (old, new) per replaceBeforeCursor
     val readThreads = mutableListOf<String>()
     var awaitedMs = -1L
 
@@ -82,6 +84,13 @@ class FakeEditorPort : EditorPort {
     override fun paste(): Boolean {
         call("paste")
         return pastes
+    }
+
+    override fun replaceBeforeCursor(pin: Pin, old: String, new: String): Replaced {
+        read("replaceBeforeCursor")
+        replaced += old to new
+        if (pin.generation != field) return Replaced.UNCHANGED
+        return replaceAnswers.removeFirstOrNull() ?: Replaced.DONE
     }
 
     private fun call(name: String) {
