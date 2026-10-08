@@ -155,6 +155,23 @@ class BubbleWindow(
         }
     }
 
+    /** Clean up's button beside the circle (BubbleView.sparkle); null hides it. */
+    var sparkle: Sparkle?
+        get() = view.sparkle
+        set(value) {
+            view.sparkle = value
+        }
+
+    /** Clean up's tap (false) or hold (true) on the sparkle. */
+    var onSparkle: (hold: Boolean) -> Unit
+        get() = view.onSparkle
+        set(value) {
+            view.onSparkle = value
+        }
+
+    /** The sparkle in screen pixels, or null while it or the bubble is hidden, and until the first layout pass. */
+    fun sparkleBoundsOnScreen(): Rect? = if (shown) view.sparkleOnScreen() else null
+
     /** The circle's touch target side in pixels, for the current [style]. */
     val sizePx: Int get() = view.sizePx
 

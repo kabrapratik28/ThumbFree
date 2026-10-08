@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import android.view.View.MeasureSpec
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
@@ -520,6 +521,69 @@ class BubbleViewTest {
     private fun message(text: String) = visible().filterIsInstance<TextView>().single { it !is Button && it.text.toString() == text }
 
     private fun cancelButtons() = visible().filter { it.contentDescription?.toString() == "Cancel dictation" }
+
+    private fun sparkles() = visible().filter { it.contentDescription?.toString() in setOf("Clean up", "Cancel clean up", "Undo clean up") }
+
+    // Clean up's sparkle (issue #1): beside the idle circle, toward the middle of the screen, the circle's size and the idle
+    // bubble's transparency at every size, and level with it.
+    @Test
+    fun theSparkleIsTheBubblesSizeAndTransparencyBesideIt() {
+        for (size in BubbleStyle.Size.entries) for (mirrored in listOf(false, true)) {
+            view.style = BubbleStyle(size, 60)
+            view.mirrored = mirrored
+            view.sparkle = Sparkle.OFFER
+            view.render(BubbleUi.Idle)
+            layOut()
+            val sparkle = sparkles().single()
+            val (x, y) = sparkle.offsetIn(view)
+            assertWithMessage("$size").that(sparkle.width).isEqualTo(view.sizePx)
+            assertWithMessage("$size").that(sparkle.height).isEqualTo(view.sizePx)
+            assertWithMessage("$size").that(sparkle.alpha).isEqualTo((60 * 255 + 50) / 100 / 255f)
+            assertWithMessage("$size").that(y).isEqualTo(0)
+            assertWithMessage("$size").that(view.width).isEqualTo(2 * view.sizePx)
+            assertWithMessage("$size mirrored=$mirrored").that(x).isEqualTo(if (mirrored) 0 else view.sizePx)
+        }
+    }
+
+    // Only the idle bubble has it: never during a take, with a chip, or grey.
+    @Test
+    fun theSparkleShowsOnTheIdleBubbleOnly() {
+        view.sparkle = Sparkle.OFFER
+        view.render(BubbleUi.Idle)
+        assertThat(sparkles()).hasSize(1)
+        for (ui in listOf(BubbleUi.Arming, BubbleUi.Recording(0f, locked = true, 0), BubbleUi.Processing(false, 0, null), noTarget)) {
+            view.render(ui)
+            assertWithMessage("$ui").that(sparkles()).isEmpty()
+        }
+        view.render(BubbleUi.Idle)
+        view.grey = Grey.MIC_OFF
+        assertThat(sparkles()).isEmpty()
+        view.grey = null
+        assertThat(sparkles()).hasSize(1)
+        view.sparkle = null
+        assertThat(sparkles()).isEmpty()
+    }
+
+    // A tap tidies with the default style and a hold picks one; TalkBack hears what it does, and names the hold.
+    @Test
+    fun theSparkleTapsHoldsAndSaysWhatItDoes() {
+        val taps = mutableListOf<Boolean>()
+        view.onSparkle = { taps += it }
+        view.sparkle = Sparkle.OFFER
+        view.render(BubbleUi.Idle)
+        val sparkle = sparkles().single()
+        sparkle.performClick()
+        sparkle.performLongClick()
+        assertThat(taps).containsExactly(false, true).inOrder()
+        val info = sparkle.createAccessibilityNodeInfo()
+        assertThat(sparkle.contentDescription.toString()).isEqualTo("Clean up")
+        assertThat(info.actionList.single { it.id == AccessibilityNodeInfo.ACTION_LONG_CLICK }.label.toString()).isEqualTo("Choose a style")
+
+        view.sparkle = Sparkle.WORKING
+        assertThat(sparkle.contentDescription.toString()).isEqualTo("Cancel clean up")
+        view.sparkle = Sparkle.UNDO
+        assertThat(sparkle.contentDescription.toString()).isEqualTo("Undo clean up")
+    }
 
     private companion object {
         const val DOWNLOADING_42 = "Your speech model is still downloading (42%)."

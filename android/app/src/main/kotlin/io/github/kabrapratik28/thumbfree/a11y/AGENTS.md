@@ -16,6 +16,9 @@ the text, and `PreviewPanel` is the experimental live preview's window.
 - Text is written only after the user's own tap, with one write (`commitText`) at the cursor and one check that it
   landed. A miss is never written again: the chip offers Copy and Insert here. There is no ACTION_SET_TEXT and no
   automatic paste; Insert here pastes only when the user taps it.
+- Clean up (a test build) rewrites only the last take's own words, after a tap on its sparkle, and only while they sit
+  right before a cursor with nothing selected in the take's field (a new session of the same node counts): a selection
+  over them, read back to cover exactly them, one commitText, one read back. Never deleteSurroundingText.
 - No bubble and no write for password, number, phone or date fields (`FieldKind`). The pinned field is checked again
   right before the write, since focus can move to a password field in between.
 - A take types into the field pinned at touch-down: its input session and the node its focus event named. Another
@@ -29,6 +32,8 @@ the text, and `PreviewPanel` is the experimental live preview's window.
   It is the bubble's one live region, redrawn at most every 10% and once a second, since no microphone is open while it
   shows. No timer puts it away, only Open, a tap outside it (the window watches outside touches only then) or a second
   tap on the bubble.
+- Clean up's sparkle stands beside the idle circle, its size and idle transparency, toward the middle of the screen, in
+  the bubble's own window, so it moves with every drag.
 - The bubble keeps its size and place in every state; its listening ring and stop mark fade (220 and 180 ms), and the
   start and stop of listening tick the same, through the phone's haptic setting. While a tap can't listen (the
   microphone off, the chosen model not usable) it is grey, with a ring for how far and a badge for why.

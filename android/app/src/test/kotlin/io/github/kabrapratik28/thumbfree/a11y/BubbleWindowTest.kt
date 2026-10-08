@@ -187,6 +187,41 @@ class BubbleWindowTest {
         assertThat(window.circle()!!.toList()).containsExactly(100, 40, 100 + window.sizePx, 40 + window.sizePx).inOrder()
     }
 
+    // Clean up's sparkle (issue #1) stands beside the circle toward the middle of the screen wherever the bubble goes:
+    // at the far left, the far right, the top and the bottom the circle stays where it was put, and the sparkle stays
+    // on screen, level with it, the circle's size.
+    @Test
+    fun theSparkleFollowsTheBubbleToEveryEdge() {
+        val manager = FakeWindowManager(context.getSystemService(WindowManager::class.java))
+        val window = BubbleWindow(context, manager, onTouch = { false }, onChip = {})
+        window.show(0, 600)
+        window.sparkle = Sparkle.OFFER
+        window.render(BubbleUi.Idle)
+        val view = manager.view as BubbleView
+        val s = window.sizePx
+        for ((x, y) in listOf(0 to 600, SCREEN_WIDTH - s to 600, 300 to 0, 300 to 2400 - s, SCREEN_WIDTH - s to 0, 0 to 2400 - s)) {
+            window.move(x, y)
+            repeat(3) {
+                val any = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                view.measure(any, any)
+                view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                shadowOf(Looper.getMainLooper()).idle()
+            }
+            val right = x + s / 2 > SCREEN_WIDTH / 2
+            val at = "($x, $y)"
+            assertWithMessage(at).that(window.params.gravity).isEqualTo(Gravity.TOP or if (right) Gravity.END else Gravity.START)
+            assertWithMessage(at).that(window.params.x).isEqualTo(if (right) SCREEN_WIDTH - x - s else x)
+            assertWithMessage(at).that(window.params.y).isEqualTo(y)
+            assertWithMessage(at).that(view.width).isEqualTo(2 * s)
+            assertWithMessage(at).that(view.height).isEqualTo(s)
+            // The window's left edge on screen, then the sparkle's: beside the circle, toward the middle.
+            val left = if (right) SCREEN_WIDTH - window.params.x - view.width else window.params.x
+            assertWithMessage(at).that(left).isAtLeast(0)
+            assertWithMessage(at).that(left + view.width).isAtMost(SCREEN_WIDTH)
+            assertWithMessage(at).that(if (right) left else left + s).isEqualTo(if (right) x - s else x + s)
+        }
+    }
+
     @Test
     fun laterRenderCancelsTheDismissal() {
         window.render(BubbleUi.Chip(Code.NO_SPEECH, listOf(DISMISS)))

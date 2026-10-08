@@ -16,6 +16,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.animation.PathInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
@@ -32,12 +33,16 @@ import io.github.kabrapratik28.thumbfree.core.session.SpeechWait
 import kotlin.math.PI
 import kotlin.math.sin
 
+/** Clean up's button beside the bubble (issue #1): it offers a tidy, turns while one runs, then offers Undo. */
+enum class Sparkle { OFFER, WORKING, UNDO }
+
 /**
  * Draws the bubble (circle, level ring, spinner) and an optional chip with message and action buttons; before the speech
  * model is usable, the chip is the panel that says why (BubbleUi.NotReady), with Open. A bubble that can't listen yet is
  * grey ([grey]), with a ring for how far and a badge for why, since a yellow bubble always listens. The listening ring
  * and the stop mark fade in and out (220 ms and 180 ms) and the panel comes and goes with a short fade, none of it with
- * the phone's animations off; the circle's size and place never change.
+ * the phone's animations off; the circle's size and place never change. After a take, Clean up's [sparkle] can stand
+ * beside the idle circle, the same size and transparency, toward the middle of the screen.
  */
 class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : FrameLayout(context) {
     private val dp = resources.displayMetrics.density
@@ -89,8 +94,20 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
             if (field == value) return
             field = value
             describeState()
+            fitSparkle()
             invalidate()
         }
+
+    /** Clean up's button beside the circle; null hides it. It shows on the idle bubble only, never with a chip or grey. */
+    var sparkle: Sparkle? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            fitSparkle()
+        }
+
+    /** Clean up's tap (false) or hold (true) on [sparkle]. */
+    var onSparkle: (hold: Boolean) -> Unit = {}
 
     // When the listening ring last started to come or go, and when the stop mark did; 0 draws either as it is.
     private var ringAt = 0L
@@ -182,9 +199,12 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
      */
     var greyMotion = true
 
-    // Beside the circle: the X button next to it, then the chip.
+    private val sparkleButton = SparkleButton()
+
+    // Beside the circle: the sparkle or the X button next to it, then the chip.
     private val extras = LinearLayout(context).apply {
         gravity = Gravity.CENTER_VERTICAL
+        addView(sparkleButton)
         addView(cancel)
         addView(chip)
     }
@@ -195,8 +215,9 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
             if (field == value) return
             field = value
             extras.layoutParams = beside()
-            extras.removeView(cancel)
-            extras.addView(cancel, if (value) 1 else 0)
+            extras.removeAllViews()
+            val order = listOf(sparkleButton, cancel, chip) // from the circle outward
+            for (child in if (value) order.reversed() else order) extras.addView(child)
             fitChip()
             invalidate()
         }
@@ -257,6 +278,9 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
         badgeRadius = art * 0.15f
         minimumWidth = sizePx
         minimumHeight = sizePx
+        // The sparkle: the circle's target and disc, at the idle bubble's opacity.
+        sparkleButton.layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
+        sparkleButton.alpha = (style.opacity * 255 + 50) / 100 / 255f
     }
 
     fun render(ui: BubbleUi) {
@@ -267,6 +291,7 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
         if (stopShown(ui) != stopShown(before)) stopAt = now
         visibility = if (ui == BubbleUi.Hidden) GONE else VISIBLE
         describeState()
+        fitSparkle()
         cancel.visibility = if (cancelable && (ui is BubbleUi.Processing || (ui is BubbleUi.Recording && ui.locked))) VISIBLE else GONE
         val note = noteFor(ui)
         // The panel is read aloud as it comes, which nothing else here may be: a take's chips show while the microphone
@@ -423,6 +448,12 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
         chip.translationY = 0f
     }
 
+    /** The sparkle shows on the idle bubble only: never during a take, with a chip or the panel, or grey. */
+    private fun fitSparkle() {
+        sparkleButton.visibility = if (sparkle != null && ui == BubbleUi.Idle && grey == null) VISIBLE else GONE
+        sparkleButton.refresh()
+    }
+
     /** Whether [ui] prints the stop mark on the key: a take a tap started, which the next tap stops. */
     private fun stopShown(ui: BubbleUi) = ui is BubbleUi.Recording && ui.locked
 
@@ -453,6 +484,9 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
 
     /** The circle's touch target on screen, or null while hidden or before the first layout pass. */
     fun circleOnScreen(): Rect? = onScreen(this, circle())
+
+    /** The sparkle on screen, or null while it is hidden or before the first layout pass. */
+    fun sparkleOnScreen(): Rect? = onScreen(sparkleButton, Rect(0, 0, sparkleButton.width, sparkleButton.height))
 
     /** The X button on screen, or null while it is hidden or before the first layout pass. */
     fun cancelOnScreen(): Rect? = onScreen(cancel, Rect(0, 0, cancel.width, cancel.height))
@@ -578,6 +612,69 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
     }
 
     private fun art(id: Int) = context.getDrawable(id)!! // bounds set by resize()
+
+    /**
+     * Clean up's round button: a white disc the size of the bubble's, its light line, and the ink sparkle; an ink arc turns
+     * around it while the clean up runs, and the Undo arrow stands in after. Never yellow, which is for a bubble that
+     * listens. Its target is the circle's. A tap uses the default style, a hold picks one.
+     */
+    private inner class SparkleButton : View(context) {
+        private val sparkleArt = art(R.drawable.cleanup_sparkle)
+        private val undoArt = art(R.drawable.cleanup_undo)
+        private val disc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        private val arc = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; color = ink }
+        private val arcBox = RectF()
+
+        init {
+            visibility = GONE
+            setOnClickListener { onSparkle(false) }
+            setOnLongClickListener {
+                onSparkle(true)
+                true
+            }
+        }
+
+        /** Its label for TalkBack and its look, for the [sparkle] it shows. */
+        fun refresh() {
+            val label = context.getString(
+                when (sparkle) {
+                    Sparkle.WORKING -> R.string.cleanup_cancel_label
+                    Sparkle.UNDO -> R.string.cleanup_undo_label
+                    else -> R.string.cleanup_label
+                },
+            )
+            if (contentDescription?.toString() != label) contentDescription = label
+            invalidate()
+        }
+
+        override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+            super.onInitializeAccessibilityNodeInfo(info)
+            info.className = Button::class.java.name
+            // A hold picks a style: TalkBack and Switch Access name it. Only the offer has one.
+            if (sparkle == Sparkle.OFFER) {
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_LONG_CLICK, context.getString(R.string.cleanup_choose_style)))
+            } else {
+                info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_LONG_CLICK)
+            }
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            val c = width / 2f
+            canvas.drawCircle(c, c, radius, disc)
+            canvas.drawCircle(c, c, radius, outline)
+            val glyph = if (sparkle == Sparkle.UNDO) undoArt else sparkleArt
+            val half = radius * 0.55f
+            glyph.setBounds((c - half).toInt(), (c - half).toInt(), (c + half).toInt(), (c + half).toInt())
+            glyph.draw(canvas)
+            if (sparkle == Sparkle.WORKING) {
+                arc.strokeWidth = ring.strokeWidth
+                val r = radius - arc.strokeWidth
+                arcBox.set(c - r, c - r, c + r, c + r)
+                canvas.drawArc(arcBox, SystemClock.uptimeMillis() % 1_000 * 0.36f, 90f, false, arc) // one turn a second
+                postInvalidateOnAnimation()
+            }
+        }
+    }
 
     private fun rounded(shape: Int) =
         GradientDrawable().apply { this.shape = shape; setColor(Color.WHITE); setStroke(dp.toInt(), LINE) }
