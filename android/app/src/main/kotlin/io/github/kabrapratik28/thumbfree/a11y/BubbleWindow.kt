@@ -169,6 +169,13 @@ class BubbleWindow(
             view.onSparkle = value
         }
 
+    /** The sparkle's first-time pill (BubbleView.sparkleHint). */
+    var sparkleHint: Boolean
+        get() = view.sparkleHint
+        set(value) {
+            view.sparkleHint = value
+        }
+
     /** The sparkle in screen pixels, or null while it or the bubble is hidden, and until the first layout pass. */
     fun sparkleBoundsOnScreen(): Rect? = if (shown) view.sparkleOnScreen() else null
 

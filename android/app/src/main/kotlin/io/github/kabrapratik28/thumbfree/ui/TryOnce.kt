@@ -105,6 +105,10 @@ internal class TrialState : TrialHost {
         private set
     var words by mutableStateOf<String?>(null)
         private set
+
+    /** The take's words as heard, which Clean up's beat starts every style from; [words] may show a tidy of them. */
+    var heard by mutableStateOf<String?>(null)
+        private set
     var unheard by mutableStateOf(false)
         private set
     var problem by mutableStateOf<Code?>(null)
@@ -144,6 +148,7 @@ internal class TrialState : TrialHost {
             ui is BubbleUi.Recording -> {
                 if (!listening) {
                     words = null
+                    heard = null
                     unheard = false
                     problem = null
                 }
@@ -186,6 +191,12 @@ internal class TrialState : TrialHost {
 
     override fun words(text: String) {
         words = text
+        heard = text
+    }
+
+    /** Clean up's beat: the card shows [text], a tidy of the words as heard. */
+    fun tidied(text: String) {
+        words = text
     }
 
     /** Forgets the try: nothing of it stays once its step goes. */
@@ -194,6 +205,7 @@ internal class TrialState : TrialHost {
         level = 0f
         done = false
         words = null
+        heard = null
         unheard = false
         problem = null
         transcribing = false

@@ -304,7 +304,12 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
 
     /** Clean up (issue #1): the sparkle beside the bubble after a typed take, and its card. */
     val cleanup = Cleanup(
-        app, editorPort, enabled = { AppGraph.settings.cleanupOn }, draw = { bubble?.sparkle = it }, anchor = { bubble?.boundsOnScreen() },
+        app, editorPort, enabled = { AppGraph.settings.cleanupOn },
+        draw = {
+            bubble?.sparkle = it
+            bubble?.sparkleHint = !AppGraph.settings.cleanupHintDone
+        },
+        anchor = { bubble?.boundsOnScreen() },
     )
 
     /**
@@ -768,7 +773,11 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         bubble = BubbleWindow(service, windows, ::onBubbleTouch, ::onChipAction).also {
             it.onDropped = ::place // found gone: the touch on it ends at once and the window comes back, with no focus event
             it.restyle(AppGraph.settings.bubbleStyle)
-            it.onSparkle = cleanup::tap
+            it.onSparkle = { hold ->
+                AppGraph.settings.cleanupHintDone = true // used once: its first-time pill goes
+                bubble?.sparkleHint = false
+                cleanup.tap(hold)
+            }
             service.bubble = it
         }
         cleanup.clear() // an offer from before the service went is no field's now

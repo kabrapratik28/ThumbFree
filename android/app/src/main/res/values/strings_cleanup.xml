@@ -6,6 +6,10 @@
     <string name="cleanup_choose_style">Choose a style</string>
     <string name="cleanup_cancel_label">Cancel clean up</string>
     <string name="cleanup_undo_label">Undo clean up</string>
+    <!-- Beside the floating sparkle the first time, until it is used. -->
+    <string name="cleanup_hint">Tap to tidy · Hold for styles</string>
+    <!-- The welcome's try, once the take's words show. -->
+    <string name="welcome_cleanup_cue">Tap ✨ to tidy it. Hold it for styles.</string>
 
     <!-- The card. -->
     <string name="cleanup_working">Cleaning up…</string>

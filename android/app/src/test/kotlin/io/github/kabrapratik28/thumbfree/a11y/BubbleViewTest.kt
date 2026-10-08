@@ -564,6 +564,20 @@ class BubbleViewTest {
         assertThat(sparkles()).isEmpty()
     }
 
+    // The first time, a pill beside the sparkle says what a tap and a hold do; it shows only with the offer.
+    @Test
+    fun theFirstTimePillStandsBesideTheSparkle() {
+        view.sparkle = Sparkle.OFFER
+        view.render(BubbleUi.Idle)
+        assertThat(texts()).doesNotContain("Tap to tidy · Hold for styles")
+        view.sparkleHint = true
+        layOut()
+        val pill = visible().filterIsInstance<TextView>().single { it.text.toString() == "Tap to tidy · Hold for styles" }
+        assertThat(pill.offsetIn(view).first).isEqualTo(2 * view.sizePx) // after the circle and the sparkle
+        view.sparkle = Sparkle.UNDO
+        assertThat(texts()).doesNotContain("Tap to tidy · Hold for styles")
+    }
+
     // A tap tidies with the default style and a hold picks one; TalkBack hears what it does, and names the hold.
     @Test
     fun theSparkleTapsHoldsAndSaysWhatItDoes() {

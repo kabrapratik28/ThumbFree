@@ -140,6 +140,11 @@ class Settings(private val prefs: SharedPreferences) {
         get() = CleanupStyle.entries.firstOrNull { it.name == prefs.getString("cleanup_style", null) } ?: CleanupStyle.CLEAN
         set(value) = prefs.edit().putString("cleanup_style", value.name).apply()
 
+    /** Key "cleanup_hint_done": the floating sparkle was used once, so its "Tap to tidy · Hold for styles" pill goes. */
+    var cleanupHintDone: Boolean
+        get() = prefs.getBoolean("cleanup_hint_done", false)
+        set(value) = prefs.edit().putBoolean("cleanup_hint_done", value).apply()
+
     companion object {
         /**
          * Off: an experimental feature (since 2026-09-27). The code and its tests stay; the app doesn't offer it, since

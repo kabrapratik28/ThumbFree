@@ -69,7 +69,7 @@
     <!-- While it listens, a line to say (English until the translation round), in a card TalkBack hears as one label, and
          how to finish. %1$s is the line. -->
     <string name="welcome_try_saying">Try saying</string>
-    <string name="welcome_try_saying_line">“Yes, see you at seven.”</string>
+    <string name="welcome_try_saying_line">“See you at six, no, seven.”</string>
     <string name="welcome_try_saying_other">Or say anything.</string>
     <string name="welcome_try_saying_read">Try saying %1$s Or say anything.</string>
     <string name="welcome_try_finish">When you finish, tap the bubble again.</string>

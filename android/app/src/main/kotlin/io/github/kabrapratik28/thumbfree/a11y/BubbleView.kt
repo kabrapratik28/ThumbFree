@@ -109,6 +109,14 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
     /** Clean up's tap (false) or hold (true) on [sparkle]. */
     var onSparkle: (hold: Boolean) -> Unit = {}
 
+    /** The sparkle's first-time pill, "Tap to tidy · Hold for styles", beside it while it offers a tidy. */
+    var sparkleHint = false
+        set(value) {
+            if (field == value) return
+            field = value
+            fitSparkle()
+        }
+
     // When the listening ring last started to come or go, and when the stop mark did; 0 draws either as it is.
     private var ringAt = 0L
     private var stopAt = 0L
@@ -200,11 +208,21 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
     var greyMotion = true
 
     private val sparkleButton = SparkleButton()
+    private val sparkleTip = TextView(context).apply {
+        text = context.getString(R.string.cleanup_hint)
+        setTextColor(ink)
+        textSize = 13f
+        background = GradientDrawable().apply { cornerRadius = 16 * dp; setColor(Color.WHITE); setStroke(dp.toInt(), LINE) }
+        (12 * dp).toInt().let { setPadding(it, (6 * dp).toInt(), it, (6 * dp).toInt()) }
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO // the sparkle's own label and action say it
+        visibility = GONE
+    }
 
     // Beside the circle: the sparkle or the X button next to it, then the chip.
     private val extras = LinearLayout(context).apply {
         gravity = Gravity.CENTER_VERTICAL
         addView(sparkleButton)
+        addView(sparkleTip)
         addView(cancel)
         addView(chip)
     }
@@ -216,7 +234,7 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
             field = value
             extras.layoutParams = beside()
             extras.removeAllViews()
-            val order = listOf(sparkleButton, cancel, chip) // from the circle outward
+            val order = listOf(sparkleButton, sparkleTip, cancel, chip) // from the circle outward
             for (child in if (value) order.reversed() else order) extras.addView(child)
             fitChip()
             invalidate()
@@ -281,6 +299,7 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
         // The sparkle: the circle's target and disc, at the idle bubble's opacity.
         sparkleButton.layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
         sparkleButton.alpha = (style.opacity * 255 + 50) / 100 / 255f
+        sparkleTip.alpha = sparkleButton.alpha
     }
 
     fun render(ui: BubbleUi) {
@@ -450,7 +469,9 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
 
     /** The sparkle shows on the idle bubble only: never during a take, with a chip or the panel, or grey. */
     private fun fitSparkle() {
-        sparkleButton.visibility = if (sparkle != null && ui == BubbleUi.Idle && grey == null) VISIBLE else GONE
+        val shown = sparkle != null && ui == BubbleUi.Idle && grey == null
+        sparkleButton.visibility = if (shown) VISIBLE else GONE
+        sparkleTip.visibility = if (shown && sparkleHint && sparkle == Sparkle.OFFER) VISIBLE else GONE
         sparkleButton.refresh()
     }
 

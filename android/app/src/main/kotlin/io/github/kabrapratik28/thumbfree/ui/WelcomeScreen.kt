@@ -583,6 +583,7 @@ private fun TryWords(line: TryLine, trial: TrialState, compact: Boolean) = Colum
                 Heading(stringResource(R.string.welcome_try_done), live = true)
             }
             Sentence(stringResource(R.string.welcome_try_done_body))
+            CleanupTry(trial)
         }
         TryLine.AGAIN -> {
             Heading(stringResource(R.string.welcome_try_tap))
