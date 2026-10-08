@@ -145,9 +145,15 @@ class Cleanup(
         if (!opening && !writing && pin != null && pin.generation != offer.pin.generation && !sameField(pin, offer.pin)) clear()
     }
 
-    /** [pin] is [of]'s field in a new session: the same app, window and node. A pin that named no node matches only itself. */
-    private fun sameField(pin: Pin, of: Pin) =
-        of.nodeKey.isNotEmpty() && pin.packageName == of.packageName && pin.windowId == of.windowId && pin.nodeKey == of.nodeKey
+    /**
+     * [pin] is [of]'s field in a new session: the same app, and the same window and node wherever both pins name them.
+     * Messages starts a new session after the card without a new focus event, so the new pin names no node; the write
+     * still needs the take's exact words at the place it ended, right before the cursor, so another field never matches
+     * by accident.
+     */
+    private fun sameField(pin: Pin, of: Pin) = pin.packageName == of.packageName &&
+        (pin.windowId == -1 || of.windowId == -1 || pin.windowId == of.windowId) &&
+        (pin.nodeKey.isEmpty() || of.nodeKey.isEmpty() || pin.nodeKey == of.nodeKey)
 
     /** The sparkle's tap or [hold]: tidy (the card), cancel the card, or Undo. */
     fun tap(hold: Boolean) {
