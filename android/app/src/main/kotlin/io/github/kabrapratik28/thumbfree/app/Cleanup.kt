@@ -93,7 +93,16 @@ class Cleanup(
         asking = ask
         scope.launch {
             val end = try {
-                withContext(io) { port.cursorEnd(pin, take) }
+                // A field's node can lag the write by a moment: asked again for up to a second.
+                withContext(io) {
+                    var at: Int? = null
+                    for (tries in 0 until 10) {
+                        at = port.cursorEnd(pin, take)
+                        if (at != null) break
+                        delay(100)
+                    }
+                    at
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -162,8 +162,7 @@ class AccessibilityEditorPort(private val context: Context) : EditorPort {
         val cursor = window.selectionStart
         if (cursor != window.selectionEnd || cursor !in take.length..window.text.length) return null
         if (!window.text.substring(0, cursor).toString().endsWith(take)) return null
-        val origin = if (window.offset >= 0) window.offset else (nodeCursor()?.minus(cursor) ?: return null)
-        return origin + cursor
+        return if (window.offset >= 0) window.offset + cursor else nodeCursor(take)
     }
 
     /**
@@ -192,7 +191,7 @@ class AccessibilityEditorPort(private val context: Context) : EditorPort {
         val kept = before.dropLast(old.length)
         // Where the window starts in the field. Some apps (Compose's fields, for one) give no offset: the cursor's index
         // in the focused node's text tells it then.
-        val origin = if (window.offset >= 0) window.offset else (nodeCursor()?.minus(cursor) ?: return refuse("offset"))
+        val origin = if (window.offset >= 0) window.offset else (nodeCursor(old)?.minus(cursor) ?: return refuse("offset"))
         val start = origin + kept.length
         if (start + old.length != end) return refuse("moved") // the same text, but not the take's own words
         connection.setSelection(start, end)
@@ -230,11 +229,16 @@ class AccessibilityEditorPort(private val context: Context) : EditorPort {
     private fun SurroundingText.beforeCursor(): String? =
         if (selectionStart in 0..text.length) text.substring(0, selectionStart).toString() else null
 
-    /** The cursor's index in the focused field's text, read again from its node; null for a selection or no node. */
-    private fun nodeCursor(): Int? {
+    /**
+     * The cursor's index in the focused field's text, read again from its node, once that text has [before] right before
+     * it: a node can lag the input connection by a moment after a write. Null for a selection, no node, or a stale one.
+     */
+    private fun nodeCursor(before: String): Int? {
         val node = service?.focusedEditable() ?: return null
         if (!node.refresh()) return null
-        return node.textSelectionStart.takeIf { it >= 0 && it == node.textSelectionEnd }
+        val at = node.textSelectionStart.takeIf { it >= 0 && it == node.textSelectionEnd } ?: return null
+        val text = node.text?.toString() ?: return null
+        return at.takeIf { it in before.length..text.length && text.regionMatches(it - before.length, before, 0, before.length) }
     }
 
     // Checked on the node that gets the paste: focus can reach a password field after Insert here's own check.
