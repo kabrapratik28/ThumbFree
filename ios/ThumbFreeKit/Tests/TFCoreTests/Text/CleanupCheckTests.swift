@@ -38,6 +38,12 @@ import Testing
             "Yes! I got us a table for 7:30 at the Italian place. Can't wait!", .friendly),
         Row("Yes yes I booked a table for like seven no seven thirty at the Italian place on Main Street.",
             "Yes, booked for 7:30 at the Italian place on Main Street.", .shorter),
+        // Apple's on-device model on a Mac, the tuning round: good answers the first checks turned down.
+        Row("uh so yeah I I was thinking we could we could grab lunch at noon tomorrow",
+            "Yeah, I was thinking we could grab lunch at 12 tomorrow."), // noon is a number word
+        Row("it costs like forty five dollars no wait fifty five dollars", "It costs $55."), // a number's words are one word
+        Row("please ensure all documentation is submitted prior to the deadline on the fifteenth",
+            "Please ensure all documentation is submitted prior to the deadline on the 15th.", .simple),
     ]
 
     @Test(arguments: good)

@@ -36,6 +36,9 @@ public enum CleanupCheck {
         "fifty", "sixty", "seventy", "eighty", "ninety", "hundred", "thousand", "million", "billion", "percent", "dollar",
         "dollars", "cents", "o'clock", "pm", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
         "ninth", "tenth", "half", "quarter",
+        // Found tuning on Apple's model: words it writes as digits ("noon" as 12, "the fifteenth" as the 15th).
+        "noon", "midnight", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth",
+        "eighteenth", "nineteenth", "twentieth", "thirtieth", "hundredth", "thousandth",
     ]
 
     public static func check(take: String, output: String?, style: CleanupStyle) -> CleanupVerdict {
@@ -53,7 +56,7 @@ public enum CleanupCheck {
         let added = outWords.filter { !known.contains($0) && !hasDigit($0) }.count
         let tone = style == .friendly || style == .professional || style == .simple
         if added > (tone ? max(4, outWords.count / 2) : max(2, outWords.count / 5)) { return .rejected("new_words") }
-        if Double(outWords.count) < Double(takeWords.count) * (style == .shorter ? 0.25 : 0.4) { return .rejected("dropped") }
+        if Double(length(outWords)) < Double(length(takeWords)) * (style == .shorter ? 0.25 : 0.4) { return .rejected("dropped") }
         if style == .clean {
             let meaningful = Set(takeWords.filter { !functionWords.contains($0) && !numberWords.contains($0) && !hasDigit($0) })
             let have = Set(outWords)
@@ -99,6 +102,18 @@ public enum CleanupCheck {
     }
 
     static func hasDigit(_ word: String) -> Bool { !digitGroups(word).isEmpty }
+
+    /// How long a text is for the dropped check: a run of number words and digits counts once, as the number it says
+    /// ("forty five dollars no wait fifty five dollars" is 2 numbers and 2 words, "$55" one number).
+    static func length(_ words: [String]) -> Int {
+        var count = 0, inNumber = false
+        for word in words {
+            let number = numberWords.contains(word) || hasDigit(word)
+            if !number || !inNumber { count += 1 }
+            inNumber = number
+        }
+        return count
+    }
 
     /// Runs of decimal digits (`\p{Nd}+`).
     static func digitGroups(_ text: String) -> [String] {
