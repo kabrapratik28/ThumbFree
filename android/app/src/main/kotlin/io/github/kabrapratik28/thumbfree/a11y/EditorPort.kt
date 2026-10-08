@@ -184,7 +184,10 @@ class AccessibilityEditorPort(private val context: Context) : EditorPort {
         val text = window.text.toString()
         val cursor = window.selectionStart
         // A selection, or another app's bad indexes: nothing is written.
-        if (cursor != window.selectionEnd || cursor !in old.length..text.length) return refuse("selection")
+        if (cursor != window.selectionEnd || cursor !in old.length..text.length) {
+            // Numbers only: where the cursor and selection were, and how much text the app gave back.
+            return refuse("selection start=$cursor end=${window.selectionEnd} text=${text.length} want=${old.length} offset=${window.offset}")
+        }
         val before = text.substring(0, cursor)
         if (!before.endsWith(old)) return refuse("text")
         if (!sameNode(pin)) return refuse("node")

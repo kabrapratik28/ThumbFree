@@ -102,6 +102,10 @@ class CleanupCheckTest {
             "pick up two no three bags of rice" to "Pick up two, no, three bags of rice.",
             "let's meet on monday no tuesday no wednesday" to "Let's meet on Wednesday.",
             "surely we can ship it" to "Surely we can ship it.",
+            // The owner's own try on the Pixel, which a word-order check once refused.
+            "Meet me at 6:30, oh no, actually, let's meet at 7:30." to "Meet me at 7:30.",
+            "Meet me at 6:30. Oh no, actually, let's meet at 7:30." to "Let's meet at 7:30.",
+            "send it to marco no I mean luca" to "Send it to Luca.",
         )
         for ((take, out) in good) {
             assertWithMessage(take).that(CleanupCheck.check(take, out, CleanupStyle.CLEAN)).isEqualTo(CleanupCheck.Verdict.Ok(out))

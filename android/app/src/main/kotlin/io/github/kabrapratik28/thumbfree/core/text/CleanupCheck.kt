@@ -26,7 +26,7 @@ object CleanupCheck {
         "our", "their", "its", "do", "does", "did", "have", "has", "had", "will", "would", "can", "could", "should",
         "just", "really", "very", "then", "there", "here", "um", "uh", "er", "erm", "hmm", "like", "no", "wait",
         "actually", "mean", "know", "comma", "period", "question", "mark", "exclamation", "colon", "new", "line",
-        "paragraph", "dot",
+        "paragraph", "dot", "oh", "let's", "lets",
     )
 
     // Dates and times: what a correction's final version is checked for, as a wrong pick would change them.
@@ -120,8 +120,9 @@ object CleanupCheck {
         if (missing > allowed) return "dropped_words"
         val known = takeWords.map(::key).toSet()
         if (missing >= 1 && have.any { it !in known }) return "substitution"
-        // The words that stay keep their order; an accidental repeat ("yes yes") counts once.
-        val stayed = kept.filterIndexed { i, w -> i == 0 || w != kept[i - 1] }.filter { it in have }
+        // The words that stay keep their order, each where the speaker said it last ("meet at 6:30, oh no, actually,
+        // let's meet at 7:30" ends on its second "meet").
+        val stayed = kept.withIndex().filter { (i, w) -> kept.lastIndexOf(w) == i && w in have }.map { it.value }
         if (commonInOrder(stayed, have) < stayed.size) return "order"
         return null
     }
@@ -161,11 +162,14 @@ object CleanupCheck {
      */
     private fun correctionNo(words: List<String>, i: Int): Boolean {
         if (i == 0) return false
+        // "oh no", "no, actually", "no, sorry", "no, wait", "no, I mean": a correction, said so.
+        val next = words.getOrNull(i + 1)
+        if (words[i - 1] == "oh" || next in setOf("actually", "sorry", "wait", "rather") || next == "i" && words.getOrNull(i + 2) == "mean") return true
         val before = words.subList(maxOf(0, i - 3), i)
         val after = words.subList(i + 1, minOf(words.size, i + 5)).filter { it !in CORRECTIONS && it != "i" }
-        val next = after.firstOrNull { it !in ARTICLES } ?: return false
+        val first = after.firstOrNull { it !in ARTICLES } ?: return false
         val prev = words[i - 1]
-        return (numberish(prev) && numberish(next)) || (prev in WHEN_WORDS && next in WHEN_WORDS) ||
+        return (numberish(prev) && numberish(first)) || (prev in WHEN_WORDS && first in WHEN_WORDS) ||
             after.take(2).any { it in before && it !in ARTICLES }
     }
 
