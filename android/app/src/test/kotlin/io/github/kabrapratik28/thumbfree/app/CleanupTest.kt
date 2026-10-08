@@ -192,6 +192,19 @@ class CleanupTest {
         assertThat(drawn).isEqualTo(Sparkle.UNDO)
     }
 
+    // Messages starts a new session after the card with no new focus event, so the new pin names no node: still the
+    // same field, written through it.
+    @Test
+    fun aNewSessionThatNamesNoNodeIsStillTheField() {
+        port.surroundings += Surrounding("Hi Maya!$take", "", 0)
+        offered()
+        port.field = 2
+        port.pin = Pin("com.example", -1, "", 2)
+        cleanup.write("See you at 7.")
+        idle()
+        assertThat(port.replaced).containsExactly(take to " See you at 7.")
+    }
+
     // A web page's field loses its input session while the card is up and starts a new one when it closes: the write
     // goes through the new session of the same field, and so does Undo.
     @Test
