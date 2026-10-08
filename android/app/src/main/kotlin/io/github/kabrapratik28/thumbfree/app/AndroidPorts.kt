@@ -114,6 +114,9 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
     private val filesDir = app.filesDir // read once, at process start: getFilesDir() touches the disk
     // Field writes sent so far (commit, paste): an insert that throws tells from it whether its text may have landed.
     @Volatile private var writes = 0
+
+    // One thread for every field call, the take's insert and Clean up's writes alike, so they never interleave.
+    private val editorIo = Dispatchers.IO.limitedParallelism(1)
     private val inserter = Inserter(object : EditorPort by editorPort {
         override fun commit(pin: Pin, text: String): Boolean {
             writes++ // before the call: a write that throws may still have reached the field
@@ -124,7 +127,7 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
             writes++
             return editorPort.paste()
         }
-    }, Dispatchers.IO.limitedParallelism(1))
+    }, editorIo)
     private val focus = FocusTracker()
     private val audioFocus = AudioFocus(app.getSystemService(AudioManager::class.java)) {
         post { (controller.state as? State.Recording)?.let { controller.onEvent(Event.StopRequested(it.id, Code.CALL)) } }
@@ -309,7 +312,8 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
             bubble?.sparkle = it
             bubble?.sparkleHint = !AppGraph.settings.cleanupHintDone
         },
-        anchor = { bubble?.boundsOnScreen() },
+        anchor = { bubble?.boundsOnScreen() }, io = editorIo,
+        previewFirst = { AppGraph.settings.cleanupStyle != io.github.kabrapratik28.thumbfree.core.text.CleanupStyle.CLEAN },
     )
 
     /**

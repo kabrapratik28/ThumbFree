@@ -18,7 +18,7 @@ import io.github.kabrapratik28.thumbfree.ui.CleanupActivity
 import java.lang.ref.WeakReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -26,9 +26,11 @@ import kotlinx.coroutines.withContext
 
 /**
  * Clean up (issue #1): after a take is typed, the sparkle beside the bubble tidies its words with Gemini Nano. A tap uses
- * the default style and a hold opens the styles, both in CleanupActivity, since ML Kit answers only while a ThumbFree
- * activity is resumed. Undo writes the take back. Only the take's own words change, and only while they sit right before
- * the cursor of the field they were typed into. Main thread; field calls run on [io].
+ * the default style (Clean writes at once; any other style shows its answer first) and a hold opens the styles, both in
+ * CleanupActivity, since ML Kit answers only while a ThumbFree activity is resumed. Undo writes the take back. Only the
+ * take's own words change: the same field, the same place (where the take ended, read right after it was typed), and
+ * only while they sit right before the cursor. Main thread; field calls run on [io], which the dictation's own writes
+ * share, so the two never interleave.
  */
 class Cleanup(
     private val app: Application,
@@ -36,23 +38,33 @@ class Cleanup(
     private val enabled: () -> Boolean,
     private val draw: (Sparkle?) -> Unit,
     private val anchor: () -> Rect?,
-    private val io: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1),
+    private val io: CoroutineDispatcher,
+    private val previewFirst: () -> Boolean = { false },
     private val toast: (Int) -> Unit = { Toast.makeText(app, it, Toast.LENGTH_SHORT).show() },
     private val start: (Intent) -> Unit = app::startActivity,
 ) {
     /**
-     * The take on offer: the exact text it typed, and the pin of its field (a new session of the same field once the card
-     * cost it its session); [written], the tidied text in its place, until Undo.
+     * The take on offer: the exact text it typed, where in the field it ends ([end]), and the pin of its field (a new
+     * session of the same field once the card cost it its session); [written], the tidied text in its place, until Undo.
      */
-    private class Offer(var pin: Pin, val take: String) {
+    private class Offer(var pin: Pin, val take: String, var end: Int) {
         var written: String? = null
     }
 
     private val scope = MainScope()
     private var offer: Offer? = null
+        set(value) {
+            field = value
+            live = value
+        }
+
+    // The offer as the field calls see it from the io thread: a write goes ahead only while it is still this one.
+    @Volatile private var live: Offer? = null
+    private var asking: Any? = null // the read of a new take's end, until it answers
+    private var job: Job? = null // the write or Undo that runs
     private var card: WeakReference<Activity>? = null
     private var opening = false // the card was asked for and has not closed yet
-    private var writing = false // a write or an Undo runs
+    private var writing = false
     private var pending: String? = null // the card's answer, written once the card has closed
 
     /** Gemini Nano's last known FeatureStatus, from Settings or the card; null until checked. UNAVAILABLE hides the sparkle. */
@@ -70,16 +82,42 @@ class Cleanup(
 
     private fun redraw() = draw(sparkle)
 
-    /** A take was typed and verified through [pin]; [take] is the exact text written. The sparkle offers to tidy it. */
+    /**
+     * A take was typed and verified through [pin]; [take] is the exact text written. Where it ends in the field is read
+     * first; then the sparkle offers to tidy it. A field that can't say where (no offset, no node) gets no sparkle.
+     */
     fun offer(pin: Pin, take: String) {
-        close()
-        offer = Offer(pin, take).takeIf { enabled() && status != FeatureStatus.UNAVAILABLE && take.isNotBlank() }
-        redraw()
+        clear()
+        if (!enabled() || status == FeatureStatus.UNAVAILABLE || take.isBlank()) return
+        val ask = Any()
+        asking = ask
+        scope.launch {
+            val end = try {
+                withContext(io) { port.cursorEnd(pin, take) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "cleanup_offer_error ${e.javaClass.name}")
+                null
+            }
+            if (asking !== ask) return@launch
+            asking = null
+            if (end == null) {
+                Log.i(TAG, "cleanup_no_offer")
+                return@launch
+            }
+            offer = Offer(pin, take, end)
+            redraw()
+        }
     }
 
-    /** A new take, another field, or the service gone: the sparkle goes, and an open card closes. */
+    /** A new take, another field, or the service gone: the sparkle goes, an open card closes, and a write stops. */
     fun clear() {
         close()
+        asking = null
+        job?.cancel()
+        job = null
+        writing = false
         offer = null
         redraw()
     }
@@ -95,15 +133,12 @@ class Cleanup(
      */
     fun followFocus(pin: Pin?) {
         val offer = offer ?: return
-        if (!opening && !writing && pin != null && !sameField(pin, offer.pin)) clear()
+        if (!opening && !writing && pin != null && pin.generation != offer.pin.generation && !sameField(pin, offer.pin)) clear()
     }
 
-    /**
-     * [pin] is [of]'s field, maybe in a new session: the same app, window and node. A pin that named no node (no focus
-     * event yet at its press) matches any field of its app; the write still needs the take right before the cursor.
-     */
+    /** [pin] is [of]'s field in a new session: the same app, window and node. A pin that named no node matches only itself. */
     private fun sameField(pin: Pin, of: Pin) =
-        pin.packageName == of.packageName && (of.nodeKey.isEmpty() || (pin.windowId == of.windowId && pin.nodeKey == of.nodeKey))
+        of.nodeKey.isNotEmpty() && pin.packageName == of.packageName && pin.windowId == of.windowId && pin.nodeKey == of.nodeKey
 
     /** The sparkle's tap or [hold]: tidy (the card), cancel the card, or Undo. */
     fun tap(hold: Boolean) {
@@ -115,7 +150,7 @@ class Cleanup(
                 redraw()
             }
             offer.written != null -> undo(offer)
-            else -> open(hold)
+            else -> open(hold || previewFirst())
         }
     }
 
@@ -142,7 +177,7 @@ class Cleanup(
         return true
     }
 
-    /** The card went, however it closed; its answer, if it gave one, is written now. */
+    /** The card went, however it closed; the answer it handed over, if any, is written now. */
     fun detach(activity: Activity) {
         if (card?.get() !== activity) return
         card = null
@@ -154,10 +189,10 @@ class Cleanup(
 
     /**
      * The card's checked answer, written once the card has closed: a web page's field loses its focus and input session
-     * while another app is in front, and gets them back only then.
+     * while another app is in front, and gets them back only then. Only from the card that is up, while it is up.
      */
-    fun deliver(cleaned: String) {
-        if (opening) pending = cleaned
+    fun deliver(activity: Activity, cleaned: String) {
+        if (opening && card?.get() === activity) pending = cleaned
     }
 
     private fun close() {
@@ -174,35 +209,60 @@ class Cleanup(
     fun check(style: CleanupStyle, output: String?): CleanupCheck.Verdict =
         offer?.let { CleanupCheck.check(it.take, output, style) } ?: CleanupCheck.Verdict.Rejected("gone")
 
-    /**
-     * Writes [cleaned] in place of the take, then calls [done] with whether it did. A field that changed gets nothing
-     * and a toast says so; after a write the sparkle offers Undo.
-     */
-    fun write(cleaned: String, done: (Boolean) -> Unit = {}) {
-        val offer = offer ?: return done(false)
-        writing = true
-        redraw()
-        scope.launch {
-            val pin = withContext(io) { field(offer.pin) }
-            val (result, payload) = if (pin == null) refused("session") to "" else guarded { replace(pin, offer.take, cleaned) }
-            writing = false
-            Log.i(TAG, "cleanup_write result=$result")
-            if (pin != null && result == Replaced.DONE) offer.pin = pin
-            if (this@Cleanup.offer === offer) if (result == Replaced.DONE) offer.written = payload else fail(result)
-            redraw()
-            done(result == Replaced.DONE)
+    /** Writes [cleaned] in place of the take. A field that changed gets nothing and a toast says so; after a write, Undo. */
+    fun write(cleaned: String) {
+        val offer = offer ?: return
+        var payload = ""
+        run(offer, "cleanup_write", block = { pin ->
+            val around = port.readSurrounding(pin, offer.take.length + 64, 64) ?: return@run refused("read")
+            payload = CleanupCheck.replacement(around.before, offer.take, cleaned, around.after, port.inputType())
+                ?: return@run refused("moved")
+            if (!writable(pin)) Replaced.UNCHANGED else port.replaceBeforeCursor(pin, offer.take, payload, offer.end) { live === offer }
+        }) {
+            offer.written = payload
+            offer.end += payload.length - offer.take.length
         }
     }
 
     private fun undo(offer: Offer) {
         val written = offer.written ?: return
+        run(offer, "cleanup_undo", block = { pin -> port.replaceBeforeCursor(pin, written, offer.take, offer.end) { live === offer } }) {
+            offer.written = null
+            offer.end += offer.take.length - written.length
+        }
+    }
+
+    /**
+     * Runs one write for [offer] on [io], through its field ([field]); [block] makes it, and [done] follows on main once it
+     * landed. The sparkle turns meanwhile; a write that didn't land ends the offer, with a toast.
+     */
+    private fun run(offer: Offer, log: String, block: (Pin) -> Replaced, done: () -> Unit) {
         writing = true
         redraw()
-        scope.launch {
-            val (result, _) = guarded { put(offer.pin, written, offer.take) to offer.take }
+        job = scope.launch {
+            var used: Pin? = null
+            val result = try {
+                withContext(io) {
+                    val pin = field(offer.pin) ?: return@withContext refused("session")
+                    used = pin
+                    if (live !== offer || !writable(pin)) Replaced.UNCHANGED else block(pin)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "${log}_error ${e.javaClass.name}") // the class only: a message can carry text
+                Replaced.UNSURE // a write may have gone out
+            }
             writing = false
-            Log.i(TAG, "cleanup_undo result=$result")
-            if (this@Cleanup.offer === offer) if (result == Replaced.DONE) offer.written = null else fail(result)
+            Log.i(TAG, "$log result=$result")
+            if (this@Cleanup.offer === offer) {
+                if (result == Replaced.DONE) {
+                    used?.let { offer.pin = it }
+                    done()
+                } else {
+                    fail(result)
+                }
+            }
             redraw()
         }
     }
@@ -228,28 +288,6 @@ class Cleanup(
         }
         return null
     }
-
-    /** Runs [block] on [io]. An unexpected exception (an accessibility call) reads as UNSURE: a write may have gone out. */
-    private suspend fun guarded(block: () -> Pair<Replaced, String>): Pair<Replaced, String> = try {
-        withContext(io) { block() }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Log.w(TAG, "cleanup_write_error ${e.javaClass.name}") // the class only: a message can carry text
-        Replaced.UNSURE to ""
-    }
-
-    /** Off main: [cleaned], formatted against the text before the take as the take was, in the take's place. */
-    private fun replace(pin: Pin, take: String, cleaned: String): Pair<Replaced, String> {
-        if (!writable(pin)) return Replaced.UNCHANGED to ""
-        val around = port.readSurrounding(pin, take.length + 64, 64) ?: return refused("read") to ""
-        val payload = CleanupCheck.replacement(around.before, take, cleaned, around.after, port.inputType())
-            ?: return refused("moved") to ""
-        return put(pin, take, payload) to payload
-    }
-
-    private fun put(pin: Pin, old: String, new: String): Replaced =
-        if (writable(pin)) port.replaceBeforeCursor(pin, old, new) else Replaced.UNCHANGED
 
     /** The take's field still holds its session and focus, and is no password field (focus can reach one meanwhile). */
     private fun writable(pin: Pin): Boolean = when {

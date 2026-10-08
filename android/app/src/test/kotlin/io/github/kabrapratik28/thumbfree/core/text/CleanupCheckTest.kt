@@ -74,6 +74,35 @@ class CleanupCheckTest {
             .isEqualTo(CleanupCheck.Verdict.Ok("Are you coming tonight?"))
     }
 
+    // Found in the Codex review (2026-10-07): a swapped word, swapped roles, a lost or moved negation, a changed number.
+    @Test
+    fun cleanKeepsWhoDidWhatAndHowMuch() {
+        val bad = listOf(
+            "stop" to "Go!",
+            "send the contract to alice tomorrow" to "Send the contract to Bob tomorrow.",
+            "bob owes alice 50" to "Alice owes Bob 50.",
+            "I have no allergies" to "I have allergies.",
+            "he was not injured and she was hurt" to "He was injured and she was not hurt.",
+            "I paid 5 dollars" to "I paid 5,000 dollars.",
+            "I have two cats" to "I have 900 cats.",
+            "meet at twenty five no thirty five" to "Meet at 30.",
+        )
+        for ((take, out) in bad) {
+            assertWithMessage(take).that(CleanupCheck.check(take, out, CleanupStyle.CLEAN)).isInstanceOf(CleanupCheck.Verdict.Rejected::class.java)
+        }
+        val good = listOf(
+            "meet at twenty five no thirty five" to "Meet at 35.",
+            "five" to "5.",
+            "the code is 4 8 1 5" to "The code is 4815.",
+            "the invoice for twelve hundred dollars is due" to "The invoice for $1,200 is due.",
+            "version two point three ships at ten to midnight" to "Version 2.3 ships at 10:00 to midnight.",
+            "there is no milk" to "There is no milk.",
+        )
+        for ((take, out) in good) {
+            assertWithMessage(take).that(CleanupCheck.check(take, out, CleanupStyle.CLEAN)).isEqualTo(CleanupCheck.Verdict.Ok(out))
+        }
+    }
+
     // Gemini Nano once answered Friendly with the cleaned text, a label and the rewrite: a paragraph nobody asked for.
     @Test
     fun aSecondVersionIsRejected() {

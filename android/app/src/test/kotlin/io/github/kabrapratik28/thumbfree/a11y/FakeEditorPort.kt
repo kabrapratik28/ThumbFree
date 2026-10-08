@@ -86,10 +86,20 @@ class FakeEditorPort : EditorPort {
         return pastes
     }
 
-    override fun replaceBeforeCursor(pin: Pin, old: String, new: String): Replaced {
+    var cursorEnds = ArrayDeque<Int?>()                  // one answer per cursorEnd, then 100
+    val ends = mutableListOf<Int>()                      // the end each replaceBeforeCursor was asked for
+
+    override fun cursorEnd(pin: Pin, take: String): Int? {
+        read("cursorEnd")
+        if (pin.generation != field) return null
+        return if (cursorEnds.isEmpty()) 100 else cursorEnds.removeFirst()
+    }
+
+    override fun replaceBeforeCursor(pin: Pin, old: String, new: String, end: Int, live: () -> Boolean): Replaced {
         read("replaceBeforeCursor")
+        if (pin.generation != field || !live()) return Replaced.UNCHANGED
         replaced += old to new
-        if (pin.generation != field) return Replaced.UNCHANGED
+        ends += end
         return replaceAnswers.removeFirstOrNull() ?: Replaced.DONE
     }
 

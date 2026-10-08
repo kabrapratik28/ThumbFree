@@ -29,13 +29,20 @@ class CleanupTest {
     private val pin = Pin("com.example", 1, "n1", 1)
     private val take = " yes yes see you at six no seven" // as typed after "Hi Maya!"
     private var on = true
+    private var preview = false
     private var drawn: Sparkle? = null
     private val toasts = mutableListOf<Int>()
     private val started = mutableListOf<Intent>()
     private val cleanup = Cleanup(
         app, port, enabled = { on }, draw = { drawn = it }, anchor = { Rect(900, 1500, 1032, 1632) },
-        io = Dispatchers.Unconfined, toast = { toasts += it }, start = { started += it },
+        io = Dispatchers.Unconfined, previewFirst = { preview }, toast = { toasts += it }, start = { started += it },
     )
+
+    /** Offers [take] and lets the read of where it ends answer. */
+    private fun offered(take: String = this.take, pin: Pin = this.pin) {
+        cleanup.offer(pin, take)
+        idle()
+    }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
@@ -43,17 +50,17 @@ class CleanupTest {
     // on the phone, it never comes.
     @Test
     fun aTypedTakeOffersTheSparkle() {
-        cleanup.offer(pin, take)
+        offered()
         assertThat(drawn).isEqualTo(Sparkle.OFFER)
         cleanup.clear()
         assertThat(drawn).isNull()
 
         on = false
-        cleanup.offer(pin, take)
+        offered()
         assertThat(drawn).isNull()
         on = true
         cleanup.status = FeatureStatus.UNAVAILABLE
-        cleanup.offer(pin, take)
+        offered()
         assertThat(drawn).isNull()
     }
 
@@ -61,7 +68,7 @@ class CleanupTest {
     // then closes the card. The card gets the take's words without the space it was typed with.
     @Test
     fun aTapOpensTheCardAndAHoldTheStyles() {
-        cleanup.offer(pin, take)
+        offered()
         cleanup.tap(hold = false)
         assertThat(started.single().getBooleanExtra(CleanupActivity.EXTRA_STYLES, true)).isFalse()
         assertThat(drawn).isEqualTo(Sparkle.WORKING)
@@ -79,17 +86,17 @@ class CleanupTest {
     @Test
     fun aWriteReplacesTheTakeAndUndoPutsItBack() {
         port.surroundings += Surrounding("Hi Maya!$take", "", 0)
-        cleanup.offer(pin, take)
-        var wrote: Boolean? = null
-        cleanup.write("See you at 7.") { wrote = it }
+        offered()
+        cleanup.write("See you at 7.")
         idle()
-        assertThat(wrote).isTrue()
         assertThat(port.replaced).containsExactly(take to " See you at 7.")
+        assertThat(port.ends).containsExactly(100) // where the take ended, read when it was typed
         assertThat(drawn).isEqualTo(Sparkle.UNDO)
 
         cleanup.tap(hold = false)
         idle()
         assertThat(port.replaced.last()).isEqualTo(" See you at 7." to take)
+        assertThat(port.ends.last()).isEqualTo(100 + " See you at 7.".length - take.length)
         assertThat(drawn).isEqualTo(Sparkle.OFFER)
         assertThat(toasts).isEmpty()
     }
@@ -99,7 +106,7 @@ class CleanupTest {
     @Test
     fun aChangedFieldGetsNothing() {
         port.surroundings += Surrounding("Hi Maya!$take, ok", "", 0)
-        cleanup.offer(pin, take)
+        offered()
         cleanup.write("See you at 7.")
         idle()
         assertThat(port.replaced).isEmpty()
@@ -108,25 +115,50 @@ class CleanupTest {
 
         port.password = true
         port.surroundings += Surrounding("Hi Maya!$take", "", 0)
-        cleanup.offer(pin, take)
+        offered()
         cleanup.write("See you at 7.")
         idle()
         assertThat(port.replaced).isEmpty()
 
         port.password = false
         port.replaceAnswers += Replaced.UNSURE
-        cleanup.offer(pin, take)
+        offered()
         cleanup.write("See you at 7.")
         idle()
         assertThat(toasts.last()).isEqualTo(R.string.cleanup_check_text)
         assertThat(drawn).isNull()
     }
 
+    // A field that can't say where the take ends gets no sparkle; a cleared offer's write never runs.
+    @Test
+    fun noPlaceNoSparkleAndAClearedWriteNeverRuns() {
+        port.cursorEnds += null
+        offered()
+        assertThat(drawn).isNull()
+
+        port.surroundings += Surrounding("Hi Maya!$take", "", 0)
+        offered()
+        cleanup.write("See you at 7.")
+        cleanup.clear() // a new take starts before the write ran
+        idle()
+        assertThat(port.replaced).isEmpty()
+        assertThat(drawn).isNull()
+    }
+
+    // A tap with another default style than Clean shows its answer first, in the styles card.
+    @Test
+    fun aToneByDefaultShowsItsAnswerFirst() {
+        preview = true
+        offered()
+        cleanup.tap(hold = false)
+        assertThat(started.single().getBooleanExtra(CleanupActivity.EXTRA_STYLES, false)).isTrue()
+    }
+
     // Focus on another field ends the offer, unless the card is up: it can hide the bubble for its moment. A new
     // session of the same field keeps it.
     @Test
     fun anotherFieldEndsTheOffer() {
-        cleanup.offer(pin, take)
+        offered()
         cleanup.followFocus(pin.copy(generation = 2))
         assertThat(drawn).isEqualTo(Sparkle.OFFER)
         cleanup.tap(hold = false)
@@ -140,15 +172,17 @@ class CleanupTest {
         assertThat(drawn).isNull()
     }
 
-    // The card's answer is written once the card has closed, not while it is up.
+    // The card's answer is written once the card has closed, not while it is up, and only from the card that is up.
     @Test
     fun theCardsAnswerIsWrittenOnceTheCardCloses() {
         val card = Robolectric.buildActivity(android.app.Activity::class.java).get()
+        val stranger = Robolectric.buildActivity(android.app.Activity::class.java).get()
         port.surroundings += Surrounding("Hi Maya!$take", "", 0)
-        cleanup.offer(pin, take)
+        offered()
         cleanup.tap(hold = false)
         assertThat(cleanup.attach(card)).isTrue()
-        cleanup.deliver("See you at 7.")
+        cleanup.deliver(stranger, "Something else.")
+        cleanup.deliver(card, "See you at 7.")
         idle()
         assertThat(port.replaced).isEmpty()
 
@@ -163,7 +197,7 @@ class CleanupTest {
     @Test
     fun aFieldThatLostItsSessionIsWrittenInItsNewOne() {
         port.surroundings += Surrounding("Hi Maya!$take", "", 0)
-        cleanup.offer(pin, take)
+        offered()
         port.field = 2
         port.pin = pin.copy(generation = 2)
         cleanup.write("See you at 7.")
@@ -178,7 +212,7 @@ class CleanupTest {
     // The card's answer is checked against the take before anything is written.
     @Test
     fun theCardsAnswerIsChecked() {
-        cleanup.offer(pin, take)
+        offered()
         assertThat(cleanup.check(CleanupStyle.CLEAN, "See you at 7.")).isEqualTo(CleanupCheck.Verdict.Ok("See you at 7."))
         assertThat(cleanup.check(CleanupStyle.CLEAN, "Sure! Here is a poem about cats and dogs.")).isInstanceOf(CleanupCheck.Verdict.Rejected::class.java)
         cleanup.clear()

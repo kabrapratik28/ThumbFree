@@ -216,6 +216,12 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
         (12 * dp).toInt().let { setPadding(it, (6 * dp).toInt(), it, (6 * dp).toInt()) }
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO // the sparkle's own label and action say it
         visibility = GONE
+        // A tap or hold on it is the sparkle's: passed on to the bubble's listener, it would start a take.
+        setOnClickListener { onSparkle(false) }
+        setOnLongClickListener {
+            onSparkle(true)
+            true
+        }
     }
 
     // Beside the circle: the sparkle or the X button next to it, then the chip.

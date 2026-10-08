@@ -109,6 +109,10 @@ internal class TrialState : TrialHost {
     /** The take's words as heard, which Clean up's beat starts every style from; [words] may show a tidy of them. */
     var heard by mutableStateOf<String?>(null)
         private set
+
+    /** Counts takes and resets, so a tidy that comes late never lands on the next take's card. */
+    var takeNumber = 0
+        private set
     var unheard by mutableStateOf(false)
         private set
     var problem by mutableStateOf<Code?>(null)
@@ -147,6 +151,7 @@ internal class TrialState : TrialHost {
         when {
             ui is BubbleUi.Recording -> {
                 if (!listening) {
+                    takeNumber++
                     words = null
                     heard = null
                     unheard = false
@@ -194,15 +199,16 @@ internal class TrialState : TrialHost {
         heard = text
     }
 
-    /** Clean up's beat: the card shows [text], a tidy of the words as heard. */
-    fun tidied(text: String) {
-        words = text
+    /** Clean up's beat: the card shows [text], a tidy of the words as heard in take [number]. */
+    fun tidied(text: String, number: Int) {
+        if (number == takeNumber && heard != null) words = text
     }
 
     /** Forgets the try: nothing of it stays once its step goes. */
     fun reset() {
         listening = false
         level = 0f
+        takeNumber++
         done = false
         words = null
         heard = null

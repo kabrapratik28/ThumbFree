@@ -574,6 +574,11 @@ class BubbleViewTest {
         layOut()
         val pill = visible().filterIsInstance<TextView>().single { it.text.toString() == "Tap to tidy · Hold for styles" }
         assertThat(pill.offsetIn(view).first).isEqualTo(2 * view.sizePx) // after the circle and the sparkle
+        // A tap on the pill is the sparkle's, never a take's.
+        val taps = mutableListOf<Boolean>()
+        view.onSparkle = { taps += it }
+        pill.performClick()
+        assertThat(taps).containsExactly(false)
         view.sparkle = Sparkle.UNDO
         assertThat(texts()).doesNotContain("Tap to tidy · Hold for styles")
     }

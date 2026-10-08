@@ -65,6 +65,7 @@ internal fun CleanupTry(trial: TrialState) {
     var failed by remember(heard) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     fun run(style: CleanupStyle) {
+        val number = trial.takeNumber
         used = true
         picked = style
         busy = true
@@ -78,8 +79,8 @@ internal fun CleanupTry(trial: TrialState) {
                 null
             }
             when (val verdict = CleanupCheck.check(heard, answer, style)) {
-                is CleanupCheck.Verdict.Ok -> trial.tidied(verdict.text)
-                CleanupCheck.Verdict.Same -> trial.tidied(heard)
+                is CleanupCheck.Verdict.Ok -> trial.tidied(verdict.text, number)
+                CleanupCheck.Verdict.Same -> trial.tidied(heard, number)
                 is CleanupCheck.Verdict.Rejected -> failed = true
             }
             busy = false

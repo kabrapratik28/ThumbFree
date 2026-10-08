@@ -4,6 +4,7 @@ import android.util.Log
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
+import com.google.mlkit.genai.prompt.Candidate
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
@@ -47,6 +48,9 @@ object GeminiCleanup {
             delay(500)
             model.generateContent(request)
         }
-        return response.candidates.firstOrNull()?.text
+        val candidate = response.candidates.firstOrNull() ?: return null
+        // An answer cut off at the token limit could read as a tidy that dropped the take's end.
+        if (candidate.finishReason != null && candidate.finishReason != Candidate.FinishReason.STOP) return null
+        return candidate.text
     }
 }

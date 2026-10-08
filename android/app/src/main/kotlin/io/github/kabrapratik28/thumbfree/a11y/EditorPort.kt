@@ -53,7 +53,8 @@ interface EditorPort {
     suspend fun awaitSelectionChange(timeoutMs: Long): Boolean
     fun copyToClipboard(text: String): Boolean           // EXTRA_IS_SENSITIVE; false when the clip reads back different (a denied read counts as written)
     fun paste(): Boolean                                 // ACTION_PASTE on the focused node; false for a password node
-    fun replaceBeforeCursor(pin: Pin, old: String, new: String): Replaced   // blocking IPC: [old] right before the cursor becomes [new], one write
+    fun cursorEnd(pin: Pin, take: String): Int?          // blocking IPC: the cursor's index in the field, when nothing is selected and [take] is right before it
+    fun replaceBeforeCursor(pin: Pin, old: String, new: String, end: Int, live: () -> Boolean): Replaced   // blocking IPC: [old], ending at [end] right before the cursor, becomes [new]; one write
 }
 
 /** The real port over DictationAccessibilityService.instance and its EditorSession. */
@@ -154,13 +155,27 @@ class AccessibilityEditorPort(private val context: Context) : EditorPort {
         return readBack.getItemAt(0).text?.toString() == text
     }
 
+    /** Where Clean up's take ends in the field, read right after it was typed, so a later write knows it is the same words. */
+    override fun cursorEnd(pin: Pin, take: String): Int? {
+        val connection = connection(pin) ?: return null
+        val window = connection.getSurroundingText(take.length, 0, 0) ?: return null
+        val cursor = window.selectionStart
+        if (cursor != window.selectionEnd || cursor !in take.length..window.text.length) return null
+        if (!window.text.substring(0, cursor).toString().endsWith(take)) return null
+        val origin = if (window.offset >= 0) window.offset else (nodeCursor()?.minus(cursor) ?: return null)
+        return origin + cursor
+    }
+
     /**
-     * Clean up's one write, after the user's tap: [old] must sit right before a cursor with nothing selected, in [pin]'s
-     * own field. It is selected, the selection is read back to cover exactly [old], and [new] is committed over it, never
-     * deleted first, so a write that fails loses no words. Then one read back: the words that were before [old], then
-     * [new], right before the cursor. An app that ignored the selection shows both, which reads as UNSURE.
+     * Clean up's one write, after the user's tap: [old] must end at [end], right before a cursor with nothing selected, in
+     * [pin]'s own field: the same words the take typed, not the same text elsewhere. It is selected, the selection is read
+     * back to cover exactly [old], the field is checked again (its node, no password field, [live]: the offer still
+     * stands), and [new] is committed over it, never deleted first, so a write that fails loses no words. Then one read
+     * back: the words that were before [old], then [new], right before the cursor. An app that ignored the selection shows
+     * both, which reads as UNSURE. A selection the user makes in the moment between the last check and the write would
+     * still be replaced: the accessibility connection has no atomic replace.
      */
-    override fun replaceBeforeCursor(pin: Pin, old: String, new: String): Replaced {
+    override fun replaceBeforeCursor(pin: Pin, old: String, new: String, end: Int, live: () -> Boolean): Replaced {
         fun refuse(why: String): Replaced {
             Log.i("ThumbFree", "cleanup_replace refused=$why") // a code, never text
             return Replaced.UNCHANGED
@@ -179,13 +194,19 @@ class AccessibilityEditorPort(private val context: Context) : EditorPort {
         // in the focused node's text tells it then.
         val origin = if (window.offset >= 0) window.offset else (nodeCursor()?.minus(cursor) ?: return refuse("offset"))
         val start = origin + kept.length
-        val end = start + old.length
+        if (start + old.length != end) return refuse("moved") // the same text, but not the take's own words
         connection.setSelection(start, end)
-        // A web page applies a selection a moment later, so the reads ask again for up to 300 ms.
-        val covers = settled { connection.getSurroundingText(0, 0, 0)?.let { it.selected() == old } == true }
+        // A web page applies a selection a moment later, so the reads ask again for up to 300 ms. Focus may move meanwhile.
+        val covers = settled { !sameNode(pin) || connection.getSurroundingText(0, 0, 0)?.let { it.selected() == old } == true }
+        if (!sameNode(pin)) return refuse("target") // another field's now: nothing more goes to this connection
         if (!covers) {
             connection.setSelection(end, end) // the cursor back where it was
             return refuse("covers")
+        }
+        if (this.connection(pin) !== connection || !sameNode(pin) || isPasswordTarget()) return refuse("target")
+        if (!live()) {
+            connection.setSelection(end, end)
+            return refuse("cleared")
         }
         connection.commitText(new, 1, null)
         val landed = settled {

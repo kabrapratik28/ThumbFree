@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -42,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
@@ -72,6 +74,7 @@ class CleanupActivity : ComponentActivity() {
     private val cleanup get() = AppGraph.ports.cleanup
     private var styles = false
     private var started = false
+    private var room = 400f // dp; set by place()
     private var job: Job? = null
 
     // The hold's card: the style picked, its answer as checked (null while it runs), and a failure's message.
@@ -122,6 +125,12 @@ class CleanupActivity : ComponentActivity() {
         run(AppGraph.settings.cleanupStyle)
     }
 
+    // Leaving the card (Back, another app) drops a model call still running: its answer goes nowhere.
+    override fun onPause() {
+        super.onPause()
+        if (isFinishing) job?.cancel()
+    }
+
     override fun onDestroy() {
         if (AppGraph.initialized) cleanup.detach(this)
         super.onDestroy()
@@ -138,6 +147,9 @@ class CleanupActivity : ComponentActivity() {
         val right = circle.centerX() > screen.centerX()
         val above = circle.top - screen.top > (if (styles) 380 else 120) * dp
         val gap = (8 * dp).toInt()
+        // The card's room between the bubble and the bars: a hold's card scrolls its body within it.
+        val bars = windowManager.currentWindowMetrics.windowInsets.getInsetsIgnoringVisibility(WindowInsets.Type.systemBars())
+        room = ((if (above) circle.top - screen.top - bars.top else screen.bottom - circle.bottom - bars.bottom) - 2 * gap) / dp
         window.setLayout(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)
         window.attributes = window.attributes.apply {
             fitInsetsTypes = 0
@@ -182,7 +194,8 @@ class CleanupActivity : ComponentActivity() {
             }
             when (checked) {
                 is Verdict.Ok -> {
-                    cleanup.deliver(checked.text)
+                    if (isFinishing || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@launch
+                    cleanup.deliver(this@CleanupActivity, checked.text)
                     finish()
                 }
                 Verdict.Same -> fail(R.string.cleanup_same, null)
@@ -221,17 +234,15 @@ class CleanupActivity : ComponentActivity() {
     @OptIn(ExperimentalLayoutApi::class)
     @Composable
     private fun StylesCard() = Card {
-        Column(Modifier.width(328.dp).padding(16.dp)) {
+        // The styles and the answer scroll within the card's room, so Cancel and Replace always show.
+        Column(Modifier.width(328.dp).heightIn(max = maxOf(room, 160f).dp).padding(16.dp)) {
+          Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (style in CleanupStyle.entries) {
                     FilterChip(selected = style == picked, onClick = { run(style) }, label = { Text(stringResource(styleName(style))) })
                 }
             }
-            // At most about six lines, scrolled, so Cancel and Replace always fit above the bubble.
-            Box(
-                Modifier.fillMaxWidth().heightIn(min = 72.dp, max = 168.dp).verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
+            Box(Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
                 val v = verdict
                 when {
                     problem != null -> Text(stringResource(problem!!), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -245,11 +256,12 @@ class CleanupActivity : ComponentActivity() {
                     else -> Text(stringResource(R.string.cleanup_pick), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+          }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = { finish() }) { Text(stringResource(R.string.cleanup_cancel)) }
                 Button(
                     onClick = {
-                        (verdict as? Verdict.Ok)?.let { cleanup.deliver(it.text) }
+                        (verdict as? Verdict.Ok)?.let { cleanup.deliver(this@CleanupActivity, it.text) }
                         finish()
                     },
                     enabled = verdict is Verdict.Ok && problem == null,
