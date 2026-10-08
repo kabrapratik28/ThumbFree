@@ -6,6 +6,7 @@ import TFCore
 enum CleanupWords {
     static let working = String(localized: "Cleaning up…")
     static let failed = String(localized: "Couldn't tidy this one. Your words are unchanged.")
+    static let nothing = String(localized: "Nothing to tidy. Your words are unchanged.")
     static let changed = String(localized: "The text changed, so it was left as is.")
     static let paused = String(localized: "Apple paused Clean up for a moment")
     /// Apple's rate limit with its end: "Apple paused Clean up. Ready in 0:40".

@@ -325,6 +325,8 @@ import UniformTypeIdentifiers
             take.original = take.typed
             take.typed = payload
             typedTake = take
+        case .same:
+            say(CleanupWords.nothing)
         case .paused:
             pausedUntil = (result.resetAt ?? Date().addingTimeInterval(5), result.resetAt != nil)
         case .failed, .unavailable:

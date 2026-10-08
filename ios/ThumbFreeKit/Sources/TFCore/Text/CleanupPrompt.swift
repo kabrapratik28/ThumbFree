@@ -6,9 +6,9 @@ public enum CleanupStyle: String, Codable, Sendable, CaseIterable {
     case clean, shorter, friendly, professional, simple
 }
 
-/// What Clean up asks the on-device model. Instruction v2 (issue #1) is the session's instructions, short rules and
-/// five examples in a "Text:" and "Cleaned text:" format; the take goes in the prompt in the same format. Each style
-/// other than Clean adds one line after the examples.
+/// What Clean up asks the on-device model, in the Android app's words. Instruction v2 (issue #1) is the session's
+/// instructions, short rules and five examples in a "Text:" and "Cleaned text:" format; the take goes in the prompt in
+/// the same format. Each style other than Clean adds its line after the examples.
 public enum CleanupPrompt {
     /// Instruction v2, word for word.
     public static let rules = """
@@ -29,22 +29,27 @@ public enum CleanupPrompt {
         Cleaned text: What time does the store close?
         """
 
-    /// The session's instructions for `style`: the rules, and for every style but Clean its line. Friendly and
-    /// Professional may add a few words, for tone only; no style changes a fact.
-    public static func instructions(_ style: CleanupStyle) -> String {
-        let line: String
+    /// What a style asks for after the tidy, as on Android; it may change words for the tone, never facts, names or numbers.
+    public static func styleLine(_ style: CleanupStyle) -> String {
         switch style {
-        case .clean: return rules
-        case .shorter: line = "Then say it in fewer words."
-        case .friendly: line = "Then make it warm and casual. You may add a few words for tone."
-        case .professional: line = "Then make it polished and formal. You may add a few words for tone."
-        case .simple: line = "Then use plain words and short sentences."
+        case .clean: ""
+        case .shorter: "Then say it in fewer words. Keep every fact, name and number."
+        case .friendly: "Then make it warm and casual. You may change words for the tone; keep every fact, name and number."
+        case .professional: "Then make it polished and formal. You may change words for the tone; keep every fact, name and number."
+        case .simple: "Then use plain words and short sentences. Keep every fact, name and number."
         }
-        return rules + "\n" + line + " Keep the facts, names and numbers."
     }
 
-    /// The prompt for one take, in the examples' format.
-    public static func prompt(take: String) -> String {
-        "Text: \(take.trimmingCharacters(in: .whitespacesAndNewlines))\nCleaned text:"
+    /// The session's instructions for `style`: the rules, and for every style but Clean its line and a request for one
+    /// version with no label (asked otherwise, a small model answered with the tidy, a label and then the rewrite).
+    public static func instructions(_ style: CleanupStyle) -> String {
+        guard style != .clean else { return rules }
+        return rules + "\n\nStyle: " + styleLine(style) + " Reply with the rewritten text only: one version, no label, no notes."
+    }
+
+    /// The prompt for one take, in the examples' format: Clean ends on "Cleaned text:", every other style on its own
+    /// "Rewritten text:".
+    public static func prompt(take: String, style: CleanupStyle) -> String {
+        "Text: \(take.trimmingCharacters(in: .whitespacesAndNewlines))\n" + (style == .clean ? "Cleaned text:" : "Rewritten text:")
     }
 }

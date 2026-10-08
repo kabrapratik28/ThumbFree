@@ -77,10 +77,11 @@ public enum CleanupAvailability: String, Codable, Sendable {
 }
 
 /// The app's answer to one clean command (`requestID` is the command's id). `done` carries the text that passed the
-/// checks; `paused` is Apple's rate limit, with when it ends if iOS says (iOS 27); `failed` keeps the words as they
-/// are; `unavailable` means Apple Intelligence could not run. The app is the only writer of cleanups.json.
+/// checks; `same` means the take needed no tidying; `paused` is Apple's rate limit, with when it ends if iOS says (iOS
+/// 27); `failed` keeps the words as they are; `unavailable` means Apple Intelligence could not run. The app is the only
+/// writer of cleanups.json.
 public struct CleanupResult: Codable, Sendable, Equatable {
-    public enum State: String, Codable, Sendable { case done, failed, paused, unavailable }
+    public enum State: String, Codable, Sendable { case done, same, failed, paused, unavailable }
 
     public let requestID: UUID
     public let takeID: UUID

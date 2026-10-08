@@ -8,7 +8,7 @@ import TFCore
 /// keyboard, which replaces the take. Only the on-device system model, never Private Cloud Compute; greedy decoding;
 /// instruction v2 and the style's line as the session's instructions, the take as the prompt. One request at a time.
 @MainActor final class CleanUp {
-    private static let log = Logger(subsystem: Brand.bundleID, category: "cleanup")
+    nonisolated private static let log = Logger(subsystem: Brand.bundleID, category: "cleanup")
     /// A request that takes longer is answered as failed, so one stuck call never holds up the next.
     static let timeout = Duration.seconds(20)
 
@@ -77,9 +77,8 @@ import TFCore
             #if DEBUG
             if let fake {
                 try? await Task.sleep(for: .seconds(1))
-                let text = CleanupCheck.accept(take: take, output: fake, style: style)
-                let result = CleanupResult(requestID: command.id, takeID: command.takeID, state: text == nil ? .failed : .done,
-                                           text: text)
+                let result = Self.result(CleanupCheck.check(take: take, output: fake, style: style), requestID: command.id,
+                                         takeID: command.takeID)
                 self?.answer(result, ms: (ContinuousClock.now - started) / .milliseconds(1))
                 return
             }
@@ -99,7 +98,7 @@ import TFCore
             let output = try await withThrowingTaskGroup(of: String?.self) { group in
                 group.addTask {
                     let session = LanguageModelSession(model: model, instructions: CleanupPrompt.instructions(style))
-                    let response = try await session.respond(to: CleanupPrompt.prompt(take: take),
+                    let response = try await session.respond(to: CleanupPrompt.prompt(take: take, style: style),
                                                              options: GenerationOptions(samplingMode: .greedy))
                     return response.content
                 }
@@ -111,14 +110,22 @@ import TFCore
                 group.cancelAll()
                 return first
             }
-            guard let text = CleanupCheck.accept(take: take, output: output, style: style) else {
-                return CleanupResult(requestID: requestID, takeID: takeID, state: .failed)
-            }
-            return CleanupResult(requestID: requestID, takeID: takeID, state: .done, text: text)
+            return result(CleanupCheck.check(take: take, output: output, style: style), requestID: requestID, takeID: takeID)
         } catch {
             let limit = Self.rateLimit(error)
             return CleanupResult(requestID: requestID, takeID: takeID, state: limit.limited ? .paused : .failed,
                                  resetAt: limit.resetAt)
+        }
+    }
+
+    /// The checks' verdict as the keyboard's answer; a rejection's check is logged (a code, never text).
+    nonisolated static func result(_ verdict: CleanupVerdict, requestID: UUID, takeID: UUID) -> CleanupResult {
+        switch verdict {
+        case .ok(let text): return CleanupResult(requestID: requestID, takeID: takeID, state: .done, text: text)
+        case .same: return CleanupResult(requestID: requestID, takeID: takeID, state: .same)
+        case .rejected(let check):
+            log.notice("Clean up answer rejected: \(check, privacy: .public)")
+            return CleanupResult(requestID: requestID, takeID: takeID, state: .failed)
         }
     }
 
