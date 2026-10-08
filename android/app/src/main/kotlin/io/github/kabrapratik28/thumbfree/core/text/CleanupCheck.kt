@@ -65,7 +65,7 @@ object CleanupCheck {
         val outNots = negations(outWords)
         // "I can't" opens a refusal, unless the speaker said they can't ("I won't be able to" may come back as "I cannot").
         val chatter = CHATTER.filter { !it.startsWith("i can") || takeNots.isEmpty() }
-        if (chatter.any { out.lowercase().startsWith(it) && !raw.lowercase().startsWith(it) }) return Verdict.Rejected("chatter")
+        if (chatter.any { opens(out, it) && !opens(raw, it) }) return Verdict.Rejected("chatter")
         // A second paragraph the speaker didn't ask for: a label and two versions, say ("Warm and casual version:").
         if ('\n' in out && '\n' !in raw && NEW_LINES.none { it in raw.lowercase() }) return Verdict.Rejected("lines")
         val known = takeWords.map(::key).toSet()
@@ -124,6 +124,12 @@ object CleanupCheck {
         val stayed = kept.filterIndexed { i, w -> i == 0 || w != kept[i - 1] }.filter { it in have }
         if (commonInOrder(stayed, have) < stayed.size) return "order"
         return null
+    }
+
+    /** [text] starts with the words [phrase], whole ("Surely" doesn't open with "sure"), with any apostrophe ("I can’t"). */
+    private fun opens(text: String, phrase: String): Boolean {
+        val lower = text.lowercase().replace('’', '\'')
+        return lower.startsWith(phrase) && (lower.length == phrase.length || !lower[phrase.length].isLetter())
     }
 
     /** The answer without an echoed label or one pair of surrounding quotes. */
@@ -197,6 +203,8 @@ object CleanupCheck {
         val have = outWords.map(::key).toSet()
         for (i in takeWords.indices) {
             if (!correction(takeWords, i)) continue
+            // In a chain ("monday no tuesday no wednesday") the last correction decides.
+            if ((i + 1..minOf(i + 3, takeWords.lastIndex)).any { correction(takeWords, it) }) continue
             val next = (i + 1..minOf(i + 3, takeWords.lastIndex)).map { takeWords[it] }.filter { it !in CORRECTIONS }
             if (next.any(::numberish)) continue
             val last = next.firstOrNull { it in WHEN_WORDS } ?: next.firstOrNull { anyWord && meaningful(it) } ?: continue
@@ -314,7 +322,13 @@ object CleanupCheck {
             if (!found) return false
             k = j + 1
         }
+        // What is left in the answer was said. A number the speaker took back may stay ("the fifth, no, the sixth works
+        // better"), but not joined to the one they kept as a range nobody said: "two no three bags" is not "2-3 bags".
         val all = said.map { it.value }
-        return given.all { it in all }
+        if (given.any { it !in all }) return false
+        return Regex("(\\p{Nd}+) *[-–] *(\\p{Nd}+)").findAll(out).none { m ->
+            val (a, b) = m.destructured
+            (a in given && b in required) || (b in given && a in required)
+        }
     }
 }

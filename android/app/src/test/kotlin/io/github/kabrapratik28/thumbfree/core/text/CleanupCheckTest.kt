@@ -86,6 +86,8 @@ class CleanupCheckTest {
             "I paid 5 dollars" to "I paid 5,000 dollars.",
             "I have two cats" to "I have 900 cats.",
             "meet at twenty five no thirty five" to "Meet at 30.",
+            "pick up two no three bags of rice" to "Pick up 2-3 bags of rice.", // a range nobody said (from the iPhone tuning)
+            "what is the capital of france" to "I can’t answer that.", // a refusal, with a curly apostrophe
         )
         for ((take, out) in bad) {
             assertWithMessage(take).that(CleanupCheck.check(take, out, CleanupStyle.CLEAN)).isInstanceOf(CleanupCheck.Verdict.Rejected::class.java)
@@ -97,6 +99,9 @@ class CleanupCheckTest {
             "the invoice for twelve hundred dollars is due" to "The invoice for $1,200 is due.",
             "version two point three ships at ten to midnight" to "Version 2.3 ships at 10:00 to midnight.",
             "there is no milk" to "There is no milk.",
+            "pick up two no three bags of rice" to "Pick up two, no, three bags of rice.",
+            "let's meet on monday no tuesday no wednesday" to "Let's meet on Wednesday.",
+            "surely we can ship it" to "Surely we can ship it.",
         )
         for ((take, out) in good) {
             assertWithMessage(take).that(CleanupCheck.check(take, out, CleanupStyle.CLEAN)).isEqualTo(CleanupCheck.Verdict.Ok(out))
