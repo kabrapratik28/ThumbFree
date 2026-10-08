@@ -299,7 +299,6 @@ class BubbleView(context: Context, private val onChip: (ChipAction) -> Unit) : F
         // The sparkle: the circle's target and disc, at the idle bubble's opacity.
         sparkleButton.layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
         sparkleButton.alpha = (style.opacity * 255 + 50) / 100 / 255f
-        sparkleTip.alpha = sparkleButton.alpha
     }
 
     fun render(ui: BubbleUi) {
