@@ -6,7 +6,8 @@ import TFCore
 /// Clean up in the app: the keyboard asks (a `clean` command) and the app, alive in the background through the live
 /// session, runs Apple's on-device model, checks the answer (`CleanupCheck`) and writes it to cleanups.json for the
 /// keyboard, which replaces the take. Only the on-device system model, never Private Cloud Compute; greedy decoding;
-/// instruction v2 and the style's line as the session's instructions, the take as the prompt. One request at a time.
+/// Clean's rules or the style's one rewrite task as the session's instructions, the take as the prompt. One request at a
+/// time.
 @MainActor final class CleanUp {
     nonisolated private static let log = Logger(subsystem: Brand.bundleID, category: "cleanup")
     /// A request that takes longer is answered as failed, so one stuck call never holds up the next.

@@ -24,6 +24,12 @@ import Testing
             "Hi Maya! Yes, I booked a table for 7:30 at Lucia's on Main Street. See you there!"),
         Row("I'm so I think we should meet at 5, no, 6, at the cafe on Main Street", "I think we should meet at 6 at the cafe on Main Street."),
         Row("call me at 555 1212 after lunch", "Call me at 555-1212 after lunch."),
+        Row("the client wants the draft by monday no tuesday morning", "The client wants the draft by Tuesday morning."),
+        Row("pick up two no three bags of rice", "Pick up 3 bags of rice."),
+        Row("it costs twenty five dollars no wait thirty dollars", "It costs $30."),
+        Row("send it to marco no sorry to luca by tonight", "Send it to Luca by tonight."),
+        Row("let's do thursday actually make it friday", "Let's do Friday."),
+        Row("it's at the cafe on main street no oak street", "It's at the cafe on Oak Street."),
         Row("can you call me back question mark it's about the invoice for two hundred dollars",
             "Can you call me back? It's about the invoice for $200."),
         Row("send it to anna dot lee at example dot com by friday", "Send it to anna.lee@example.com by Friday."),
@@ -38,13 +44,24 @@ import Testing
             "Yes! I got us a table for 7:30 at the Italian place. Can't wait!", .friendly),
         Row("Yes yes I booked a table for like seven no seven thirty at the Italian place on Main Street.",
             "Yes, booked for 7:30 at the Italian place on Main Street.", .shorter),
+        // Android's stylesKeepWhatTheSpeakerMeant: a negation said another way, the speaker's own "I can't", a shorter wording.
+        Row(sorry, "Please accept my apologies, but I will be unable to attend tomorrow's meeting due to a medical appointment.",
+            .professional),
+        Row(sorry, "I cannot attend tomorrow's meeting. I have a doctor's appointment.", .simple),
+        Row(sorry, "I won't be able to attend tomorrow's meeting due to a doctor's appointment.", .shorter),
+        Row("I can't make it on the fifth no the sixth works better for me", "I am unavailable on the fifth. The sixth is preferable.",
+            .professional),
         // Apple's on-device model on a Mac, the tuning round: good answers the first checks turned down.
         Row("uh so yeah I I was thinking we could we could grab lunch at noon tomorrow",
             "Yeah, I was thinking we could grab lunch at 12 tomorrow."), // noon is a number word
-        Row("it costs like forty five dollars no wait fifty five dollars", "It costs $55."), // a number's words are one word
+        Row("it costs like forty five dollars no wait fifty five dollars", "It costs $55."), // fifty may start 55
         Row("please ensure all documentation is submitted prior to the deadline on the fifteenth",
             "Please ensure all documentation is submitted prior to the deadline on the 15th.", .simple),
+        Row("the meeting is at three no sorry four thirty on thursday", "The meeting is at 4:30 on Thursday."),
+        Row(sorry, "I can't make the meeting tomorrow due to a doctor's appointment.", .shorter), // "won't" said as "can't"
     ]
+
+    static let sorry = "I am really sorry but I won't be able to make it to the meeting tomorrow because I have a doctor's appointment"
 
     @Test(arguments: good)
     func acceptsAGoodAnswer(_ row: Row) {
@@ -71,7 +88,20 @@ import Testing
              "Yes! I got us a table for 7:30 at the Italian place. Can't wait!"), "new_words"), // fine for Friendly, not Clean
         (Row("um so I I think we should meet at five no six", "Here's the cleaned text: I think we should meet at 6."), "chatter"),
         (Row("tell him the plan", "As an AI, I tell him the plan."), "chatter"),
-        (Row("this is so damn annoying I missed the bus again and now I am late for work", "I missed the bus."), "dropped"),
+        (Row("this is so damn annoying I missed the bus again and now I am late for work", "I missed the bus."), "dropped_words"),
+        // The speaker's correction undone, as Gemini Nano did it: a "not" from a "no", or the first version kept.
+        (Row("the client wants the draft by monday no tuesday morning", "The client wants the draft by Monday, not Tuesday morning."),
+         "negation_added"),
+        (Row("the client wants the draft by monday no tuesday morning", "The client wants the draft by Monday."), "dropped_words"),
+        (Row("pick up two no three bags of rice", "Pick up 2 bags of rice."), "correction"),
+        (Row("it's at the cafe on main street no oak street", "It's at the cafe on Main Street."), "correction"),
+        (Row("meet at nine no ten", "Meet at 15."), "correction"), // only twenty to ninety start a longer number
+        // Apple's model, the tuning round: the first version kept, or both.
+        (Row("um the password is tango seven seven no tango seven eight", "The password is tango 7 7."), "correction"),
+        (Row("pick up two no three bags of rice", "Pick up 2-3 bags of rice."), "correction"),
+        (Row("so I wanted to tell you the delivery is coming wednesday no thursday afternoon between two and four",
+             "I wanted to tell you the delivery is coming Wednesday, Thursday afternoon between 2 and 4.", .shorter), "correction"),
+        (Row("write me a song about friday", "I can't help with that.", .friendly), "chatter"), // the speaker said no "can't"
         (Row("I have never been there", "I have been there."), "negation"),
         (Row("I no longer work there", "I work there."), "negation"),
         (Row("Yes yes I booked a table for like seven no seven thirty at the Italian place on Main Street.", "Booked.", .shorter),
@@ -92,7 +122,7 @@ import Testing
     @Test func dropsALabelAndQuotes() {
         #expect(CleanupCheck.check(take: "are you coming tonight", output: "Cleaned text: \"Are you coming tonight?\"", style: .clean)
             == .ok("Are you coming tonight?"))
-        #expect(CleanupCheck.check(take: "are you coming tonight", output: "Rewritten text: Are you coming tonight?", style: .friendly)
+        #expect(CleanupCheck.check(take: "are you coming tonight", output: "Friendly version: Are you coming tonight?", style: .friendly)
             == .ok("Are you coming tonight?"))
         #expect(CleanupCheck.check(take: "he said \"hi\" twice twice", output: "He said \"hi\" twice.", style: .clean) == .ok("He said \"hi\" twice."))
     }

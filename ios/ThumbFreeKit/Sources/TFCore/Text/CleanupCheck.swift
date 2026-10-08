@@ -8,37 +8,55 @@ public enum CleanupVerdict: Equatable, Sendable {
     case rejected(String)
 }
 
-/// The checks a model's answer must pass before it may replace the person's words (issue #1, part 4), ported rule for
-/// rule from the Android app's `CleanupCheck` with its test rows: anything that could change the message's meaning keeps
-/// the words as they are. A small on-device model sometimes answers the text, chats, adds a second version, drops a
-/// sentence or a word that matters, switches alphabet, loses a "not", or invents or loses a number.
+/// The checks a model's answer must pass before it may replace the person's words (issue #1, part 4), the Android app's
+/// `CleanupCheck` with its test rows (tuned on the Pixel's Gemini Nano, 2026-10-07) and rows from Apple's on-device
+/// model, which also shaped the correction check: anything that could change the message's meaning keeps the words. A
+/// small on-device model sometimes answers the text, chats, adds a second version, drops a word that matters, undoes a
+/// self-correction, switches alphabet, loses or adds a "not", or invents or loses a number.
 public enum CleanupCheck {
     /// Openers of a reply about the text rather than the text itself.
     static let chatter = ["sure", "here is", "here's", "i can't", "i cannot", "as an ai", "certainly", "of course"]
-    static let negations = ["not", "never", "no longer", "cannot"]
-    /// Words Clean may drop or turn into marks and digits: function words, fillers, self-correction markers and spoken
-    /// punctuation. Every other word of the take must survive a Clean (one may go, for a correction).
+    static let negations = ["not", "never", "no longer", "cannot", "unable", "unavailable", "nothing", "none", "nobody",
+                            "nowhere", "neither"]
+    /// Words Clean may drop or turn into marks and digits: function words, fillers and spoken punctuation. Every other
+    /// word of the take must survive a Clean (one may go), but for what a correction replaced.
     static let functionWords: Set<String> = [
         "a", "an", "the", "and", "or", "but", "so", "to", "of", "in", "on", "at", "by", "for", "with", "from", "is", "are",
         "was", "were", "be", "been", "am", "it", "this", "that", "i", "you", "he", "she", "we", "they", "me", "my", "your",
         "our", "their", "its", "do", "does", "did", "have", "has", "had", "will", "would", "can", "could", "should",
-        "just", "really", "very", "then", "there", "here", "um", "uh", "er", "erm", "hmm", "like", "no", "sorry", "wait",
+        "just", "really", "very", "then", "there", "here", "um", "uh", "er", "erm", "hmm", "like", "no", "wait",
         "actually", "mean", "know", "comma", "period", "question", "mark", "exclamation", "colon", "new", "line",
         "paragraph", "dot",
     ]
+    /// Words a correction's final version is checked for first: the dates and times a wrong pick would change.
+    static let whenWords: Set<String> = [
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "today", "tonight", "tomorrow",
+        "yesterday", "morning", "afternoon", "evening", "january", "february", "march", "april", "may", "june", "july",
+        "august", "september", "october", "november", "december",
+    ]
+    static let tens = ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+    /// Number words and their digits: zero to nineteen, and the tens.
+    static let digitOf: [String: String] = {
+        let units = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+                     "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+        var map: [String: String] = [:]
+        for (i, word) in units.enumerated() { map[word] = String(i) }
+        for (i, word) in tens.enumerated() { map[word] = String((i + 2) * 10) }
+        return map
+    }()
     /// A take that asks for a new line may get one.
     static let newLines = ["new line", "newline", "new paragraph", "next line"]
-    /// Words with which a speaker takes a number back ("at 5, no, 6").
+    /// Words with which a speaker takes something back ("at 5, no, 6", "Marco, sorry, Luca").
     static let corrections: Set<String> = ["no", "sorry", "mean", "actually", "wait", "rather"]
     static let numberWords: Set<String> = [
         "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
         "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty",
         "fifty", "sixty", "seventy", "eighty", "ninety", "hundred", "thousand", "million", "billion", "percent", "dollar",
         "dollars", "cents", "o'clock", "pm", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
-        "ninth", "tenth", "half", "quarter",
-        // Found tuning on Apple's model: words it writes as digits ("noon" as 12, "the fifteenth" as the 15th).
-        "noon", "midnight", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth",
-        "eighteenth", "nineteenth", "twentieth", "thirtieth", "hundredth", "thousandth",
+        "ninth", "tenth", "half", "quarter", "noon", "midnight",
+        // Found tuning on Apple's model: ordinals it writes as digits ("the fifteenth" as the 15th).
+        "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth",
+        "nineteenth", "twentieth", "thirtieth", "hundredth", "thousandth",
     ]
 
     public static func check(take: String, output: String?, style: CleanupStyle) -> CleanupVerdict {
@@ -48,31 +66,55 @@ public enum CleanupCheck {
         if out.isEmpty { return .rejected("empty") }
         if out == raw { return .same }
         let lowerRaw = straight(raw.lowercased()), lowerOut = straight(out.lowercased())
-        if chatter.contains(where: { starts(lowerOut, with: $0) && !starts(lowerRaw, with: $0) }) { return .rejected("chatter") }
+        let saidNo = negated(lowerRaw)
+        // "I can't" opens a refusal, unless the speaker said they can't ("I won't be able to" may come back as "I cannot").
+        let openers = chatter.filter { !$0.hasPrefix("i can") || !saidNo }
+        if openers.contains(where: { starts(lowerOut, with: $0) && !starts(lowerRaw, with: $0) }) { return .rejected("chatter") }
         // A paragraph the speaker didn't ask for: a label and a second version, say ("Warm and casual version:").
         if out.contains("\n"), !raw.contains("\n"), !newLines.contains(where: lowerRaw.contains) { return .rejected("lines") }
         let takeWords = words(raw), outWords = words(out)
         let known = Set(takeWords)
         let added = outWords.filter { !known.contains($0) && !hasDigit($0) }.count
         let tone = style == .friendly || style == .professional || style == .simple
-        if added > (tone ? max(4, outWords.count / 2) : max(2, outWords.count / 5)) { return .rejected("new_words") }
-        if Double(length(outWords)) < Double(length(takeWords)) * (style == .shorter ? 0.25 : 0.4) { return .rejected("dropped") }
+        // A tone may reword most of it; a hold shows its answer first. Shorter may say "can't attend" for "won't be able
+        // to make it".
+        let addedLimit = tone ? max(6, outWords.count * 7 / 10)
+            : style == .shorter ? max(4, outWords.count / 3) : max(2, outWords.count / 5)
+        if added > addedLimit { return .rejected("new_words") }
+        // Clean checks the words that carry meaning instead: a self-correction can take most of a short take away
+        // ("twenty five dollars no wait thirty dollars" is "$30").
+        if style != .clean, Double(outWords.count) < Double(takeWords.count) * (style == .shorter ? 0.25 : 0.4) {
+            return .rejected("dropped")
+        }
         if style == .clean {
-            let meaningful = Set(takeWords.filter { !functionWords.contains($0) && !numberWords.contains($0) && !hasDigit($0) })
+            // What a correction replaced may go: the three words before "no", "sorry", "actually"...
+            let replaced = Set(takeWords.indices.filter { next(takeWords, after: $0).contains(where: corrections.contains) })
+            let meaningful = Set(takeWords.indices.filter { i in
+                let word = takeWords[i]
+                return !replaced.contains(i) && !corrections.contains(word) && !functionWords.contains(word)
+                    && !numberWords.contains(word) && !hasDigit(word)
+            }.map { takeWords[$0] })
             let have = Set(outWords)
             let missing = meaningful.filter { !have.contains($0) }.count
             if Double(missing) > max(1, Double(meaningful.count) * 0.3) { return .rejected("dropped_words") }
         }
         if let script = mainScript(raw), let other = mainScript(out), script != other { return .rejected("script") }
-        if negated(lowerRaw) && !negated(lowerOut) { return .rejected("negation") }
+        if saidNo && !negated(lowerOut) { return .rejected("negation") }
+        // A "no" that corrects the speaker is no "not": "by monday no tuesday" once came back as "by Monday, not
+        // Tuesday". A tone may add an idiom ("Can't wait!"), and a hold shows its answer first.
+        if !tone && !saidNo && negated(lowerOut) { return .rejected("negation_added") }
         if !numbersKept(takeWords, out) { return .rejected("digits") }
+        if !finalsKept(takeWords, outWords, out, anyWord: !tone, saysNo: negated(lowerOut)) {
+            return .rejected("correction")
+        }
         return .ok(out)
     }
 
-    /// The answer without an echoed "Cleaned text:" or "Rewritten text:" label, or quotes around it the take did not have.
+    /// The answer without an echoed label ("Cleaned text:", "Shorter version:"...), or quotes around it the take did
+    /// not have.
     static func tidy(_ output: String, take: String) -> String {
         var text = output.trimmingCharacters(in: .whitespacesAndNewlines)
-        for label in ["cleaned text:", "rewritten text:"] where text.lowercased().hasPrefix(label) {
+        for label in CleanupPrompt.labels.map({ $0.lowercased() }) where text.lowercased().hasPrefix(label) {
             text = String(text.dropFirst(label.count)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         let quotes: [(Character, Character)] = [("\"", "\""), ("\u{201C}", "\u{201D}")]
@@ -101,25 +143,22 @@ public enum CleanupCheck {
             .filter { !$0.isEmpty }
     }
 
+    /// The (up to) three words after `index`.
+    static func next(_ words: [String], after index: Int) -> ArraySlice<String> {
+        words[min(index + 1, words.count)..<min(index + 4, words.count)]
+    }
+
     static func hasDigit(_ word: String) -> Bool { !digitGroups(word).isEmpty }
 
-    /// How long a text is for the dropped check: a run of number words and digits counts once, as the number it says
-    /// ("forty five dollars no wait fifty five dollars" is 2 numbers and 2 words, "$55" one number).
-    static func length(_ words: [String]) -> Int {
-        var count = 0, inNumber = false
-        for word in words {
-            let number = numberWords.contains(word) || hasDigit(word)
-            if !number || !inNumber { count += 1 }
-            inNumber = number
-        }
-        return count
-    }
+    static func isDecimal(_ scalar: Unicode.Scalar) -> Bool { scalar.properties.numericType == .decimal }
 
     /// Runs of decimal digits (`\p{Nd}+`).
     static func digitGroups(_ text: String) -> [String] {
         var groups: [String] = [], run = ""
         for scalar in text.unicodeScalars {
-            if scalar.properties.numericType == .decimal { run.unicodeScalars.append(scalar) } else if !run.isEmpty {
+            if isDecimal(scalar) {
+                run.unicodeScalars.append(scalar)
+            } else if !run.isEmpty {
                 groups.append(run)
                 run = ""
             }
@@ -128,7 +167,27 @@ public enum CleanupCheck {
         return groups
     }
 
-    /// The text (lowercased, straight apostrophes) says "not", "n't", "never", "no longer" or "cannot".
+    /// How many numbers a text writes in digits, a time or an amount once however it is written (10:00, 7.30, 1,200).
+    static func numberCount(_ text: String) -> Int {
+        let scalars = Array(text.unicodeScalars)
+        var count = 0, i = 0
+        while i < scalars.count {
+            guard isDecimal(scalars[i]) else { i += 1; continue }
+            count += 1
+            while i < scalars.count {
+                if isDecimal(scalars[i]) {
+                    i += 1
+                } else if ":.,".unicodeScalars.contains(scalars[i]), i + 1 < scalars.count, isDecimal(scalars[i + 1]) {
+                    i += 1
+                } else {
+                    break
+                }
+            }
+        }
+        return count
+    }
+
+    /// The text (lowercased, straight apostrophes) holds a negation: "n't", or one of `negations` as whole words.
     static func negated(_ lower: String) -> Bool {
         lower.contains("n't") || negations.contains { word in
             var from = lower.startIndex
@@ -143,22 +202,68 @@ public enum CleanupCheck {
     }
 
     /// The take's digit groups all stay, in order (555 1212 may become 555-1212, never 555 alone), except one the speaker
-    /// took back ("at 5, no, 6"); and the answer has no more digit groups than the take said in digits or number words.
+    /// took back ("at 5, no, 6"); and the answer writes no more numbers than the take said in digits or number words.
     static func numbersKept(_ takeWords: [String], _ out: String) -> Bool {
         let kept = takeWords.indices.flatMap { corrected(takeWords, $0) ? [] : digitGroups(takeWords[$0]) }
         let given = digitGroups(out)
         let said = takeWords.reduce(0) { $0 + (numberWords.contains($1) ? 1 : digitGroups($1).count) }
         var next = 0
         for group in given where next < kept.count && kept[next] == group { next += 1 }
-        return next == kept.count && given.count <= said
+        return next == kept.count && numberCount(out) <= said
+    }
+
+    /// What the speaker said last stays, and a date or number it replaced goes. After a correction word, the first date,
+    /// time or number among the next three words that isn't among the three before ("tango seven seven no tango seven
+    /// eight" ends in 8), else (`anyWord`, Clean and Shorter; a tone may reword it) the first word that carries meaning,
+    /// must be in the answer: as itself, a number word as its digits ("forty five no fifty five" may be $55), a negation
+    /// as any negation ("I won't" may be "I can't"). The date or number just before the correction word, of the same
+    /// kind, must be gone: "two no three bags" came back from Apple's model as "2-3 bags".
+    static func finalsKept(_ takeWords: [String], _ outWords: [String], _ out: String, anyWord: Bool,
+                           saysNo: Bool) -> Bool {
+        let have = Set(outWords)
+        let digits = digitGroups(out)
+        func written(_ word: String, exactly: Bool) -> Bool {
+            if have.contains(word) { return true }
+            if let d = digitOf[word] {
+                // A tens word starts a number of two digits or more: "fifty five" is 55.
+                return digits.contains {
+                    (exactly ? $0 == d : $0.hasPrefix(d)) || (tens.contains(word) && $0.count >= 2 && $0.first == d.first)
+                }
+            }
+            if hasDigit(word) { return digitGroups(word).allSatisfy(digits.contains) }
+            return saysNo && (word.contains("n't") || negations.contains(word))
+        }
+        for (i, word) in takeWords.enumerated() where corrections.contains(word) {
+            let before = takeWords[max(0, i - 3)..<i], after = next(takeWords, after: i)
+            let fresh = after.filter { !before.contains($0) }
+            let dated = fresh.first(where: isDated)
+            let plain = anyWord ? fresh.first(where: carriesMeaning) : nil
+            guard let last = dated ?? plain else { continue }
+            if !written(last, exactly: false) { return false }
+            guard let dated else { continue }
+            // What it replaced: a day for a day, a number for a number, not said again after the correction word.
+            let replaced = before.last {
+                isDated($0) && whenWords.contains($0) == whenWords.contains(dated) && !after.contains($0)
+            }
+            if let replaced, written(replaced, exactly: true) { return false }
+        }
+        return true
+    }
+
+    /// A date, a time or a number: the words a wrong pick between two versions would change.
+    static func isDated(_ word: String) -> Bool { whenWords.contains(word) || digitOf[word] != nil || hasDigit(word) }
+
+    /// Not a function word, a correction word or a number word.
+    static func carriesMeaning(_ word: String) -> Bool {
+        !functionWords.contains(word) && !corrections.contains(word) && !numberWords.contains(word)
     }
 
     /// The number at `index` is taken back: a correction word follows within 3 words, and another number within 3 more.
     static func corrected(_ words: [String], _ index: Int) -> Bool {
-        guard hasDigit(words[index]), index < words.count - 1 else { return false }
-        guard let marker = words[(index + 1)...min(index + 3, words.count - 1)].firstIndex(where: corrections.contains),
-              marker < words.count - 1 else { return false }
-        return words[(marker + 1)...min(marker + 3, words.count - 1)].contains { numberWords.contains($0) || hasDigit($0) }
+        guard hasDigit(words[index]), let marker = next(words, after: index).firstIndex(where: corrections.contains) else {
+            return false
+        }
+        return next(words, after: marker).contains { numberWords.contains($0) || hasDigit($0) }
     }
 
     /// The alphabet most of the letters are in, or nil with no letters. Hindi said in Latin letters stays Latin.

@@ -111,22 +111,29 @@ public enum TextPipeline {
 // Clean up (issue #1): what the on-device model is asked, what may replace a take, and where.
 public enum CleanupStyle: String, Codable, Sendable, CaseIterable { case clean, shorter, friendly, professional, simple }
 public enum CleanupPrompt {                                            // the Android app's words
-    public static let rules: String                                   // instruction v2, word for word
-    public static func styleLine(_ style: CleanupStyle) -> String     // "" for Clean
-    public static func instructions(_ style: CleanupStyle) -> String  // rules; for a style also "Style: <line> Reply with the rewritten text only: one version, no label, no notes."
-    public static func prompt(take: String, style: CleanupStyle) -> String // "Text: <take>\nCleaned text:" ("Rewritten text:" for a style)
+    public static let rules: String                                   // instruction v3, word for word
+    public static func task(_ style: CleanupStyle) -> String          // "" for Clean; "Say it in fewer words." for Shorter...
+    public static func label(_ style: CleanupStyle) -> String         // "Cleaned text:", "Shorter version:", "Friendly version:"...
+    public static let labels: [String]                                // every style's label
+    public static func instructions(_ style: CleanupStyle) -> String  // rules; for a style one rewrite task of its own, ending "Reply with one rewritten version only."
+    public static func prompt(take: String, style: CleanupStyle) -> String // "Text: <take>\n<label>"
 }
 public enum CleanupVerdict: Equatable, Sendable { case ok(String), same, rejected(String) } // rejected: the check's code
-/// Ported rule for rule from Android's CleanupCheck, with its test rows. The answer is trimmed (an echoed "Cleaned
-/// text:" or "Rewritten text:" label and wrapping quotes dropped); equal to the take: same. Rejected, in order: empty;
-/// chatter (an opener the take lacks: "Sure", "Here is", "Here's", "I can't", "I cannot", "As an AI", "Certainly", "Of
-/// course"); lines (a new line the take neither has nor asks for); new_words (words not in the take, a word with a digit
-/// never counts: more than max(2, n/5) of the answer's n words, max(4, n/2) for Friendly, Professional and Simple);
-/// dropped (fewer than 40% of the take's words, 25% for Shorter); dropped_words (Clean: more than max(1, 30%) of the
-/// take's meaningful words missing, not function words, fillers, spoken punctuation, number words or digits); script;
-/// negation ("not", "n't", "never", "no longer", "cannot" lost); digits (the take's digit groups in order, a group taken
-/// back by "no", "sorry", "mean", "actually", "wait" or "rather" and another number within 3 words exempt, and no more
-/// digit groups than the take's digit groups plus number words).
+/// Android's CleanupCheck with its test rows, and rows from tuning on Apple's model. The answer is trimmed (an echoed
+/// label and wrapping quotes dropped); equal to the take: same. Rejected, in order: empty; chatter (an opener the take lacks:
+/// "Sure", "Here is", "Here's", "I can't", "I cannot", "As an AI", "Certainly", "Of course"; the "I can" ones only when
+/// the take has no negation); lines (a new line the take neither has nor asks for); new_words (words not in the take, a
+/// word with a digit never counts: more than max(2, n/5) of the answer's n words, max(4, n/3) for Shorter, max(6, 7n/10)
+/// for Friendly, Professional and Simple); dropped (not Clean: fewer than 40% of the take's words, 25% for Shorter);
+/// dropped_words (Clean: more than max(1, 30%) of the take's meaningful words missing, not function words, fillers,
+/// spoken punctuation, number words, digits, correction words or the 3 words before one); script; negation (a "not",
+/// "n't", "never", "no longer", "cannot", "unable", "nothing", "none"... lost); negation_added (Clean and Shorter: one
+/// the take lacks, as from "monday no tuesday"); digits (the take's digit groups in order, a group taken back by "no",
+/// "sorry", "mean", "actually", "wait" or "rather" and another number within 3 words exempt, and no more numbers, 7:30
+/// or 1,200 once, than the take's digit groups plus number words); correction (after a correction word, the first date,
+/// time or number among the next 3 words not among the 3 before, else for Clean and Shorter the first meaningful word,
+/// is in the answer, a number word as its digits, a negation as any negation; the date or number of the same kind just
+/// before it is gone).
 public enum CleanupCheck { public static func check(take: String, output: String?, style: CleanupStyle) -> CleanupVerdict }
 public enum CleanupReplace {
     /// The text before the cursor ends with the typed take, as much as iOS shows: its last 16 characters or all of it.
