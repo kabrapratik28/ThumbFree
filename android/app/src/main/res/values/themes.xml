@@ -8,4 +8,9 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowBackground">@color/window_background</item>
     </style>
+    <!-- Clean up's card (ui.CleanupActivity): a see-through window with no title, no dim and no animation. -->
+    <style name="Theme.Cleanup" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

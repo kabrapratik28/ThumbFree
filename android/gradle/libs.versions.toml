@@ -1,4 +1,5 @@
 [versions]
+mlkitGenaiPrompt = "1.0.0-beta4"
 agp = "9.4.1"
 kotlin = "2.4.20"
 composeBom = "2026.09.00"
@@ -14,6 +15,8 @@ espresso = "3.7.0"
 work = "2.12.0"
 
 [libraries]
+# Clean up (issue #1, a test build): Gemini Nano through ML Kit's Prompt API.
+mlkit-genai-prompt = { module = "com.google.mlkit:genai-prompt", version.ref = "mlkitGenaiPrompt" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }

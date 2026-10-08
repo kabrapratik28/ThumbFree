@@ -8,7 +8,7 @@ and the thin packages `app/`, `data/` and `models/`.
 | Package | Job |
 |---|---|
 | `a11y/` | Accessibility service, focus tracking, the bubble and preview windows, text insertion |
-| `app/` | Wiring: `AppGraph` builds the main process's objects once, `DictationController` runs the session |
+| `app/` | Wiring: `AppGraph` builds the main process's objects once, `DictationController` runs the session, `Cleanup` runs Clean up's sparkle, card and writes (a test build) |
 | `audio/` | Microphone capture, the recording foreground service, audio focus |
 | `core/` | Plain Kotlin logic: session state machine, speech gate, chunking, models catalog, text cleanup |
 | `data/` | History (`history.db` and one WAV per take in `filesDir/recordings/`), settings, crash recovery |
@@ -40,7 +40,7 @@ and the thin packages `app/`, `data/` and `models/`.
 
 ## Testing
 
-- Host: `AppGraphTest`, `DictationControllerTest` (ports faked in `FakePorts`), `DbThreadTest`, `HistoryDbTest`,
+- Host: `AppGraphTest`, `DictationControllerTest` (ports faked in `FakePorts`), `CleanupTest`, `DbThreadTest`, `HistoryDbTest`,
   `RecoveryTest`, `SettingsTest`, `DownloadWorkerTest`, `ModelDownloadsTest`, `ReadinessTest`.
 - Guards for the whole app, in `android/app/src/test/.../build/`: `CorePurityTest`, `EngineIsolationTest`,
   `ManifestContractTest`, `NetworkRegressionGuardTest`, `CmakeFlagsTest`, `TranscribePatchesTest`, `BubbleArtGuardTest`
@@ -50,6 +50,9 @@ and the thin packages `app/`, `data/` and `models/`.
 
 ## Pitfalls
 
+- `ui.CleanupActivity`, Clean up's card, sizes its window to the card: a wrap-content window is laid out 320 dp wide.
+  While it is the focused app with no focusable window, a key event holds all input until Android reports not
+  responding (5 s), so a tap's card turns focusable after 3 s and a hold's card is focusable from the start.
 - Host tests use a plain `Application` (`robolectric.properties`), so the real graph is never built by accident;
   `AppGraphTest` builds it on purpose.
 - Log an exception's class, not its message: a message can carry the text of a take.

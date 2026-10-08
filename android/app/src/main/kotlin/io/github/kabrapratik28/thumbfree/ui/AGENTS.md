@@ -2,7 +2,7 @@
 
 `MainActivity` hosts the welcome flow (`WelcomeScreen`, its try in `TryOnce`) and four tabs: Home (`HomeTab`), History,
 Dictionary and Settings (`HomeScreen`). `Pictures` draws the welcome's pictures, `ModelScreen` downloads and deletes
-speech models, `BubbleSettings` sets the bubble, `Theme` and `Icons` hold the look, `Motion` the motion.
+speech models, `BubbleSettings` sets the bubble, `Theme`, `Icons` and `Motion` the look; `CleanupActivity` and `CleanupSettings` are Clean up's.
 
 ## Invariants
 

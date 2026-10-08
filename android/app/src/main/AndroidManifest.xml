@@ -34,6 +34,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Clean up's card (ui.CleanupActivity, issue #1): small, by the bubble, never focused; its own task, out of
+             Recents, closed when the owner leaves it. -->
+        <activity
+            android:name=".ui.CleanupActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Cleanup" />
         <service
             android:name=".a11y.DictationAccessibilityService"
             android:exported="true"

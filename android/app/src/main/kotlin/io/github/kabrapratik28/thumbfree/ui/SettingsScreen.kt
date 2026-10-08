@@ -132,6 +132,12 @@ fun SettingsScreen(
         SectionLabel(R.string.ui_settings_bubble, note = stringResource(R.string.ui_bubble_note))
         SettingsCard { BubbleSection(bubbleStyle, onBubbleStyle, bubblePlaced, bubbleSnap, onBubbleSnap, onResetBubblePosition) }
 
+        // Clean up (issue #1, a test build) reads and writes its settings itself; host tests build no graph.
+        if (io.github.kabrapratik28.thumbfree.app.AppGraph.initialized) {
+            SectionLabel(R.string.ui_settings_cleanup, note = stringResource(R.string.ui_cleanup_note))
+            SettingsCard { CleanupSettings() }
+        }
+
         SectionLabel(R.string.ui_settings_model, note = stringResource(R.string.ui_settings_model_body))
         SettingsCard {
             ModelChoice(setup, downloads, onChoose)

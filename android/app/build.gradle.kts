@@ -39,7 +39,7 @@ android {
         minSdk = 33
         targetSdk = 37
         versionCode = 4
-        versionName = "1.0"
+        versionName = "1.0-cleanup"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
         // Several C++ .so files (transcribe, ggml, one per CPU variant) share one C++ runtime.
@@ -135,6 +135,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.mlkit.genai.prompt)
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Clean up (issue #1): the sparkle beside the bubble, its card, and its Settings section. A test build. -->
+<resources>
+    <!-- The sparkle button, for TalkBack. -->
+    <string name="cleanup_label">Clean up</string>
+    <string name="cleanup_choose_style">Choose a style</string>
+    <string name="cleanup_cancel_label">Cancel clean up</string>
+    <string name="cleanup_undo_label">Undo clean up</string>
+
+    <!-- The card. -->
+    <string name="cleanup_working">Cleaning up…</string>
+    <string name="cleanup_pick">Pick a style to see your words tidied.</string>
+    <string name="cleanup_replace">Replace</string>
+    <string name="cleanup_cancel">Cancel</string>
+    <string name="cleanup_style_clean">Clean</string>
+    <string name="cleanup_style_shorter">Shorter</string>
+    <string name="cleanup_style_friendly">Friendly</string>
+    <string name="cleanup_style_professional">Professional</string>
+    <string name="cleanup_style_simple">Simple</string>
+    <string name="cleanup_hint_clean">Your words, without the ums and repeats.</string>
+    <string name="cleanup_hint_shorter">The same message in fewer words.</string>
+    <string name="cleanup_hint_friendly">Warm and casual.</string>
+    <string name="cleanup_hint_professional">Polished, for work.</string>
+    <string name="cleanup_hint_simple">Plain words, short sentences.</string>
+
+    <!-- What a clean up that wrote nothing says, in a short toast. -->
+    <string name="cleanup_failed">Couldn\'t tidy this one. Your words are unchanged.</string>
+    <string name="cleanup_same">Nothing to tidy. Your words are unchanged.</string>
+    <string name="cleanup_text_changed">The text changed, so it was left as is.</string>
+    <string name="cleanup_check_text">Check your text: Clean up may not have replaced it.</string>
+    <string name="cleanup_busy">Clean up is busy. Try again in a moment.</string>
+    <string name="cleanup_quota">Android paused Clean up for today to save battery.</string>
+    <string name="cleanup_not_ready">Gemini Nano isn\'t ready. See Settings, Clean up.</string>
+
+    <!-- Settings > Clean up. -->
+    <string name="ui_settings_cleanup">Clean up</string>
+    <string name="ui_cleanup_note">After you speak, ✨ beside the bubble tidies the words: tap it for your style, hold it to choose one.</string>
+    <string name="ui_cleanup_checking">Checking Gemini Nano…</string>
+    <string name="ui_cleanup_ready">Gemini Nano is ready</string>
+    <string name="ui_cleanup_downloadable">Gemini Nano needs a download</string>
+    <string name="ui_cleanup_downloading">Gemini Nano is downloading (%1$d%%)</string>
+    <string name="ui_cleanup_unavailable">Gemini Nano isn\'t on this phone</string>
+    <string name="ui_cleanup_download">Download</string>
+    <string name="ui_cleanup_show">Show ✨ after you speak</string>
+    <string name="ui_cleanup_tap_uses">Tap ✨ uses</string>
+    <string name="ui_cleanup_privacy">Gemini Nano runs on your phone. Google\'s ML Kit, which runs it, sends Google numbers on how the feature performs, never your words.</string>
+</resources>

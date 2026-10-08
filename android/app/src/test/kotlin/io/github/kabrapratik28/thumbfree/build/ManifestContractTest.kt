@@ -25,8 +25,8 @@ class ManifestContractTest {
 
     // The merged manifest, the one that ships (AGP names the unit tests' copy of it in test_config.properties), not
     // only ours. WorkManager adds WAKE_LOCK (it holds one while a job runs) and RECEIVE_BOOT_COMPLETED (it reschedules
-    // work after a reboot), AndroidX core its own receiver permission; a library that brought in another one fails
-    // here.
+    // work after a reboot), AndroidX core its own receiver permission, and ML Kit's Prompt API (Clean up, a test build)
+    // the right to bind Android's AICore, which runs Gemini Nano; a library that brought in another one fails here.
     @Test
     fun mergedPermissionsAreExactlyTheWhitelist() {
         val merged = parse(testConfig("android_merged_manifest"))
@@ -40,6 +40,7 @@ class ManifestContractTest {
             "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
             "android.permission.WAKE_LOCK",
             "android.permission.RECEIVE_BOOT_COMPLETED",
+            "com.google.android.apps.aicore.service.BIND_SERVICE",
             "${merged.getAttribute("package")}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
         )
     }

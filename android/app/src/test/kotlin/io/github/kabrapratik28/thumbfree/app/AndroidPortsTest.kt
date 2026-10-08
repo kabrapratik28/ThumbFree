@@ -1546,6 +1546,33 @@ class AndroidPortsTest {
         assertThat(ports.heldTakes()).containsExactly("s4")
     }
 
+    // Clean up (issue #1): a take typed and verified in its pinned field offers the sparkle, for the exact text it wrote.
+    // A press alone keeps it (a drag starts a take and drops it); the next take's words take it away.
+    @Test
+    fun aTypedTakeOffersCleanUpUntilTheNextTake() {
+        val fake = FakePorts()
+        AppGraph.controller = DictationController(fake, { 0L })
+        val editor = io.github.kabrapratik28.thumbfree.a11y.FakeEditorPort().apply {
+            surroundings += io.github.kabrapratik28.thumbfree.core.insert.Surrounding("Hi Maya!", "", 0)
+            surroundings += io.github.kabrapratik28.thumbfree.core.insert.Surrounding("Hi Maya! See you at seven.", "", 0)
+        }
+        val ports = AndroidPorts(app, editor)
+        ports.pins["s1"] = Pin("com.example", 1, "n1", 1)
+
+        ports.insert("s1", "See you at seven.", autoInsert = true)
+        waitUntil {
+            shadowOf(Looper.getMainLooper()).idle()
+            ports.cleanup.sparkle != null
+        }
+        assertThat(ports.cleanup.sparkle).isEqualTo(io.github.kabrapratik28.thumbfree.a11y.Sparkle.OFFER)
+        assertThat(editor.committed).containsExactly(" See you at seven.")
+
+        ports.pinTarget("s2")
+        assertThat(ports.cleanup.sparkle).isEqualTo(io.github.kabrapratik28.thumbfree.a11y.Sparkle.OFFER)
+        ports.insert("s2", "And bring the slides.", autoInsert = false)
+        assertThat(ports.cleanup.sparkle).isNull()
+    }
+
     // An exception inside an insert ends the take on the chip instead of killing the process. Before a write nothing can
     // have reached the field; after one the text may have, so the chip offers Copy only: Insert here would write it a
     // second time. The log names the exception's class, never its message.

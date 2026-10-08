@@ -6,6 +6,7 @@ import io.github.kabrapratik28.thumbfree.core.models.ModelFile
 import io.github.kabrapratik28.thumbfree.core.session.BubblePlacement
 import io.github.kabrapratik28.thumbfree.core.session.BubbleStyle
 import io.github.kabrapratik28.thumbfree.core.session.PreviewPlace
+import io.github.kabrapratik28.thumbfree.core.text.CleanupStyle
 import io.github.kabrapratik28.thumbfree.core.text.CustomWords
 
 /** SharedPreferences "settings", one key per setting. */
@@ -128,6 +129,16 @@ class Settings(private val prefs: SharedPreferences) {
     var livePreviewPlace: PreviewPlace
         get() = PreviewPlace.entries.firstOrNull { it.name == prefs.getString("live_preview_place", null) } ?: PreviewPlace.BUBBLE
         set(value) = prefs.edit().putString("live_preview_place", value.name).apply()
+
+    /** Key "cleanup_on": after a take is typed, Clean up's sparkle shows beside the bubble. On until the owner turns it off. */
+    var cleanupOn: Boolean
+        get() = prefs.getBoolean("cleanup_on", true)
+        set(value) = prefs.edit().putBoolean("cleanup_on", value).apply()
+
+    /** Key "cleanup_style", a CleanupStyle name: what a tap on the sparkle does. Clean until the owner picks one. */
+    var cleanupStyle: CleanupStyle
+        get() = CleanupStyle.entries.firstOrNull { it.name == prefs.getString("cleanup_style", null) } ?: CleanupStyle.CLEAN
+        set(value) = prefs.edit().putString("cleanup_style", value.name).apply()
 
     companion object {
         /**

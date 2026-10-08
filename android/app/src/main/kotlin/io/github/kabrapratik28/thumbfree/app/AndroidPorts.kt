@@ -302,6 +302,11 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
     private var downAtMs = 0L
     private val recheck = Runnable { place() }
 
+    /** Clean up (issue #1): the sparkle beside the bubble after a typed take, and its card. */
+    val cleanup = Cleanup(
+        app, editorPort, enabled = { AppGraph.settings.cleanupOn }, draw = { bubble?.sparkle = it }, anchor = { bubble?.boundsOnScreen() },
+    )
+
     /**
      * Every catalog model's download, collected while the service is connected: the source the screens read too. Before
      * the chosen model is usable, a tap on the bubble shows why (the not-ready [panel]) instead of listening. Tests
@@ -554,7 +559,10 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
 
     override fun insert(id: String, text: String, autoInsert: Boolean) {
         if (id in trialTakes) return showTrialWords(id, text)
-        launchInsert(id) {
+        // A new take's words: the last take's sparkle goes. Not at the press: a drag starts a take too, then drops it,
+        // and the sparkle moves with the bubble.
+        cleanup.clear()
+        launchInsert(id, offer = true) {
             db.barrier() // the INSERTING row is on disk before any commit
             // Without that row a crash during the insert could not be told apart later: the text waits on the chip.
             inserter.insert(text, pins[id], autoInsert && id !in markFailed)
@@ -563,6 +571,7 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
 
     override fun insertHere(id: String, text: String) {
         if (id in trialTakes) return showTrialWords(id, text)
+        cleanup.clear()
         launchInsert(id) { inserter.insertHere(text) }
     }
 
@@ -578,7 +587,7 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
      * (Copy only), as the Inserter does when it cannot tell: Insert here would write it twice. Before any write it ends
      * NOT_INSERTED.
      */
-    private fun launchInsert(id: String, attempt: suspend () -> InsertResult) {
+    private fun launchInsert(id: String, offer: Boolean = false, attempt: suspend () -> InsertResult) {
         scope.launch {
             val writesBefore = writes
             val result = try {
@@ -592,6 +601,9 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
             }
             insertedText[id] = result.insertedText
             controller.onEvent(Event.InsertDone(id, result.outcome, result.code))
+            // Typed and verified in the field pinned at its press: Clean up's sparkle offers to tidy exactly those words.
+            val pin = pins[id]
+            if (offer && result.outcome == Outcome.INSERTED && pin != null) result.insertedText?.let { cleanup.offer(pin, it) }
         }
     }
 
@@ -756,8 +768,10 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         bubble = BubbleWindow(service, windows, ::onBubbleTouch, ::onChipAction).also {
             it.onDropped = ::place // found gone: the touch on it ends at once and the window comes back, with no focus event
             it.restyle(AppGraph.settings.bubbleStyle)
+            it.onSparkle = cleanup::tap
             service.bubble = it
         }
+        cleanup.clear() // an offer from before the service went is no field's now
         shownAt = null
         touching = false
         collectDownloads()
@@ -876,6 +890,7 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
         // its UP, so the touch is cancelled once the bubble is gone. Nothing keeps the dead service either.
         bubble?.dispose() // its chip's dismissal timer would otherwise dismiss the next window's chip
         bubble = null
+        cleanup.clear()
         service = null
         windowManager = null
         shownAt = null
@@ -959,10 +974,12 @@ class AndroidPorts(private val app: Application, private val editorPort: EditorP
             touching = false
             relay?.hide() // the classifier will never see the UP of a finger on a removed window
             hidePanel() // so the next field's bubble doesn't come back with it
+            cleanup.bubbleHidden() // and its sparkle neither
             bubble.hide()
             shownAt = null
             return
         }
+        cleanup.followFocus(editorPort.cachedPin()) // another field: the sparkle was the last one's
         // A relayout found the window gone under the finger: that UP never comes, so the touch ends as a hide ends it.
         if (touching && !bubble.shown) {
             touching = false
