@@ -19,8 +19,9 @@ model (`Keyplane`), `KeyboardClient`, suggestions, emoji, commands and delivery.
   `insertionConfirmed` or `insertionUnverified`. Anything else waits behind Insert here and Copy (`.localOnly`).
   Nothing is retried: an unknown outcome is "May already be in the field".
 - Clean up changes only the take this keyboard typed and confirmed, only after the user's tap, only while it sits right
-  before the cursor in its own field (`CleanupReplace.matches`), with `cleanBegan` on disk first; anything else leaves
-  the field alone. The sparkle is the mic's size, white, never yellow (docs/contract.md, "Clean up").
+  before the cursor in its own field with nothing selected and the same text after it, with `cleanBegan` on disk
+  first; a pin that fails once forgets the take, and only a confirmed tidy arms Undo. The sparkle is the mic's size,
+  white, never yellow (docs/contract.md, "Clean up").
 - Read `documentIdentifier` only through `FieldTraits.documentID(of:)`: some apps return nil, and Swift's bridge traps.
 - Keys work as on Apple's iOS 26 keyboard: the layout follows the field (`KeyboardKind`; number fields get the digit
   pad), long-press alternatives in Apple's order (`KeyAlternates`), the space-bar trackpad, delete by words

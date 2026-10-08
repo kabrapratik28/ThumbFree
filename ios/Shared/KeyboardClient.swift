@@ -191,26 +191,30 @@ import UniformTypeIdentifiers
         write(landed ? .insertionConfirmed : .insertionUnverified, item.takeID)
         if !landed { chip = Chip(item: item, canInsert: false) }
         if landed, let documentID = FieldTraits.documentID(of: proxy) {
-            typedTake = TypedTake(takeID: item.takeID, typed: payload, documentID: documentID)
+            typedTake = TypedTake(takeID: item.takeID, typed: payload, documentID: documentID,
+                                  after: proxy.documentContextAfterInput ?? "")
             takeAtCursor = true
         }
     }
 
     // MARK: Clean up
 
-    /// The take this keyboard typed last, which the sparkle may tidy: the text as it went in (`typed`), the field, and
-    /// after a tidy the text it replaced (`original`, which Undo puts back).
+    /// The take this keyboard typed last, which the sparkle may tidy: the text as it went in (`typed`), the field, after
+    /// a tidy the text it replaced (`original`, which Undo puts back), and the text after the cursor then (`after`): a
+    /// cursor moved to an earlier copy of the same words has other text after it.
     struct TypedTake: Equatable {
         let takeID: UUID
         var typed: String
         let documentID: UUID
         var original: String?
+        var after: String
     }
 
     /// What the round button beside the mic shows: tidy, a request on its way (its spinner), or Undo.
     enum Sparkle: Equatable { case offer, working, undo }
 
-    static let cleanupTimeout: TimeInterval = 25
+    /// How long the keyboard waits for the app's answer (the app gives up on its model call by 24 s); tests shorten it.
+    var cleanupTimeout: TimeInterval = 25
     static let messageSeconds: TimeInterval = 4
 
     /// The first-time label beside the sparkle ("Tap to tidy · Hold for styles") was seen: the sparkle was used or the
@@ -229,14 +233,19 @@ import UniformTypeIdentifiers
     private var pausedUntil: (date: Date, known: Bool)?
     /// The controller lays the keyboard out again when the style menu opens or closes: it makes the keyboard taller.
     var onStyleMenu: (() -> Void)?
+    /// The controller reads the app's answer again when a request's time is up, so a lost answer ends the spinner.
+    var onCleanupDeadline: (() -> Void)?
 
-    /// The round button, if any: only with Full Access, while ThumbFree's session is live (a status under 5 s old)
-    /// and Clean up can run there, with no take going on, and the take this keyboard typed right before the cursor.
+    /// The round button, if any: only with Full Access and the take this keyboard typed right before the cursor. Undo
+    /// needs nothing more, since it puts back words the keyboard holds; a tidy needs ThumbFree's live session (a status
+    /// under 5 s old) where Clean up can run, with no take going on.
     func sparkle(now: Date) -> Sparkle? {
-        guard fullAccess, let typedTake, takeAtCursor, !choosingStyle, let status, status.isFresh(now: now),
-              status.session == .ready, status.cleanup == .ready, status.take == .idle else { return nil }
+        guard fullAccess, let typedTake, takeAtCursor, !choosingStyle else { return nil }
+        if typedTake.original != nil { return .undo }
         if cleanRequest != nil { return .working }
-        return typedTake.original == nil ? .offer : .undo
+        guard let status, status.isFresh(now: now), status.session == .ready, status.cleanup == .ready,
+              status.take == .idle else { return nil }
+        return .offer
     }
 
     /// What the bar's status place says for Clean up, if anything: the wait, Apple's pause (counting down when iOS
@@ -264,16 +273,23 @@ import UniformTypeIdentifiers
         guard write(command) else { return say(CleanupWords.failed) }
         cleanMessage = nil
         cleanRequest = (command.id, command.sentAt)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds((self?.cleanupTimeout ?? 0) + 0.5))
+            guard let self, self.cleanRequest?.id == command.id else { return }
+            self.onCleanupDeadline?()
+        }
     }
 
     /// Undo: the take as it was typed, back in place of the tidied words.
     func undoTidy(_ proxy: UITextDocumentProxy) {
         guard var take = typedTake, let original = take.original, cleanRequest == nil else { return }
-        guard atCursor(take, proxy), replace(take.typed, with: original, take: take.takeID, proxy: proxy) else {
+        guard atCursor(take, proxy), let landed = replace(take.typed, with: original, take: take.takeID, proxy: proxy) else {
             return leave(CleanupWords.changed)
         }
+        guard landed else { return leave(CleanupWords.unverified) }
         take.typed = original
         take.original = nil
+        take.after = proxy.documentContextAfterInput ?? ""
         typedTake = take
     }
 
@@ -308,23 +324,23 @@ import UniformTypeIdentifiers
         closeStyleMenu()
     }
 
-    /// Whether the take still sits right before the cursor in its field; another field forgets it.
+    /// The take still sits right before the cursor in its field, as it went in; anything else forgets it for good, so a
+    /// cursor that leaves and comes back (after an edit this keyboard never saw) finds nothing to tidy or undo.
     func followCursor(_ proxy: UITextDocumentProxy) {
         guard let take = typedTake else { return }
-        guard FieldTraits.documentID(of: proxy) == take.documentID else { return forgetTake() }
-        takeAtCursor = CleanupReplace.matches(before: proxy.documentContextBeforeInput ?? "", typed: take.typed)
+        guard atCursor(take, proxy) else { return forgetTake() }
+        takeAtCursor = true
     }
 
     /// The app's answer to this keyboard's request, or the request's timeout.
     private func readCleanup(_ proxy: UITextDocumentProxy) {
         guard let request = cleanRequest else { return }
-        guard let result = (try? shared?.cleanups())?.last(where: { $0.requestID == request.id }) else {
-            if Date().timeIntervalSince(request.sentAt) > Self.cleanupTimeout {
-                cleanRequest = nil
-                say(CleanupWords.failed)
-            }
-            return
+        // Past its time an answer no longer counts, even one waiting on disk: the text may have moved on meanwhile.
+        if Date().timeIntervalSince(request.sentAt) > cleanupTimeout {
+            cleanRequest = nil
+            return say(CleanupWords.failed)
         }
+        guard let result = (try? shared?.cleanups())?.last(where: { $0.requestID == request.id }) else { return }
         cleanRequest = nil
         switch result.state {
         case .done:
@@ -338,9 +354,14 @@ import UniformTypeIdentifiers
                                                   trailingSpace: false)
             // iOS showed only the end of the take: keep the space it began with, which the formatter could not see.
             if head == nil { payload = String(take.typed.prefix(while: \.isWhitespace)) + payload }
-            guard replace(take.typed, with: payload, take: take.takeID, proxy: proxy) else { return say(CleanupWords.failed) }
+            guard let landed = replace(take.typed, with: payload, take: take.takeID, proxy: proxy) else {
+                return say(CleanupWords.failed)
+            }
+            // Unseen, the words may or may not be in place: Undo could then rewrite text that is not the take.
+            guard landed else { return leave(CleanupWords.unverified) }
             take.original = take.typed
             take.typed = payload
+            take.after = proxy.documentContextAfterInput ?? ""
             typedTake = take
         case .same:
             say(CleanupWords.nothing)
@@ -351,22 +372,27 @@ import UniformTypeIdentifiers
         }
     }
 
-    /// The pin: the take's own field, with the take right before the cursor.
+    /// The pin: the take's own field, nothing selected (a delete would take the selection), the same text after the
+    /// cursor as when the take went in, and the take right before the cursor.
     private func atCursor(_ take: TypedTake, _ proxy: UITextDocumentProxy) -> Bool {
-        FieldTraits.documentID(of: proxy) == take.documentID
+        FieldTraits.documentID(of: proxy) == take.documentID && (proxy.selectedText ?? "").isEmpty
+            && (proxy.documentContextAfterInput ?? "") == take.after
             && CleanupReplace.matches(before: proxy.documentContextBeforeInput ?? "", typed: take.typed)
     }
 
     /// One replacement, as an insertion: the record on disk first, the take deleted one character at a time, the new
-    /// text inserted, then read back. False only when the record could not be written (nothing changed then).
-    private func replace(_ old: String, with new: String, take: UUID, proxy: UITextDocumentProxy) -> Bool {
-        guard write(.cleanBegan, take) else { return false }
+    /// text inserted, then read back. nil when the record could not be written (nothing changed then); else whether
+    /// the new text is seen in place: the insert changed the text before the cursor, which now ends with it. An insert
+    /// the field turned down, over text that already ended the same way, is unverified, never done.
+    private func replace(_ old: String, with new: String, take: UUID, proxy: UITextDocumentProxy) -> Bool? {
+        guard write(.cleanBegan, take) else { return nil }
         for _ in 0..<old.count { proxy.deleteBackward() }
+        let emptied = proxy.documentContextBeforeInput
         proxy.insertText(new)
-        let landed = CleanupReplace.matches(before: proxy.documentContextBeforeInput ?? "", typed: new)
+        let now = proxy.documentContextBeforeInput
+        let landed = now != emptied && CleanupReplace.matches(before: now ?? "", typed: new)
         write(landed ? .cleanConfirmed : .cleanUnverified, take)
-        takeAtCursor = landed
-        return true
+        return landed
     }
 
     /// A short message in the status place; the take stays tidy-able.

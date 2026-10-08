@@ -23,8 +23,11 @@ import UniformTypeIdentifiers
         let readable = window.map { String(text.suffix($0)) } ?? text
         return readable.isEmpty ? nil : readable
     }
-    var documentContextAfterInput: String? { nil }
-    var selectedText: String? { nil }
+    /// The text after the cursor, and the selection; empty reads as nil, like iOS.
+    var after = ""
+    var selection = ""
+    var documentContextAfterInput: String? { after.isEmpty ? nil : after }
+    var selectedText: String? { selection.isEmpty ? nil : selection }
     var documentInputMode: UITextInputMode? { nil }
     var hasText: Bool { !text.isEmpty }
     func insertText(_ string: String) {
@@ -457,5 +460,94 @@ import UniformTypeIdentifiers
         #expect(state(HostStatus(session: .starting, takeID: UUID(), take: .recording, updatedAt: now - 6), take: nil) == .startDictation) // from an app that went away
         #expect(state(HostStatus(takeID: take, take: .transcribing)) == .transcribing)
         #expect(state(HostStatus(message: "No speech heard."), take: nil) == .message("No speech heard."))
+    }
+
+    // MARK: Clean up
+
+    /// A take typed into the field, with ThumbFree's session live and Clean up ready there, so the sparkle offers a tidy.
+    func typedTake(_ client: KeyboardClient, text: String = "see you soon") throws {
+        client.pressDown(proxy)
+        let press = try #require(try shared.pendingCommands().first { $0.kind == .press })
+        try appDelivers(press.takeID, target: press.target, text: text)
+        client.refresh(proxy)
+        try shared.write(HostStatus(session: .ready, engine: .readyCPU, micOn: true, cleanup: .ready))
+        client.refresh(proxy)
+    }
+
+    /// The app's answer to the keyboard's last clean command.
+    func appTidies(to text: String) throws {
+        let command = try #require(try shared.pendingCommands().last { $0.kind == .clean })
+        try shared.write([CleanupResult(requestID: command.id, takeID: command.takeID, state: .done, text: text)])
+    }
+
+    // The review: a caret moved to an earlier copy of the same words, in the same field with the same text before it,
+    // has other text after it, so the take is forgotten for good and no tidy reaches the user's own words.
+    @Test func aCaretMovedToTheSameWordsElsewhereEndsTheOffer() throws {
+        let client = client()
+        try typedTake(client)
+        #expect(client.sparkle(now: Date()) == .offer)
+        proxy.after = " Other text. See you soon"
+        client.followCursor(proxy)
+        #expect(client.sparkle(now: Date()) == nil)
+        proxy.after = "" // back where the take went in: still forgotten
+        client.followCursor(proxy)
+        client.tidy(style: nil, proxy: proxy)
+        #expect(try !kinds().contains(.clean))
+    }
+
+    // The review: text selected from the take's end would go with the first delete.
+    @Test func aSelectionEndsTheOffer() throws {
+        let client = client()
+        try typedTake(client)
+        proxy.selection = "Other"
+        client.followCursor(proxy)
+        #expect(client.sparkle(now: Date()) == nil)
+    }
+
+    // The review: a field that turns the tidied words down, after text that already ends with them, must not read as
+    // done and arm Undo over the user's own words.
+    @Test func anInsertTheFieldTurnsDownLeavesNoUndo() throws {
+        let client = client()
+        proxy.text = "Draft: Thanks so much."
+        try typedTake(client, text: "thanks")
+        client.tidy(style: .friendly, proxy: proxy)
+        try appTidies(to: "Thanks so much.")
+        proxy.dropsInserts = true
+        client.refresh(proxy)
+        #expect(proxy.text == "Draft: Thanks so much.")
+        #expect(try Array(kinds().suffix(2)) == [.cleanBegan, .cleanUnverified])
+        #expect(client.sparkle(now: Date()) == nil)
+        #expect(client.cleanLine(now: Date()) == CleanupWords.unverified)
+    }
+
+    // The review: Undo puts back words the keyboard holds, so it stays after ThumbFree's session ends.
+    @Test func undoOutlivesTheSession() throws {
+        let client = client()
+        try typedTake(client, text: "um see you at six no seven")
+        let typed = proxy.text
+        client.tidy(style: nil, proxy: proxy)
+        try appTidies(to: "See you at 7.")
+        client.refresh(proxy)
+        #expect(proxy.text == "See you at 7.")
+        #expect(try Array(kinds().suffix(2)) == [.cleanBegan, .cleanConfirmed])
+        try shared.write(HostStatus(session: .off, updatedAt: Date(timeIntervalSinceNow: -60)))
+        client.refresh(proxy)
+        #expect(client.sparkle(now: Date()) == .undo)
+        client.undoTidy(proxy)
+        #expect(proxy.text == typed)
+    }
+
+    // The review: an answer that comes after the keyboard's wait no longer counts, even one already on disk.
+    @Test func anAnswerPastTheWaitIsDropped() throws {
+        let client = client()
+        client.cleanupTimeout = 0
+        try typedTake(client)
+        let typed = proxy.text
+        client.tidy(style: nil, proxy: proxy)
+        try appTidies(to: "See you soon.")
+        client.refresh(proxy)
+        #expect(proxy.text == typed)
+        #expect(client.cleanLine(now: Date()) == CleanupWords.failed)
+        #expect(client.sparkle(now: Date()) == .offer) // the take may be tidied again
     }
 }

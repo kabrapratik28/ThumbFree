@@ -29,6 +29,8 @@ struct KeyboardBar: View {
     let dismissHint: () -> Void
 
     @GestureState private var micPressed = false
+    /// The style menu's width, which picks its type size (`styleSize(fitting:)`).
+    @State private var menuWidth: CGFloat = 0
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
@@ -309,16 +311,32 @@ struct KeyboardBar: View {
         }
     }
 
-    /// The five styles in one row above the bar, the largest type that fits (an iPhone 16 is 393 pt wide).
+    /// The five styles in one row above the bar, the largest type that fits (an iPhone 16 is 393 pt wide), else a row
+    /// that scrolls. One row only: a `ViewThatFits` keeps a row it stopped showing, after a rotation, unseen in the
+    /// accessibility tree, where VoiceOver still finds its buttons.
     private var styleMenu: some View {
-        ViewThatFits(in: .horizontal) {
-            styleRow(size: 15)
-            styleRow(size: 14)
-            styleRow(size: 13)
-            ScrollView(.horizontal, showsIndicators: false) { styleRow(size: 13) }
+        Group {
+            if let size = Self.styleSize(fitting: menuWidth - 16) {
+                styleRow(size: size)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) { styleRow(size: 13) }
+            }
         }
+        .frame(maxWidth: .infinity)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { menuWidth = $0 }
         .padding(.horizontal, 8)
         .padding(.top, 8)
+    }
+
+    /// The largest of 15, 14 and 13 pt at which the style row fits `width`, or nil.
+    static func styleSize(fitting width: CGFloat) -> CGFloat? {
+        [15, 14, 13].first { size in
+            let words = CleanupStyle.allCases.reduce(CGFloat(0)) { sum, style in
+                let font = UIFont.systemFont(ofSize: size, weight: style == .clean ? .semibold : .regular)
+                return sum + ceil((style.title as NSString).size(withAttributes: [.font: font]).width) + 20
+            }
+            return words + 5 * CGFloat(CleanupStyle.allCases.count - 1) <= width
+        }
     }
 
     private func styleRow(size: CGFloat) -> some View {

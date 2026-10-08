@@ -8,6 +8,7 @@ enum CleanupWords {
     static let failed = String(localized: "Couldn't tidy this one. Your words are unchanged.")
     static let nothing = String(localized: "Nothing to tidy. Your words are unchanged.")
     static let changed = String(localized: "The text changed, so it was left as is.")
+    static let unverified = String(localized: "Couldn't confirm the change. Check the text.")
     static let paused = String(localized: "Apple paused Clean up for a moment")
     /// Apple's rate limit with its end: "Apple paused Clean up. Ready in 0:40".
     static func paused(ready clock: String) -> String { String(localized: "Apple paused Clean up. Ready in \(clock)") }

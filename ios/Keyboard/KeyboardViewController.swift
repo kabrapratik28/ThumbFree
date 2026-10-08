@@ -126,6 +126,7 @@ final class KeyboardViewController: UIInputViewController {
         ])
         barHost.didMove(toParent: self)
         client.onStyleMenu = { [weak self] in self?.view.setNeedsLayout() } // the style menu makes the keyboard taller
+        client.onCleanupDeadline = { [weak self] in self?.refresh() } // a request's time is up: its answer or the failure
         render()
     }
 
@@ -230,6 +231,7 @@ final class KeyboardViewController: UIInputViewController {
         if client.pressing { micUp() } // the key's release would be lost otherwise
         if emojiBar.query != nil { endSearch() } // never comes back mid-search: the letters, or the picker as it was left
         statusObserver = nil // a hidden keyboard never answers for a take: only the one on screen types or holds back
+        client.forgetTake() // back on screen it may be another field with the same words: no tidy or Undo carries over
     }
 
     override func textDidChange(_ textInput: (any UITextInput)?) {
