@@ -1,9 +1,12 @@
 import SwiftUI
 import TFCore
+import UIKit
 
-/// Shown when the keyboard opened the app to start a session, with automatic return. While the app is opening the host
-/// it reads "Listening." and "Taking you back to WhatsApp…"; on any failure it changes to the swipe-back instructions
-/// (naming the app when known) with an animated finger, and keeps listening.
+/// Shown when the keyboard opened the app to start a session. While the mic starts it says so and nothing more; then it
+/// shows the way back to your app (`Way`): the words under the title, and a cue drawn where the gesture happens, which
+/// plays 3 rounds, rests on its still, and plays again on a tap on the page. With Debug automatic return it reads
+/// "Listening." and "Taking you back to WhatsApp…" while the app is opening the host, and falls back to the way back on
+/// any failure. It keeps listening throughout. End session is a quiet button: a big one invites a stray tap.
 struct SessionScreen: View {
     static let listening = "Listening."
 
@@ -22,51 +25,82 @@ struct SessionScreen: View {
     let status: HostStatus
     let returnTrip: ReturnTrip?
     let onEnd: () -> Void
+    /// When the cue's rounds began: when it first showed with the app in front, or the last tap on the page.
+    @State private var roundsFrom: Date?
+    /// The rounds are over: the cue rests on its still, and its timeline stops.
+    @State private var rested = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @Environment(\.scenePhase) private var phase
 
     var body: some View {
         GeometryReader { geo in
+            let way = Self.way(homeButton: geo.safeAreaInsets.bottom == 0, voiceOver: voiceOver,
+                               iPad: UIDevice.current.model.hasPrefix("iPad"))
+            let cue = Self.showsCue(returnTrip, status: status)
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: 0) {
                     Spacer()
-                    BubbleArt(mode: Self.mode(for: status)).frame(width: 140, height: 140)
-                    Text(Self.primaryLine(status: status, returnTrip: returnTrip))
-                        .font(.title2.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                        .accessibilityIdentifier("session.title")
-                    if let sub = Self.subLine(status: status, returnTrip: returnTrip, way: .swipe) {
-                        Text(sub)
-                            .font(.body)
-                            .foregroundStyle(Theme.inkSoft)
-                            .multilineTextAlignment(.center)
-                            .accessibilityIdentifier("session.subtitle")
+                    VStack(spacing: 14) {
+                        BubbleArt(mode: Self.mode(for: status)).frame(width: 104, height: 104)
+                        Text(Self.primaryLine(status: status, returnTrip: returnTrip))
+                            .font(.title2.weight(.semibold))
+                            .accessibilityIdentifier("session.title")
+                        if let sub = Self.subLine(status: status, returnTrip: returnTrip, way: way) {
+                            // While the mic starts on a manual return the line keeps its room, unseen and unheard, so
+                            // nothing moves when it shows with the cue.
+                            let waits = !cue && returnTrip?.phase != .leaving
+                            Text(sub)
+                                .font(.body)
+                                .foregroundStyle(Theme.inkSoft)
+                                .opacity(waits ? 0 : 1)
+                                .animation(.easeOut(duration: 0.2), value: waits)
+                                .accessibilityHidden(waits)
+                                .accessibilityIdentifier("session.subtitle")
+                        }
+                        if let line = Self.firstReturnLine(returnTrip: returnTrip) {
+                            Text(line).font(.footnote).foregroundStyle(Theme.inkSoft)
+                        }
                     }
-                    if let line = Self.firstReturnLine(returnTrip: returnTrip) {
-                        Text(line)
-                            .font(.footnote)
-                            .foregroundStyle(Theme.inkSoft)
-                            .multilineTextAlignment(.center)
-                    }
-                    if Self.showsCue(returnTrip, status: status) {
-                        SwipeBackHint(reduceMotion: reduceMotion || voiceOver).frame(height: 56).padding(.top, 4)
-                    }
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 320)
                     Spacer()
-                    Button(action: onEnd) {
-                        Text("End session").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.capsule)
-                    .tint(Theme.primary)
-                    .foregroundStyle(Theme.onPrimary)
-                    .accessibilityIdentifier("session.end")
+                    QuietActionButton(title: "End session", id: "session.end", action: onEnd).padding(.bottom, 26)
                 }
-                .padding()
+                .padding(.horizontal, 24)
                 .frame(minHeight: geo.size.height)
+                .contentShape(.rect)
+                .onTapGesture { if roundsFrom != nil { roundsFrom = .now } } // a tap on the page plays the cue again
+            }
+            .overlay {
+                if cue, way != .backLinkNoRing {
+                    let still = reduceMotion || voiceOver
+                    let insets = geo.safeAreaInsets
+                    // Nothing redraws once it rests, while the app is away, or before its rounds begin.
+                    TimelineView(.animation(paused: still || rested || roundsFrom == nil || phase != .active)) { context in
+                        let time = roundsFrom.map { context.date.timeIntervalSince($0) } ?? 0
+                        GoBackCue(way: way, shot: CueTimeline.shot(at: still || rested ? .infinity : time),
+                                  screen: CGSize(width: geo.size.width + insets.leading + insets.trailing,
+                                                 height: geo.size.height + insets.top + insets.bottom),
+                                  top: insets.top)
+                    }
+                    .ignoresSafeArea()
+                }
+            }
+            // The rounds begin once the cue shows with the app in front: once the mic is on, or after a fallback or a
+            // prompt that came late, never while the screen waited.
+            .onChange(of: cue && phase == .active, initial: true) { _, live in
+                if live, roundsFrom == nil { roundsFrom = .now }
             }
         }
         .foregroundStyle(Theme.ink)
         .background(Theme.paper)
+        .task(id: roundsFrom) {
+            guard let roundsFrom else { return }
+            rested = false
+            try? await Task.sleep(for: .seconds(max(0, CueTimeline.length - Date.now.timeIntervalSince(roundsFrom))))
+            if !Task.isCancelled { rested = true } // a tap meanwhile began new rounds
+        }
     }
 
     /// The way back for this screen: the swipe on an iPhone with a home indicator, else iOS's link at the top left, ringed
@@ -142,32 +176,86 @@ struct SessionScreen: View {
     private static func isLive(_ status: HostStatus) -> Bool { status.take != .idle || status.session != .off }
 }
 
-/// The swipe-back hint: the guides' swipe cue sliding right along the bottom edge. Still at the end of the swipe when
-/// Reduce Motion or VoiceOver is on. Hidden from VoiceOver's own navigation either way (the sub-line already tells the
-/// user what to do).
-private struct SwipeBackHint: View {
-    let reduceMotion: Bool
+/// The way back drawn where it happens, in screen points: the swipe along the bottom edge on the home indicator's line,
+/// or a ring around the name iOS writes at the top left. It takes no touches, and VoiceOver reads it as one picture the
+/// size of the drawing.
+private struct GoBackCue: View {
+    let way: SessionScreen.Way
+    /// The frame to draw; nil between rounds, when nothing shows.
+    let shot: CueTimeline.Shot?
+    /// The whole screen, its safe areas included.
+    let screen: CGSize
+    /// The top safe area, which tells the screen's shape, and so where iOS writes its link.
+    let top: CGFloat
 
     var body: some View {
-        GeometryReader { geo in
-            let travel = geo.size.width * 0.5
-            let y = geo.size.height / 2
-            if reduceMotion {
-                cue.position(x: geo.size.width / 2 + travel / 2, y: y)
-            } else {
-                KeyframeAnimator(initialValue: 0.0, repeating: true) { x in
-                    cue.position(x: geo.size.width / 2 - travel / 2 + travel * x, y: y)
-                } keyframes: { _ in
-                    LinearKeyframe(0.0, duration: 0.3)
-                    LinearKeyframe(1.0, duration: 1.2)
-                    LinearKeyframe(1.0, duration: 0.6)
+        let bounds = way == .swipe ? swipeBand : Self.backLinkRing(top: top)
+        ZStack(alignment: .topLeading) {
+            Color.clear
+            if let shot {
+                ZStack(alignment: .topLeading) {
+                    if way == .swipe { swipe(shot) } else { ring(shot) }
                 }
+                .opacity(shot.opacity)
+                .accessibilityHidden(true)
             }
+            Color.clear
+                .frame(width: bounds.width, height: bounds.height)
+                .position(x: bounds.midX, y: bounds.midY)
+                .accessibilityElement()
+                .accessibilityLabel(way == .swipe ? Text("Picture: a finger swiping right along the bottom edge of the screen.")
+                                                  : Text("Picture: your app’s name at the top left."))
+                .accessibilityAddTraits(.isImage)
+                .accessibilityIdentifier("session.cue")
         }
-        .accessibilityHidden(true)
+        .allowsHitTesting(false)
     }
 
-    private var cue: some View { TapCue(outline: Capsule(), gesture: "Swipe").frame(width: 44, height: 26) }
+    /// The ring around the name iOS writes at the top left when another app opened ThumbFree ("◀ Messages"), wide enough
+    /// for most names: in the 20-point status bar of an iPhone with a Home button, where the Wi-Fi symbol follows the
+    /// name, else under the clock (a notch and a Dynamic Island alike).
+    /// ponytail: fixed numbers measured on the iOS 26.5 Simulators (iPhone SE 3rd generation, iPhone 14, iPhone 17 Pro);
+    /// look again after each iOS release.
+    static func backLinkRing(top: CGFloat) -> CGRect {
+        top <= 20 ? CGRect(x: 2, y: 0, width: 80, height: 20) : CGRect(x: 6, y: 27, width: 80, height: 24)
+    }
+
+    /// The home indicator's line, 12 points above the bottom, and the swipe's run along it, from 30 % to 82 % of the width.
+    private var y: CGFloat { screen.height - 12 }
+    private var x0: CGFloat { screen.width * 0.3 }
+    private var x1: CGFloat { screen.width * 0.82 }
+
+    /// What the swipe covers: its trail, the ring with the pill above it and the chevron after it, down to the bottom.
+    private var swipeBand: CGRect { CGRect(x: x0 - 27, y: y - 41, width: x1 - x0 + 73, height: 53) }
+
+    /// The ring lands on the line, slides right leaving a sunflower trail, and in the still has a chevron after it.
+    @ViewBuilder private func swipe(_ shot: CueTimeline.Shot) -> some View {
+        let x = x0 + (x1 - x0) * shot.slide
+        Capsule().fill(Theme.sunflower.opacity(0.55))
+            .frame(width: x - x0 + 8, height: 8)
+            .position(x: (x0 + x) / 2, y: y)
+        TapCue(outline: Capsule(), gesture: "Swipe", ripple: shot.ripple)
+            .frame(width: 46, height: 22)
+            .position(x: x, y: y)
+        if shot.still {
+            Image(systemName: "chevron.forward")
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundStyle(Theme.cueEdge)
+                .position(x: x + 38, y: y)
+        }
+    }
+
+    /// The guides' tap on iOS's link: the ripple and a soft press, with a Tap pill under the ring.
+    @ViewBuilder private func ring(_ shot: CueTimeline.Shot) -> some View {
+        let ring = Self.backLinkRing(top: top)
+        Capsule().fill(Theme.sunflower.opacity(0.28 * TapTimeline.press(at: shot.beat)))
+            .frame(width: ring.width, height: ring.height)
+            .position(x: ring.midX, y: ring.midY)
+        TapCue(outline: Capsule(), ripple: TapTimeline.ripple(at: shot.beat), showsPill: false)
+            .frame(width: ring.width, height: ring.height)
+            .position(x: ring.midX, y: ring.midY)
+        CuePill(text: "Tap").fixedSize().position(x: ring.midX, y: ring.maxY + 8 + CuePill.height / 2)
+    }
 }
 
 /// The cue's motion: 3 rounds of 1.65 s, then the still. Each round is one beat of a tap's length (`TapTimeline.length`,

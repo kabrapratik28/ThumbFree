@@ -8,7 +8,8 @@ Settings tabs in SwiftUI. `Intents/` and `Widgets/` add Start ThumbFree, a Short
 
 - Starting: with no live session, the first mic tap opens the app with `thumbfree://dictate?take=<id>`; the app starts
   the session and the take, then reopens the app the user came from if `ReturnTargets` lets this build open it
-  (Messages, Notes and Signal, in Debug builds only), or shows how to swipe back. Later taps need no switch.
+  (Messages, Notes and Signal, in Debug builds only), or shows the way back (`SessionScreen.Way`). Later taps need no
+  switch.
 - A session keeps the model warm and the mic open with a 300 ms pre-roll. It ends after its length (2, 5, 15 or 60
   minutes after the last take), a call, a lost route, a memory warning while idle, or End session. Tap to lock, hold
   to talk. While a take records, every mic is a red stop key and the bar reads "Recording 0:07"
@@ -26,7 +27,8 @@ Settings tabs in SwiftUI. `Intents/` and `Widgets/` add Start ThumbFree, a Short
   the first take in the try, whose box comes while the engine loads.
 - Every control has a VoiceOver label, text uses Dynamic Type, and every page scrolls at the largest sizes; the
   welcome, the try and Home never scroll below them. Every drawing sits in an `IllustrationFrame`: labelled, no taps,
-  one VoiceOver image; a `TapCue` shows where to tap, in the floating guide's video too, and Reduce Motion stills it.
+  one VoiceOver image (the session screen's cue, drawn on the screen's own edge, is the same with no frame); a `TapCue`
+  shows where to tap, in the floating guide's video too, and Reduce Motion stills it.
   The look comes from `UI/Theme.swift`. What users read follows the Android app's words, in the second person: say what
   happens and what is kept, and never blame the user. A title never leaves one word alone on its last line
   (`keepingLastWordsTogether`). No live word preview.

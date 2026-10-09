@@ -34,3 +34,5 @@ adds the keyboard to the Simulator first (`tools/sim-enable-keyboard.sh`).
 - The try screen is a sheet over Home: leave it (Not now) before the tab bar or Home's End session. Leaving it mid-take
   cancels the take; a test that needs the session over with the keyboard still up passes `-TFEndSessions YES`.
 - The landscape tests fail to rotate on a Simulator that has been up for days: shut it down and boot it again.
+- An iPad Simulator opens ThumbFree in a window beside the app it came from, whose keyboard can cover ThumbFree's tab
+  bar and End session: close that app before tapping there.
