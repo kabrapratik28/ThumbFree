@@ -8,7 +8,7 @@ Settings tabs in SwiftUI. `Intents/` and `Widgets/` add Start ThumbFree, a Short
 
 - Starting: with no live session, the first mic tap opens the app with `thumbfree://dictate?take=<id>`; the app starts
   the session and the take, then reopens the app the user came from if `ReturnTargets` lets this build open it
-  (Messages, Notes and Signal in store builds), or shows how to swipe back. Later taps need no switch.
+  (Messages, Notes and Signal, in Debug builds only), or shows how to swipe back. Later taps need no switch.
 - A session keeps the model warm and the mic open with a 300 ms pre-roll. It ends after its length (2, 5, 15 or 60
   minutes after the last take), a call, a lost route, a memory warning while idle, or End session. Tap to lock, hold
   to talk. While a take records, every mic is a red stop key and the bar reads "Recording 0:07"

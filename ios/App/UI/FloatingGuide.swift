@@ -16,7 +16,7 @@ import TFCore
     static let scale: CGFloat = 3
     /// Raised whenever the frames change, so a video made by an older version is never reused (the file name also has
     /// the app's build number, so an update never plays an old video).
-    static let version = 4
+    static let version = 5
     /// Seconds per beat: one tap's time.
     static let beat = TapTimeline.length
     /// Frames a second while a tap's ripple grows and its switch slides, so nothing steps.
@@ -25,7 +25,7 @@ import TFCore
         String(localized: "Tap Keyboards."),
         String(localized: "Turn on ThumbFree."),
         String(localized: "Turn on Allow Full Access."),
-        String(localized: "When iOS asks, tap Allow."),
+        String(localized: "iOS asks you to confirm."),
         String(localized: "Tap ThumbFree at the top left to return."),
     ]
     /// The beat that names iOS's question: words and a shield, nothing to tap in the picture.

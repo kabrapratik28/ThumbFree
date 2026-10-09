@@ -17,8 +17,8 @@ not the transcribe.cpp engine in `third_party/`. Commands here run in `ios/`; fi
   target iPhone only. Never edit a file whose header says it is generated (`ModelCatalog.swift`, `EmojiData.swift`):
   change its input and rerun its tool.
 - Automatic return finds the app being typed in through a private UIKit interface, the keyboard arbiter
-  (`Keyboard/HostArbiter*`). It compiles only with `TF_AUTO_RETURN`, which `project.yml` sets in Debug and, since 1.0.1,
-  Release; `tools/store-check.sh` then expects exactly its private names, and a build without it uses public API only.
+  (`Keyboard/HostArbiter*`). It compiles only with `TF_AUTO_RETURN`, which `project.yml` sets in Debug only: the App
+  Store build uses public API only (guideline 2.5.1), and `tools/store-check.sh` fails on any private name in it.
   Test hooks (`-TFResetState`, `-TFAudioFile`, `-TFFakeEngine` and the rest) live inside `#if DEBUG`, and each new one
   adds an 8-byte piece of its name to the `hooks` pattern of `tools/store-check.sh`. Each `PrivacyInfo.xcprivacy`
   (`App/`, `Keyboard/`, `Widgets/`) declares every required-reason API its bundle uses, with the reason, and no other.

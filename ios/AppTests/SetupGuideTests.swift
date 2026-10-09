@@ -5,11 +5,11 @@ import Testing
 /// beats, then its tip.
 @MainActor @Suite struct SetupGuideTests {
     // With Reduce Motion or VoiceOver, the keyboard step lists the rows to tap in Settings, in order, and VoiceOver hears
-    // the picture once. iOS's Allow question is named in words, never drawn.
+    // the picture once. iOS's question is named in neutral words, never drawn and never "tap Allow" (guideline 5.1.1(iv)).
     @Test func theKeyboardStepsListIsTheTapsInSettings() {
-        #expect(SetupGuideView.names == ["Keyboards", "ThumbFree", "Allow Full Access", "Allow", "Return to ThumbFree"])
+        #expect(SetupGuideView.names == ["Keyboards", "ThumbFree", "Allow Full Access", "Confirm", "Return to ThumbFree"])
         #expect(SetupGuideView.description
-            == "In Settings, open Keyboards, turn on ThumbFree, turn on Allow Full Access, tap Allow, then return to ThumbFree.")
+            == "In Settings, open Keyboards, turn on ThumbFree, turn on Allow Full Access, confirm, then return to ThumbFree.")
     }
 
     // A tap in a picture takes 1.3 s: the cue holds 0.25 s, its ripple grows over 0.35 s, the control changes over

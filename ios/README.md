@@ -49,13 +49,13 @@ flowchart LR
   download["Model download<br/>once, pinned and checked"] -.-> engine
 ```
 
-1. **Keyboard.** iOS lets no keyboard use the microphone, and a keyboard's memory is too small for a speech model. So the keyboard asks the ThumbFree app to record, through files in a folder the two share (the App Group), which is why the keyboard needs Full Access. The first tap of a session opens ThumbFree to turn the mic on, and ThumbFree takes you back to your app (Messages, Notes and Signal so far; elsewhere you swipe back). Every tap for the next few minutes starts at once, right where you are.
+1. **Keyboard.** iOS lets no keyboard use the microphone, and a keyboard's memory is too small for a speech model. So the keyboard asks the ThumbFree app to record, through files in a folder the two share (the App Group), which is why the keyboard needs Full Access. The first tap of a session opens ThumbFree to turn the mic on, and you swipe back to your app. Every tap for the next few minutes starts at once, right where you are.
 2. **Session.** The app keeps the mic open for the session with the last 300 ms of audio in hand, so a take starts with the words just before your tap. The model loads when the session starts and stays warm for it.
 3. **Engine.** Transcription runs in the app with ThumbFree's own Core ML runner for Parakeet TDT: the Encoder on the Neural Engine, the rest on the CPU, never the GPU. Long takes are cut at natural pauses and transcribed while you talk; a pause starts the final pass early, and the stop runs it at once. A speech gate and the Silero voice detector keep silence and noise from typing text.
 4. **Text.** Dictionary words fix spellings, fillers go, and the text is fitted to the cursor's spacing and capitals. It is saved to History before the keyboard types it, once, and only into the field it belongs to. Anything else waits behind Insert here and Copy.
 
-Going back by itself needs a private iOS interface to learn which app you were typing in. Since 1.0.1 store builds use
-it, only for apps checked on an iPhone, and Settings > Go back to the app automatically turns it off.
+Going back by itself needs a private iOS interface to learn which app you were typing in, so only Debug builds have it
+(for apps checked on an iPhone, with Settings > Go back to the app automatically to turn it off); store builds do not.
 
 ### Project layout
 

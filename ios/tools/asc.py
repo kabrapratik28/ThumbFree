@@ -202,7 +202,9 @@ def fill(client):
     vloc = english(client, f"/v1/appStoreVersions/{version}/appStoreVersionLocalizations")["id"]
     texts = {"description": text["description"], "keywords": text["keywords"], "promotionalText": text["promo"],
              "supportUrl": text["support"], "marketingUrl": text["marketing"]}
-    if text["whatsnew"] and current["attributes"]["versionString"] != "1.0":  # Apple refuses What's New on a first version
+    # Apple refuses What's New on a first version, whatever its number (1.0 went to review as 1.0.1 after a rejection).
+    first = sum(1 for _ in client.every(f"/v1/apps/{app}/appStoreVersions?filter[platform]=IOS")) == 1
+    if text["whatsnew"] and not first:
         texts["whatsNew"] = text["whatsnew"]
     client.patch("appStoreVersionLocalizations", vloc, texts)
 

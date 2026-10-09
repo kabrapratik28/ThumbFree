@@ -240,7 +240,7 @@ struct SetupRows: View {
         let modelLine = Self.modelLine(model.phase, engine: host.status.engine, total: model.totalBytes, waiting: model.waiting)
         VStack(alignment: .leading, spacing: 18) {
             row("mic.fill", "Microphone", facts.mic == .granted ? "Allowed" : "Needed to hear you", done: facts.mic == .granted) {
-                if facts.mic != .granted { action("Allow", "setup.mic", allowMic) }
+                if let fix = Self.micFix(facts.mic) { action(fix, "setup.mic", allowMic) }
             }
             row("keyboard", "ThumbFree keyboard", Self.keyboardLine(facts.keyboard), done: facts.keyboard == .ready) {
                 // Added: switching to it finishes the row (its first appearance with Full Access); a small way to Settings
@@ -360,7 +360,17 @@ struct SetupRows: View {
         .accessibilityIdentifier(id)
     }
 
-    /// Allow: the system's question the first time; once refused, only Settings can turn it on.
+    /// The microphone row's button. Before iOS's own question it says Continue, never Allow (App Review guideline
+    /// 5.1.1(iv)); once refused, only Settings can turn the microphone on. Nil once allowed.
+    static func micFix(_ mic: AVAudioApplication.recordPermission) -> String? {
+        switch mic {
+        case .undetermined: "Continue"
+        case .denied: "Open Settings"
+        default: nil
+        }
+    }
+
+    /// Continue: the system's question the first time; once refused, only Settings can turn it on.
     private func allowMic() {
         guard facts.mic == .undetermined else { return Self.openSettings() }
         Task {

@@ -270,6 +270,10 @@ private struct AboutSection: View {
                 }
             }
             .accessibilityElement(children: .combine)
+            // App Review asks for the privacy policy inside the app too, not only in the listing (guideline 5.1.1(i)).
+            Link("Privacy policy", destination: Self.url("https://kabrapratik28.github.io/ThumbFree/privacy.html"))
+                .foregroundStyle(Theme.ink)
+                .accessibilityIdentifier("settings.privacy")
             DisclosureGroup("Open-source licenses and credits", isExpanded: $showCredits) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Parakeet TDT 0.6B v2, the English speech model, by NVIDIA: CC BY 4.0.")

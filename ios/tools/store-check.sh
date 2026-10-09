@@ -12,8 +12,8 @@ xcodebuild -project ThumbFree.xcodeproj -scheme ThumbFree -configuration Release
   -derivedDataPath build/StoreRelease -allowProvisioningUpdates "$@" build 2>&1 | tail -1
 app=build/StoreRelease/Build/Products/Release-iphoneos/ThumbFree.app
 private='arbiter|LSApplicationWorkspace|_hostProcessIdentifier|sourceBundleIdentifier'
-# Automatic return ships since 1.0.1 (project.yml's release block sets TF_AUTO_RETURN): then its own private names are
-# expected, and any other private name still fails.
+# Automatic return ships only when project.yml's release block sets TF_AUTO_RETURN (the App Store build leaves it out):
+# then its own private names are expected, and any other private name still fails.
 if sed -n '/^    release:/,/^[a-z]/p' project.yml | grep -q TF_AUTO_RETURN; then
   expected='arbiter|_hostProcessIdentifier|sourceBundleIdentifier'
 else

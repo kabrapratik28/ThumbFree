@@ -42,7 +42,7 @@ import XCTest
     static func allowMicrophone(in app: XCUIApplication) {
         app.tabBars.buttons["Settings"].tap()
         let allow = app.buttons["setup.mic"]
-        XCTAssertTrue(allow.waitForExistence(timeout: 5), "Settings' microphone row offers no Allow")
+        XCTAssertTrue(allow.waitForExistence(timeout: 5), "Settings' microphone row offers no Continue")
         allow.tap()
         answerMicPrompt()
         XCTAssertTrue(wait(until: 5) { !app.buttons["setup.mic"].exists }, "Settings' microphone row still asks")

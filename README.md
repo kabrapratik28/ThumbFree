@@ -153,7 +153,7 @@ The app can show your words next to the bubble while you speak. The feature is b
 ### How it works
 
 - **How it types into other apps.** iOS lets no app draw over other apps or type into them, so on iPhone ThumbFree is a keyboard. Switch to the ThumbFree keyboard with the globe key, tap its mic, speak, and tap again: your words appear at the cursor.
-- **Why the app records.** iOS gives a keyboard no microphone and too little memory for a speech model. So the keyboard asks the ThumbFree app to record. The two share files through an App Group, which is why the keyboard asks for Full Access. The first tap of a session opens the app to turn the mic on. Then it takes you back to your app (Messages, Notes and Signal so far; elsewhere you swipe back), and later taps start at once. The keyboard types each take once, only into the field it belongs to.
+- **Why the app records.** iOS gives a keyboard no microphone and too little memory for a speech model. So the keyboard asks the ThumbFree app to record. The two share files through an App Group, which is why the keyboard asks for Full Access. The first tap of a session opens the app to turn the mic on; you swipe back to your app, and later taps start at once. The keyboard types each take once, only into the field it belongs to.
 - **Speech to text.** The app runs NVIDIA Parakeet TDT 0.6B v2 (English) or v3 (25 European languages) on Core ML with its own runner, the Encoder on the Neural Engine. On an iPhone 16 the text is ready about 0.12 seconds after you tap stop at the end of a sentence ([benchmark](ios/docs/benchmarks/2026-09-27-iphone16-device.md)).
 - **A full keyboard too:** letters in Apple's layout, emoji, suggestions and autocorrect.
 

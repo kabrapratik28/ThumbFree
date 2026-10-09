@@ -49,4 +49,11 @@ import TFCore
         #expect(SetupRows.keyboardLine(.ready) == "Added, with Full Access")
         #expect(SetupRows.doneCount(SetupRows.Facts(mic: .granted, keyboard: .added, model: true)) == 2)
     }
+
+    // Guideline 5.1.1(iv): a button before iOS's microphone question says Continue, never Allow (App Review, 2026-10-09).
+    @Test func theMicrophoneRowLeadsToIOSWithContinue() {
+        #expect(SetupRows.micFix(.undetermined) == "Continue")
+        #expect(SetupRows.micFix(.denied) == "Open Settings")
+        #expect(SetupRows.micFix(.granted) == nil)
+    }
 }

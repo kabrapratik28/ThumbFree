@@ -30,6 +30,7 @@ import XCTest
         XCTAssertTrue(ThumbFreeUI.element("dictionary.field", in: app).waitForExistence(timeout: 5))
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(find("settings.credits", in: app).exists)
+        XCTAssertTrue(find("settings.privacy", in: app).exists) // a link to the privacy policy in the app (guideline 5.1.1(i))
         find("settings.welcome", in: app, above: true).tap()
         XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("welcome.title", in: app),
                                        toContain: "Your voice becomes text in any app.", timeout: 5))

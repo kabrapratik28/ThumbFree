@@ -200,7 +200,7 @@ import TFCore
             "Tap Keyboards.",
             "Turn on ThumbFree.",
             "Turn on Allow Full Access.",
-            "When iOS asks, tap Allow.",
+            "iOS asks you to confirm.",
             "Tap ThumbFree at the top left to return.",
         ])
         #expect(FloatingGuide.beat == TapTimeline.length)

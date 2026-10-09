@@ -8,9 +8,9 @@ import SwiftUI
 /// floating over Settings stays.
 struct SetupGuideView: View {
     /// The rows of the short list, in order.
-    static let names = ["Keyboards", "ThumbFree", "Allow Full Access", "Allow", "Return to ThumbFree"]
+    static let names = ["Keyboards", "ThumbFree", "Allow Full Access", "Confirm", "Return to ThumbFree"]
     /// What VoiceOver reads for the picture, once.
-    static let description = "In Settings, open Keyboards, turn on ThumbFree, turn on Allow Full Access, tap Allow, then return to ThumbFree."
+    static let description = "In Settings, open Keyboards, turn on ThumbFree, turn on Allow Full Access, confirm, then return to ThumbFree."
     /// The least height the video shows at; its frame is then 250 points, and at most 340 (the video's own 274).
     static let videoMinHeight: CGFloat = 184
 
