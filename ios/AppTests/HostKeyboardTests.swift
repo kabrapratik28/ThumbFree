@@ -333,19 +333,19 @@ import TFCore
         #expect(primary(HostStatus(take: .transcribing)) == "Transcribing")
         #expect(primary(HostStatus(session: .ready, micOn: true)) == "Ready, mic on.")
         #expect(primary(HostStatus(message: "No speech heard.")) == "No speech heard.")
-        // The swipe-back sub-line names the app when known, else "your app".
-        #expect(SessionScreen.subLine(status: HostStatus(), returnTrip: swipe) == "Swipe right along the bottom edge to go back to your app.")
+        // The swipe-back sub-line names the app when known, else no app.
+        #expect(SessionScreen.subLine(status: HostStatus(), returnTrip: swipe, way: .swipe) == "Swipe right along the bottom edge to go back.")
         let named = ReturnTrip(appName: "WhatsApp", phase: .swipeBack, firstReturn: false)
-        #expect(SessionScreen.subLine(status: HostStatus(), returnTrip: named) == "Swipe right along the bottom edge to go back to WhatsApp.")
-        // While leaving, the big line is short and the sub-line names the app; no swipe hint yet. But the words and
+        #expect(SessionScreen.subLine(status: HostStatus(), returnTrip: named, way: .swipe) == "Swipe right along the bottom edge to go back to WhatsApp.")
+        // While leaving, the big line is short and the sub-line names the app; no cue yet. But the words and
         // the bubble art must not disagree: the trip goes `.leaving` before the mic delivers any audio, so "Listening."
         // shows only once the mic art itself would show listening; until then it is still the status line.
         let leaving = ReturnTrip(appName: "WhatsApp", phase: .leaving, firstReturn: false)
         #expect(SessionScreen.primaryLine(status: HostStatus(micOn: true, take: .recording), returnTrip: leaving) == "Listening.")
         #expect(SessionScreen.primaryLine(status: HostStatus(take: .recording), returnTrip: leaving) == "Starting the microphone")
-        #expect(SessionScreen.subLine(status: HostStatus(micOn: true, take: .recording), returnTrip: leaving) == "Taking you back to WhatsApp\u{2026}")
-        #expect(SessionScreen.showsSwipeHint(leaving, status: HostStatus()) == false)
-        #expect(SessionScreen.showsSwipeHint(swipe, status: HostStatus()) == true)
+        #expect(SessionScreen.subLine(status: HostStatus(micOn: true, take: .recording), returnTrip: leaving, way: .swipe) == "Taking you back to WhatsApp\u{2026}")
+        #expect(SessionScreen.showsCue(leaving, status: HostStatus()) == false)
+        #expect(SessionScreen.showsCue(swipe, status: HostStatus()) == true)
         // The first time for an app, iOS may ask before it opens it: "tap Open" shows while leaving, and goes once the
         // trip swipes back (a miss, the fallback or a Cancel), where there is nothing to tap.
         let firstTime = ReturnTrip(appName: "WhatsApp", phase: .leaving, firstReturn: true)
@@ -356,13 +356,13 @@ import TFCore
         #expect(SessionScreen.firstReturnLine(returnTrip: leaving) == nil) // not the first time
         #expect(SessionScreen.firstReturnLine(returnTrip: nil) == nil)
         // After a successful automatic return, returnTrip goes nil (`resolveIfOpened()`). Coming back mid-take
-        // must still show the generic swipe-back line and its finger, not silently drop them; but nothing once the
+        // must still show the generic swipe-back line and its cue, not silently drop them; but nothing once the
         // take and the session are both over (no trip to name, and nothing left to swipe back to anyway).
         let stillLive = HostStatus(micOn: true, take: .recording)
-        #expect(SessionScreen.subLine(status: stillLive, returnTrip: nil) == "Swipe right along the bottom edge to go back to your app.")
-        #expect(SessionScreen.showsSwipeHint(nil, status: stillLive) == true)
-        #expect(SessionScreen.subLine(status: HostStatus(), returnTrip: nil) == nil)
-        #expect(SessionScreen.showsSwipeHint(nil, status: HostStatus()) == false)
+        #expect(SessionScreen.subLine(status: stillLive, returnTrip: nil, way: .swipe) == "Swipe right along the bottom edge to go back.")
+        #expect(SessionScreen.showsCue(nil, status: stillLive) == true)
+        #expect(SessionScreen.subLine(status: HostStatus(), returnTrip: nil, way: .swipe) == nil)
+        #expect(SessionScreen.showsCue(nil, status: HostStatus()) == false)
         // Its mic art says the same as its words: the keyboard's red stop key only while listening, the turning arc while
         // transcribing.
         #expect(SessionScreen.mode(for: HostStatus(micOn: true, take: .recording)) == .stop)
@@ -371,5 +371,96 @@ import TFCore
         #expect(SessionScreen.mode(for: HostStatus(take: .transcribing)) == .busy)
         #expect(SessionScreen.mode(for: HostStatus(session: .ready, micOn: true)) == .idle)
         #expect(SessionScreen.mode(for: HostStatus(message: "No speech heard.")) == .idle)
+    }
+
+    // The way back fits the screen: the swipe along the bottom edge on an iPhone with a home indicator; iOS's link at the
+    // top left, ringed, on one with a Home button (no edge to swipe) or with VoiceOver on (a real control is easier than
+    // an edge gesture); on an iPad, the link's words and no drawing (this iPhone app's window has neither of its edges).
+    @Test func theWayBackFitsTheScreenAndVoiceOver() {
+        #expect(SessionScreen.way(homeButton: false, voiceOver: false, iPad: false) == .swipe)
+        #expect(SessionScreen.way(homeButton: true, voiceOver: false, iPad: false) == .backLink)
+        #expect(SessionScreen.way(homeButton: false, voiceOver: true, iPad: false) == .backLink)
+        #expect(SessionScreen.way(homeButton: true, voiceOver: true, iPad: false) == .backLink)
+        #expect(SessionScreen.way(homeButton: false, voiceOver: false, iPad: true) == .backLinkNoRing)
+        #expect(SessionScreen.way(homeButton: false, voiceOver: true, iPad: true) == .backLinkNoRing)
+    }
+
+    // The line under the title says the way back, and names the app only when known (a Debug build's fallback).
+    @Test func theLineUnderTheTitleSaysTheWayBack() {
+        let listening = HostStatus(micOn: true, take: .recording)
+        let swipe = ReturnTrip(appName: nil, phase: .swipeBack, firstReturn: false)
+        let named = ReturnTrip(appName: "Notes", phase: .swipeBack, firstReturn: false)
+        func line(_ trip: ReturnTrip?, _ way: SessionScreen.Way) -> String? {
+            SessionScreen.subLine(status: listening, returnTrip: trip, way: way)
+        }
+        #expect(line(swipe, .swipe) == "Swipe right along the bottom edge to go back.")
+        #expect(line(nil, .swipe) == "Swipe right along the bottom edge to go back.")
+        #expect(line(named, .swipe) == "Swipe right along the bottom edge to go back to Notes.")
+        for way in [SessionScreen.Way.backLink, .backLinkNoRing] {
+            #expect(line(swipe, way) == "Tap your app\u{2019}s name at the top left to go back, or use the App Switcher.")
+            #expect(line(nil, way) == "Tap your app\u{2019}s name at the top left to go back, or use the App Switcher.")
+            #expect(line(named, way) == "Tap Notes at the top left to go back, or use the App Switcher.")
+        }
+        // Leaving for the app (Debug automatic return) keeps its words whatever the way, also before the mic is on, and
+        // the first time its "tap Open" line, which goes once the trip falls back to the way back.
+        let leaving = ReturnTrip(appName: "WhatsApp", phase: .leaving, firstReturn: true)
+        for status in [listening, HostStatus(take: .recording)] {
+            #expect(SessionScreen.subLine(status: status, returnTrip: leaving, way: .backLink) == "Taking you back to WhatsApp\u{2026}")
+        }
+        #expect(SessionScreen.firstReturnLine(returnTrip: leaving) == "If iOS asks, tap Open. It asks once.")
+        var fellBack = leaving
+        fellBack.phase = .swipeBack
+        #expect(SessionScreen.firstReturnLine(returnTrip: fellBack) == nil)
+        #expect(SessionScreen.subLine(status: listening, returnTrip: fellBack, way: .swipe) == "Swipe right along the bottom edge to go back to WhatsApp.")
+        #expect(SessionScreen.subLine(status: HostStatus(), returnTrip: nil, way: .backLink) == nil) // nothing live
+    }
+
+    // The cue shows while there is something to go back to and it is safe to leave: not while the mic starts on a manual
+    // return (iOS won't start it from the background, so leaving then could lose the take), not while leaving for the
+    // app, and not once nothing is live.
+    @Test func theCueWaitsForTheMicAndShowsWhileTheSessionIsLive() {
+        let swipe = ReturnTrip(appName: nil, phase: .swipeBack, firstReturn: false)
+        #expect(!SessionScreen.showsCue(nil, status: HostStatus(take: .recording)))
+        #expect(!SessionScreen.showsCue(swipe, status: HostStatus(take: .recording)))
+        #expect(SessionScreen.showsCue(nil, status: HostStatus(micOn: true, take: .recording)))
+        #expect(SessionScreen.showsCue(nil, status: HostStatus(session: .ready, micOn: true)))
+        for take in [TakePhase.stopping, .transcribing, .delivering] {
+            #expect(SessionScreen.showsCue(nil, status: HostStatus(session: .ready, micOn: true, take: take)))
+        }
+        let outcome = HostStatus(session: .ready, micOn: true, message: "No speech heard.")
+        #expect(SessionScreen.showsCue(nil, status: outcome))
+        #expect(SessionScreen.primaryLine(status: outcome, returnTrip: nil) == "No speech heard.")
+        #expect(!SessionScreen.showsCue(nil, status: HostStatus()))
+        let leaving = ReturnTrip(appName: "WhatsApp", phase: .leaving, firstReturn: false)
+        #expect(!SessionScreen.showsCue(leaving, status: HostStatus(micOn: true, take: .recording)))
+    }
+
+    // The cue's motion: 3 rounds of 1.65 s, then the still. In each round's beat the ring fades in, lands with its ripple,
+    // slides right from 0.3 to 0.85 s (eased, its trail behind it), holds, and fades out over its last 0.15 s; nothing is
+    // drawn for the 0.35 s after it.
+    @Test func theCuePlaysThreeRoundsThenRestsOnItsStill() throws {
+        func near(_ value: Double?, _ expected: Double) -> Bool { value.map { abs($0 - expected) < 1e-9 } ?? false }
+        func shot(_ time: Double) throws -> CueTimeline.Shot { try #require(CueTimeline.shot(at: time)) }
+        #expect(near(CueTimeline.length, 4.95))
+        #expect(try shot(0).opacity == 0)
+        #expect(near(try shot(0.06).opacity, 0.5))
+        #expect(near(try shot(0.06).ripple, 0))
+        #expect(near(try shot(0.21).ripple, 0.5))
+        #expect(try shot(0.36).ripple == nil)
+        #expect(try shot(0.3).slide == 0)
+        #expect(near(try shot(0.575).slide, 0.5))
+        #expect(try shot(0.85).slide == 1)
+        #expect(try shot(1.15).opacity == 1)
+        #expect(near(try shot(1.225).opacity, 0.5))
+        #expect(try !shot(1.2).still)
+        #expect(CueTimeline.shot(at: 1.3) == nil)
+        #expect(CueTimeline.shot(at: 1.6) == nil)
+        #expect(near(try shot(1.65 + 0.575).slide, 0.5)) // the second round
+        #expect(near(try shot(3.3 + 0.575).slide, 0.5)) // the third
+        #expect(CueTimeline.shot(at: 4.9) == nil) // its rest
+        for time in [4.95, 6, 600] {
+            let still = try shot(time)
+            #expect(still.still && still.slide == 1 && still.opacity == 1 && still.ripple == nil)
+        }
     }
 }

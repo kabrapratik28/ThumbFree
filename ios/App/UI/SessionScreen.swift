@@ -7,6 +7,18 @@ import TFCore
 struct SessionScreen: View {
     static let listening = "Listening."
 
+    /// How the screen shows the way back to your app, in its words and its drawing alike.
+    enum Way: Equatable {
+        /// Swipe right along the bottom edge: an iPhone with a home indicator.
+        case swipe
+        /// Tap your app's name, which iOS writes at the top left, drawn ringed: an iPhone with a Home button, which has no
+        /// such swipe, or VoiceOver on, where a real control is easier to reach than an edge gesture.
+        case backLink
+        /// The same words with no drawing: an iPad, where this iPhone app's window has neither the bottom edge nor the
+        /// top left of the iPad's screen.
+        case backLinkNoRing
+    }
+
     let status: HostStatus
     let returnTrip: ReturnTrip?
     let onEnd: () -> Void
@@ -23,7 +35,7 @@ struct SessionScreen: View {
                         .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("session.title")
-                    if let sub = Self.subLine(status: status, returnTrip: returnTrip) {
+                    if let sub = Self.subLine(status: status, returnTrip: returnTrip, way: .swipe) {
                         Text(sub)
                             .font(.body)
                             .foregroundStyle(Theme.inkSoft)
@@ -36,7 +48,7 @@ struct SessionScreen: View {
                             .foregroundStyle(Theme.inkSoft)
                             .multilineTextAlignment(.center)
                     }
-                    if Self.showsSwipeHint(returnTrip, status: status) {
+                    if Self.showsCue(returnTrip, status: status) {
                         SwipeBackHint(reduceMotion: reduceMotion || voiceOver).frame(height: 56).padding(.top, 4)
                     }
                     Spacer()
@@ -57,10 +69,20 @@ struct SessionScreen: View {
         .background(Theme.paper)
     }
 
-    /// The swipe hint shows on every state except while we are actively leaving for the host. With no trip at all (a
-    /// successful automatic return resolves it to nil once we leave the foreground), it still shows while a take or the
-    /// session is live: nothing to name, but still something to swipe back to. Never once both are over.
-    static func showsSwipeHint(_ trip: ReturnTrip?, status: HostStatus) -> Bool {
+    /// The way back for this screen: the swipe on an iPhone with a home indicator, else iOS's link at the top left, ringed
+    /// on an iPhone and only in words on an iPad.
+    static func way(homeButton: Bool, voiceOver: Bool, iPad: Bool) -> Way {
+        if iPad { return .backLinkNoRing }
+        return homeButton || voiceOver ? .backLink : .swipe
+    }
+
+    /// The cue shows on every state except while we are actively leaving for the host, and while the mic starts on a
+    /// manual return: iOS won't let ThumbFree start the mic from the background, so leaving then could lose the take.
+    /// With no trip at all (a successful automatic return resolves it to nil once we leave the foreground), it still
+    /// shows while a take or the session is live: nothing to name, but still something to go back to. Never once both
+    /// are over.
+    static func showsCue(_ trip: ReturnTrip?, status: HostStatus) -> Bool {
+        if status.take == .recording && !status.micOn { return false }
         guard trip == nil else { return trip?.phase != .leaving }
         return isLive(status)
     }
@@ -72,16 +94,21 @@ struct SessionScreen: View {
         returnTrip?.phase == .leaving && mode(for: status) == .stop ? listening : statusLine(status)
     }
 
-    /// The line under it. Leaving: "Taking you back to WhatsApp…" (the app's name from the table). Swipe-back: the swipe
-    /// instructions, naming the app when known. With no trip at all but a take or the session still live (a successful
-    /// automatic return resolves the trip to nil once we leave the foreground), the generic swipe-back line: no app name
-    /// to give, but still something to swipe back to. Other live-session states, or nothing live at all, have no sub-line.
-    static func subLine(status: HostStatus, returnTrip: ReturnTrip?) -> String? {
-        if returnTrip?.phase == .leaving, let name = returnTrip?.appName { return "Taking you back to \(name)…" }
-        if returnTrip == nil { return isLive(status) ? "Swipe right along the bottom edge to go back to your app." : nil }
-        guard returnTrip?.phase == .swipeBack else { return nil }
-        if let name = returnTrip?.appName { return "Swipe right along the bottom edge to go back to \(name)." }
-        return "Swipe right along the bottom edge to go back to your app."
+    /// The line under it. Leaving: "Taking you back to WhatsApp…" (the app's name from the table). Swipe-back: the way
+    /// back, naming the app when known (only a Debug build's fallback knows it). With no trip at all but a take or the
+    /// session still live (a successful automatic return resolves the trip to nil once we leave the foreground), the
+    /// generic line: no app name to give, but still something to go back to. Other live-session states, or nothing live
+    /// at all, have no sub-line. iOS writes the app's name at the top left only when another app opened ThumbFree, so
+    /// the back link's words also give the App Switcher.
+    static func subLine(status: HostStatus, returnTrip: ReturnTrip?, way: Way) -> String? {
+        if returnTrip?.phase == .leaving, let name = returnTrip?.appName { return String(localized: "Taking you back to \(name)…") }
+        guard returnTrip?.phase == .swipeBack || (returnTrip == nil && isLive(status)) else { return nil }
+        switch (way, returnTrip?.appName) {
+        case (.swipe, let name?): return String(localized: "Swipe right along the bottom edge to go back to \(name).")
+        case (.swipe, nil): return String(localized: "Swipe right along the bottom edge to go back.")
+        case (_, let name?): return String(localized: "Tap \(name) at the top left to go back, or use the App Switcher.")
+        case (_, nil): return String(localized: "Tap your app’s name at the top left to go back, or use the App Switcher.")
+        }
     }
 
     /// The first time ThumbFree takes you back to an app, iOS may ask first: this line says to tap Open. Only while leaving
@@ -141,4 +168,40 @@ private struct SwipeBackHint: View {
     }
 
     private var cue: some View { TapCue(outline: Capsule(), gesture: "Swipe").frame(width: 44, height: 26) }
+}
+
+/// The cue's motion: 3 rounds of 1.65 s, then the still. Each round is one beat of a tap's length (`TapTimeline.length`,
+/// 1.3 s) that fades in over 0.12 s and out over its last 0.15 s, then 0.35 s with nothing drawn. In the swipe's beat
+/// the ring lands with its ripple, slides right from 0.3 to 0.85 s (eased, its trail behind it) and holds; the back
+/// link's ring taps as the guides' do (`TapTimeline`). The still is the beat's end, with a chevron after the swipe.
+enum CueTimeline {
+    static let rounds = 3
+    static let round = 1.65
+    static var length: Double { Double(rounds) * round }
+
+    /// One frame of the cue.
+    struct Shot: Equatable {
+        /// Seconds into the round's beat; the beat's end in the still.
+        let beat: Double
+        let opacity: Double
+        let still: Bool
+
+        /// How far the swipe's ring has slid, 0 to 1; its trail runs from the start to the ring.
+        var slide: Double {
+            let t = min(max((beat - 0.3) / 0.55, 0), 1)
+            return t * t * (3 - 2 * t)
+        }
+
+        /// The swipe's ripple as the ring lands, 0 to 1 of its way; nil before and after it.
+        var ripple: Double? { (0.06..<0.36).contains(beat) ? (beat - 0.06) / 0.3 : nil }
+    }
+
+    /// The frame `time` seconds after the rounds began: nil while nothing is drawn between beats, the still from
+    /// `length` on (pass `.infinity` for the still at once: Reduce Motion, VoiceOver).
+    static func shot(at time: Double) -> Shot? {
+        guard time < length else { return Shot(beat: TapTimeline.length, opacity: 1, still: true) }
+        let beat = max(time, 0).truncatingRemainder(dividingBy: round)
+        guard beat < TapTimeline.length else { return nil }
+        return Shot(beat: beat, opacity: min(beat / 0.12, 1, (TapTimeline.length - beat) / 0.15), still: false)
+    }
 }

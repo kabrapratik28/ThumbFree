@@ -9,8 +9,9 @@ import UIKit
 /// which needs no model (`-TFFakeText <text>` picks the text); `-TFResetState YES` starts with no history (and no take
 /// counted as having given text), no IPC files, no downloaded model and the welcome flow not begun (`-TFWelcomeDone YES`
 /// or `NO` then decides whether it shows), and an empty Dictionary;
-/// `-TFModelFixture <file>` makes that one file the model to download, read from disk, so UI tests stay offline. On a
-/// phone the engine uses the downloaded model; on the Simulator the Mac's cached model (FluidAudio folder) comes first.
+/// `-TFModelFixture <file>` makes that one file the model to download, read from disk, so UI tests stay offline;
+/// `-TFMicDelayMs <n>` starts the audio file n ms late, like a slow mic. On a phone the engine uses the downloaded
+/// model; on the Simulator the Mac's cached model (FluidAudio folder) comes first.
 /// `-TFKeepSetup YES` (Debug builds) keeps this launch's audio file, engine and welcome answer for the next launch only:
 /// the one iOS makes with no arguments when a keyboard's dictate link opens the closed app. These test arguments exist only
 /// in Debug builds: a Release (store) build compiles them out.
@@ -78,15 +79,16 @@ enum AppEnvironment {
         let models = speechModels(root: Self.modelsRoot, defaults: defaults)
         #if DEBUG
         let audioFile = defaults.string(forKey: "TFAudioFile").map { URL(fileURLWithPath: $0) }
+        let micDelay = Duration.milliseconds(max(0, defaults.integer(forKey: "TFMicDelayMs")))
         let engine: EngineSource = defaults.bool(forKey: "TFFakeEngine")
             ? .fixed(defaults.string(forKey: "TFFakeText") ?? fakeText) : .parakeet(models.active.usableFolder)
         #else
-        let audioFile: URL? = nil
+        let audioFile: URL? = nil, micDelay = Duration.zero
         let engine = EngineSource.parakeet(models.active.usableFolder)
         #endif
         let host = SessionHost(history: history, shared: shared, engine: engine, returnDelayMs: returnDelayMs(defaults),
                                defaults: defaults) {
-            if let audioFile, let file = try? FileAudioSource(url: audioFile, realTime: true) { return file }
+            if let audioFile, let file = try? FileAudioSource(url: audioFile, realTime: true, startDelay: micDelay) { return file }
             return MicAudioSource()
         }
         // Automatic return: the app opens the host's URL scheme and remembers which apps it returned to.

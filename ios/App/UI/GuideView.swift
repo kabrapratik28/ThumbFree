@@ -355,7 +355,7 @@ struct WalkthroughScene: View {
             VStack(spacing: 10) {
                 MicDiagram(mode: .recording).scaleEffect(1.6).frame(width: 52, height: 52)
                 Text(SessionScreen.primaryLine(status: listening, returnTrip: trip)).font(.system(size: 15, weight: .semibold))
-                if let line = SessionScreen.subLine(status: listening, returnTrip: trip) {
+                if let line = SessionScreen.subLine(status: listening, returnTrip: trip, way: .swipe) {
                     Text(line).font(.system(size: 13)).foregroundStyle(Theme.inkSoft)
                 }
             }

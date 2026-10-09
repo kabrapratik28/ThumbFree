@@ -42,6 +42,33 @@ import TFCore
         #expect(got.dropFirst(1_600).allSatisfy { $0 == 0 })
     }
 
+    // `-TFMicDelayMs`: the source starts that much later, like a mic that is slow to start, so its first block and the
+    // take's arming clock (which starts when start() returns) both wait. Stopped meanwhile, it never sends a block.
+    @Test(.timeLimit(.minutes(1))) func aStartDelayHoldsTheFirstBlockBack() async throws {
+        let url = try TestFiles.url("jfk.wav")
+        let source = try FileAudioSource(url: url, realTime: true, startDelay: .milliseconds(300))
+        let (blocks, sink) = AsyncStream.makeStream(of: [Float].self)
+        let clock = ContinuousClock()
+        let start = clock.now
+        try await source.start { sink.yield($0) }
+        #expect(clock.now - start >= .milliseconds(300))
+        var next = blocks.makeAsyncIterator()
+        #expect(await next.next() != nil)
+        source.stop()
+
+        let stopped = try FileAudioSource(url: url, realTime: true, startDelay: .milliseconds(300))
+        let (none, noneSink) = AsyncStream.makeStream(of: [Float].self)
+        async let started: Void = stopped.start { noneSink.yield($0) }
+        try await Task.sleep(for: .milliseconds(100))
+        stopped.stop()
+        try await started
+        try await Task.sleep(for: .milliseconds(200)) // ten blocks' time
+        noneSink.finish()
+        var count = 0
+        for await _ in none { count += 1 }
+        #expect(count == 0)
+    }
+
     @Test func thePreRollKeepsTheLast300ms() {
         var roll = PreRoll()
         roll.push((0..<3_000).map(Float.init))
