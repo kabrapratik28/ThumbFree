@@ -17,9 +17,9 @@ struct SessionScreen: View {
         /// Tap your app's name, which iOS writes at the top left, drawn ringed: an iPhone with a Home button, which has no
         /// such swipe, or VoiceOver on, where a real control is easier to reach than an edge gesture.
         case backLink
-        /// The same words with no drawing: an iPad, where this iPhone app's window has neither the bottom edge nor the
-        /// top left of the iPad's screen.
-        case backLinkNoRing
+        /// The App Switcher, in words only: an iPad, which opens this iPhone app in a window of its own, with no app's
+        /// name at the top left and neither of the iPad's edges.
+        case appSwitcher
     }
 
     let status: HostStatus
@@ -73,7 +73,7 @@ struct SessionScreen: View {
                 .onTapGesture { if roundsFrom != nil { roundsFrom = .now } } // a tap on the page plays the cue again
             }
             .overlay {
-                if cue, way != .backLinkNoRing {
+                if cue, way != .appSwitcher {
                     let still = reduceMotion || voiceOver
                     let insets = geo.safeAreaInsets
                     // Nothing redraws once it rests, while the app is away, or before its rounds begin.
@@ -103,10 +103,10 @@ struct SessionScreen: View {
         }
     }
 
-    /// The way back for this screen: the swipe on an iPhone with a home indicator, else iOS's link at the top left, ringed
-    /// on an iPhone and only in words on an iPad.
+    /// The way back for this screen: the swipe on an iPhone with a home indicator, else iOS's link at the top left, ringed;
+    /// on an iPad, the App Switcher.
     static func way(homeButton: Bool, voiceOver: Bool, iPad: Bool) -> Way {
-        if iPad { return .backLinkNoRing }
+        if iPad { return .appSwitcher }
         return homeButton || voiceOver ? .backLink : .swipe
     }
 
@@ -133,15 +133,16 @@ struct SessionScreen: View {
     /// session still live (a successful automatic return resolves the trip to nil once we leave the foreground), the
     /// generic line: no app name to give, but still something to go back to. Other live-session states, or nothing live
     /// at all, have no sub-line. iOS writes the app's name at the top left only when another app opened ThumbFree, so
-    /// the back link's words also give the App Switcher.
+    /// the back link's words also give the App Switcher; an iPad never writes it, so there the words give only that.
     static func subLine(status: HostStatus, returnTrip: ReturnTrip?, way: Way) -> String? {
         if returnTrip?.phase == .leaving, let name = returnTrip?.appName { return String(localized: "Taking you back to \(name)…") }
         guard returnTrip?.phase == .swipeBack || (returnTrip == nil && isLive(status)) else { return nil }
         switch (way, returnTrip?.appName) {
         case (.swipe, let name?): return String(localized: "Swipe right along the bottom edge to go back to \(name).")
         case (.swipe, nil): return String(localized: "Swipe right along the bottom edge to go back.")
-        case (_, let name?): return String(localized: "Tap \(name) at the top left to go back, or use the App Switcher.")
-        case (_, nil): return String(localized: "Tap your app’s name at the top left to go back, or use the App Switcher.")
+        case (.appSwitcher, _): return String(localized: "Use the App Switcher to go back to your app.")
+        case (.backLink, let name?): return String(localized: "Tap \(name) at the top left to go back, or use the App Switcher.")
+        case (.backLink, nil): return String(localized: "Tap your app’s name at the top left to go back, or use the App Switcher.")
         }
     }
 

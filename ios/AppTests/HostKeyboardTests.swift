@@ -375,14 +375,15 @@ import TFCore
 
     // The way back fits the screen: the swipe along the bottom edge on an iPhone with a home indicator; iOS's link at the
     // top left, ringed, on one with a Home button (no edge to swipe) or with VoiceOver on (a real control is easier than
-    // an edge gesture); on an iPad, the link's words and no drawing (this iPhone app's window has neither of its edges).
+    // an edge gesture); on an iPad, the App Switcher in words only (iOS writes no app's name there, and this iPhone app's
+    // window has neither of the iPad's edges).
     @Test func theWayBackFitsTheScreenAndVoiceOver() {
         #expect(SessionScreen.way(homeButton: false, voiceOver: false, iPad: false) == .swipe)
         #expect(SessionScreen.way(homeButton: true, voiceOver: false, iPad: false) == .backLink)
         #expect(SessionScreen.way(homeButton: false, voiceOver: true, iPad: false) == .backLink)
         #expect(SessionScreen.way(homeButton: true, voiceOver: true, iPad: false) == .backLink)
-        #expect(SessionScreen.way(homeButton: false, voiceOver: false, iPad: true) == .backLinkNoRing)
-        #expect(SessionScreen.way(homeButton: false, voiceOver: true, iPad: true) == .backLinkNoRing)
+        #expect(SessionScreen.way(homeButton: false, voiceOver: false, iPad: true) == .appSwitcher)
+        #expect(SessionScreen.way(homeButton: false, voiceOver: true, iPad: true) == .appSwitcher)
     }
 
     // The line under the title says the way back, and names the app only when known (a Debug build's fallback).
@@ -396,10 +397,13 @@ import TFCore
         #expect(line(swipe, .swipe) == "Swipe right along the bottom edge to go back.")
         #expect(line(nil, .swipe) == "Swipe right along the bottom edge to go back.")
         #expect(line(named, .swipe) == "Swipe right along the bottom edge to go back to Notes.")
-        for way in [SessionScreen.Way.backLink, .backLinkNoRing] {
-            #expect(line(swipe, way) == "Tap your app\u{2019}s name at the top left to go back, or use the App Switcher.")
-            #expect(line(nil, way) == "Tap your app\u{2019}s name at the top left to go back, or use the App Switcher.")
-            #expect(line(named, way) == "Tap Notes at the top left to go back, or use the App Switcher.")
+        #expect(line(swipe, .backLink) == "Tap your app\u{2019}s name at the top left to go back, or use the App Switcher.")
+        #expect(line(nil, .backLink) == "Tap your app\u{2019}s name at the top left to go back, or use the App Switcher.")
+        #expect(line(named, .backLink) == "Tap Notes at the top left to go back, or use the App Switcher.")
+        // An iPad writes no app's name at the top left (this iPhone app opens there in a window of its own): the App
+        // Switcher alone, named app or not.
+        for trip in [swipe, nil, named] {
+            #expect(line(trip, .appSwitcher) == "Use the App Switcher to go back to your app.")
         }
         // Leaving for the app (Debug automatic return) keeps its words whatever the way, also before the mic is on, and
         // the first time its "tap Open" line, which goes once the trip falls back to the way back.

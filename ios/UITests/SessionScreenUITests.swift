@@ -14,8 +14,14 @@ import XCTest
         return XCUIApplication(bundleIdentifier: "com.apple.springboard").frame.height <= 667 ? .homeButton : .homeIndicator
     }
 
-    static let swipeLine = "Swipe right along the bottom edge to go back."
-    static let backLinkLine = "Tap your app’s name at the top left to go back, or use the App Switcher."
+    /// The words under the title on this Simulator's screen.
+    static var wayBackLine: String {
+        switch screen {
+        case .homeIndicator: "Swipe right along the bottom edge to go back."
+        case .homeButton: "Tap your app’s name at the top left to go back, or use the App Switcher."
+        case .iPad: "Use the App Switcher to go back to your app."
+        }
+    }
 
     func testTheDictateLinkShowsTheSessionScreenUntilEndSession() throws {
         let app = ThumbFreeUI.launch()
@@ -23,7 +29,7 @@ import XCTest
         let listening = app.staticTexts["session.title"]
         XCTAssertTrue(ThumbFreeUI.wait(for: listening, toContain: "Listening", timeout: 10))
         // A plain link (no trusted host) shows the way back, not an automatic return.
-        XCTAssertEqual(app.staticTexts["session.subtitle"].label, Self.screen == .homeIndicator ? Self.swipeLine : Self.backLinkLine)
+        XCTAssertEqual(app.staticTexts["session.subtitle"].label, Self.wayBackLine)
         app.buttons["session.end"].tap()
         XCTAssertTrue(listening.waitForNonExistence(timeout: 5))
         XCTAssertTrue(ThumbFreeUI.onHome(app, timeout: 5), "not back on Home")
@@ -67,7 +73,7 @@ import XCTest
         }, "the mic did not come on: \(title.label)")
         XCTAssertEqual(early, [], "shown while the mic started")
         XCTAssertGreaterThan(Date().timeIntervalSince(starting), 4.95, "the mic came on too soon to tell when the cue starts")
-        XCTAssertEqual(line.label, Self.swipeLine)
+        XCTAssertEqual(line.label, Self.wayBackLine)
         XCTAssertEqual(title.frame.minY, titleTop, accuracy: 1, "the title moved when the line showed")
         XCTAssertTrue(cue.waitForExistence(timeout: 2), "no cue once the mic is on")
         XCTAssertEqual(cue.frame.maxY, app.frame.maxY, accuracy: 30, "the cue \(cue.frame) is not on the bottom edge")
@@ -110,7 +116,7 @@ import XCTest
         let (app, messages) = tripFromMessages()
         let title = app.staticTexts["session.title"], line = app.staticTexts["session.subtitle"]
         XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Listening", timeout: 10))
-        XCTAssertEqual(line.label, Self.backLinkLine)
+        XCTAssertEqual(line.label, Self.wayBackLine)
         XCTAssertTrue(line.isHittable && app.buttons["session.end"].isHittable, "the line or End session is out of reach")
         let cue = ThumbFreeUI.element("session.cue", in: app)
         XCTAssertTrue(cue.waitForExistence(timeout: 2), "no ring once the mic is on")
@@ -124,10 +130,10 @@ import XCTest
         XCTAssertTrue(messages.wait(for: .runningForeground, timeout: 5), "the link did not go back to Messages")
     }
 
-    // On an iPad this iPhone app's window has neither the iPad's bottom edge nor its top left: the words give the back
-    // link and the App Switcher, with no cue. A cold trip (ThumbFree not running) from Messages, back through the App
-    // Switcher, and the take's words arrive there.
-    func testOnAnIPadTheWordsGiveTheBackLinkWithNoCue() throws {
+    // On an iPad iOS writes no app's name at the top left (it opens this iPhone app in a window of its own), and the
+    // window has neither of the iPad's edges: the words give the App Switcher, with no cue. A cold trip (ThumbFree not
+    // running) from Messages, back through the App Switcher, and the take's words arrive there.
+    func testOnAnIPadTheWordsGiveTheAppSwitcherWithNoCue() throws {
         try XCTSkipUnless(Self.screen == .iPad, "an iPad shows the words alone")
         KeyboardSetup.ensureReady()
         let app = ThumbFreeUI.launch(arguments: ["-TFKeepSetup", "YES"]) // iOS starts the closed app with no arguments
@@ -140,7 +146,7 @@ import XCTest
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15), "ThumbFree did not open")
         let title = app.staticTexts["session.title"]
         XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Listening", timeout: 15))
-        XCTAssertEqual(app.staticTexts["session.subtitle"].label, Self.backLinkLine)
+        XCTAssertEqual(app.staticTexts["session.subtitle"].label, Self.wayBackLine)
         XCTAssertFalse(ThumbFreeUI.element("session.cue", in: app).waitForExistence(timeout: 2), "a cue on an iPad")
         ThumbFreeUI.shot("session-ipad")
         messages.activate() // the App Switcher's way back
