@@ -58,13 +58,13 @@ YOUR DICTIONARY
 Add the names and terms you say often. ThumbFree fixes close misspellings of them in your dictation, and autocorrect leaves them alone. Ums and uhs are left out.
 
 HISTORY
-Every take is kept on your iPhone and left out of backups. Search it, copy it or transcribe it again. Choose how long takes are kept, or clear them all.
+Your recordings and transcripts are kept on your iPhone and left out of backups. Search it, copy it or transcribe it again. Choose how long takes are kept, or clear them all.
 
 LANGUAGES
-English by default. An optional Multilingual model understands 25 European languages.
+Choose English, or a Multilingual model that understands 25 European languages.
 
 WHY FULL ACCESS
-iOS asks for Full Access before a keyboard can work with its own app. ThumbFree's keyboard uses it to start the mic in ThumbFree, bring your words back and share your Dictionary. The keyboard never goes online, and nothing it reads leaves your iPhone. Without Full Access it still types, with suggestions and emoji.
+iOS asks for Full Access before a keyboard can work with its own app. ThumbFree's keyboard uses it to start the mic in ThumbFree, bring your words back and share your Dictionary. The keyboard makes no network requests. Without Full Access it still types, with suggestions and emoji.
 
 GOOD TO KNOW
 • Needs iOS 26 or later on iPhone.
@@ -72,7 +72,7 @@ GOOD TO KNOW
 • The open speech models and word list are credited in Settings > About.
 <!-- /description -->
 
-[2,605]
+[2,588]
 
 ## Keywords (100 at most)
 
@@ -96,12 +96,12 @@ Eight, at Apple's 6.9 inch size (1320 x 2868), in `screenshots/`: the maintainer
 
 1. Talk. It types.
 2. Your words, right where you type
-3. Talk as long as you like
+3. Dictate long notes
 4. Works offline. Your voice is never uploaded.
 5. Speak in 25 languages
 6. A full keyboard, too
 7. Names spelled your way
-8. Every take, saved on your iPhone
+8. Your takes, saved on your iPhone
 
 ## URLs
 
@@ -130,9 +130,9 @@ In App Store Connect, App Privacy: "Do you or your third-party partners collect 
 
 Why that is the right answer:
 
-- Speech is turned into text on the iPhone. Recordings, text, the Dictionary and settings are stored only on the iPhone and never sent to you or anyone else.
+- Speech is turned into text on the iPhone. Recordings and transcripts stay on the iPhone and out of backups; the Dictionary and settings are in the iPhone's own backups, like any app's settings. None of it is sent to you or anyone else.
 - There are no accounts and no analytics, crash reporting, advertising or tracking code, and no third-party code at all that talks to a server.
-- The one network use is downloading the speech model files, which are public, from Hugging Face at a pinned revision. The request is an ordinary HTTPS download with no identifier and nothing about the user. Hugging Face sees the IP address, as any web server does; the app neither receives nor uses it.
+- The one network use is downloading the speech model files, which are public, from Hugging Face at a pinned revision. The request is an ordinary HTTPS download with no account, no identifier made by ThumbFree and no dictation content. Hugging Face sees the IP address, as any web server does; the app neither receives nor uses it.
 - The privacy manifests agree: `NSPrivacyTracking` is false, with no tracking domains and no collected data types.
 
 Export compliance: the app's Info.plist says `ITSAppUsesNonExemptEncryption` NO (it uses only the HTTPS that iOS provides), so App Store Connect does not ask.

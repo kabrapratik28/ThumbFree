@@ -6,7 +6,7 @@ ThumbFree turns your speech into text on your iPhone. It is built so that your v
 
 ## The short version
 
-- Your audio and your text never leave your iPhone.
+- ThumbFree never uploads your recordings or transcripts.
 - ThumbFree has no accounts, no analytics, no ads and no tracking.
 - It uses the internet for one thing only: downloading its speech models from Hugging Face.
 

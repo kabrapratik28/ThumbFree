@@ -21,12 +21,12 @@ SANS = "/System/Library/Fonts/SFNS.ttf"
 FRAMES = [  # headline lines, raw screen (also the output's name), illustration in ART_DIR
     (["Talk.", "It types."], "1-talk.png", "1.png"),
     (["Your words,", "right where", "you type"], "2-typed.png", "2.png"),
-    (["Talk as long", "as you like"], "3-note.png", "3.png"),
+    (["Dictate", "long notes"], "3-note.png", "3.png"),
     (["Works offline.", "Your voice is", "never uploaded."], "4-private.png", "4.png"),
     (["Speak in", "25 languages"], "5-languages.png", "languages.png"),
     (["A full", "keyboard, too"], "6-keyboard.png", "5.png"),
     (["Names spelled", "your way"], "7-dictionary.png", "names.png"),
-    (["Every take,", "saved on", "your iPhone"], "8-history.png", "6.png"),
+    (["Your takes,", "saved on", "your iPhone"], "8-history.png", "6.png"),
 ]
 ART_BOX = (600, 860)          # the illustration's box, top right
 TEXT_LEFT, TEXT_TOP = 96, 170
