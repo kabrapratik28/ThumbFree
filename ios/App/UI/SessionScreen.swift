@@ -38,6 +38,9 @@ struct SessionScreen: View {
             let way = Self.way(homeButton: geo.safeAreaInsets.bottom == 0, voiceOver: voiceOver,
                                iPad: UIDevice.current.model.hasPrefix("iPad"))
             let cue = Self.showsCue(returnTrip, status: status)
+            let still = reduceMotion || voiceOver
+            // Only a drawn cue that may move plays rounds: none on an iPad, and the still with Reduce Motion or VoiceOver.
+            let plays = cue && way != .appSwitcher && !still
             ScrollView {
                 VStack(spacing: 0) {
                     Spacer()
@@ -74,7 +77,6 @@ struct SessionScreen: View {
             }
             .overlay {
                 if cue, way != .appSwitcher {
-                    let still = reduceMotion || voiceOver
                     let insets = geo.safeAreaInsets
                     // Nothing redraws once it rests, while the app is away, or before its rounds begin.
                     TimelineView(.animation(paused: still || rested || roundsFrom == nil || phase != .active)) { context in
@@ -87,9 +89,9 @@ struct SessionScreen: View {
                     .ignoresSafeArea()
                 }
             }
-            // The rounds begin once the cue shows with the app in front: once the mic is on, or after a fallback or a
-            // prompt that came late, never while the screen waited.
-            .onChange(of: cue && phase == .active, initial: true) { _, live in
+            // The rounds begin once a cue that plays shows with the app in front: once the mic is on, or after a fallback
+            // or a prompt that came late, never while the screen waited.
+            .onChange(of: plays && phase == .active, initial: true) { _, live in
                 if live, roundsFrom == nil { roundsFrom = .now }
             }
         }
