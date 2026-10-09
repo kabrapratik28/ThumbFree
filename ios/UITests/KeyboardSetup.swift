@@ -16,7 +16,7 @@ import XCTest
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
         settings.terminate()
         settings.launch()
-        settings.staticTexts["General"].tap()
+        settings.staticTexts["General"].firstMatch.tap() // an iPad's Settings also has it in its sidebar
         settings.staticTexts["Keyboard"].tap()
         settings.cells["KEYBOARDS"].tap() // the nav bar also says "Keyboards", so tap the cell by its identifier
         let row = settings.cells[keyboardID]
