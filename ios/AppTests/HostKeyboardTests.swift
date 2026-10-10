@@ -439,13 +439,13 @@ import TFCore
         #expect(!SessionScreen.showsCue(leaving, status: HostStatus(micOn: true, take: .recording)))
     }
 
-    // The cue's motion: 3 rounds of 1.65 s, then the still. In each round's beat the ring fades in, lands with its ripple,
+    // The back link's ring keeps option A's rounds: 3 of 1.65 s, then the still. In each round's beat the ring fades in, lands with its ripple,
     // slides right from 0.3 to 0.85 s (eased, its trail behind it), holds, and fades out over its last 0.15 s; nothing is
     // drawn for the 0.35 s after it.
     @Test func theCuePlaysThreeRoundsThenRestsOnItsStill() throws {
         func near(_ value: Double?, _ expected: Double) -> Bool { value.map { abs($0 - expected) < 1e-9 } ?? false }
-        func shot(_ time: Double) throws -> CueTimeline.Shot { try #require(CueTimeline.shot(at: time)) }
-        #expect(near(CueTimeline.length, 4.95))
+        func shot(_ time: Double) throws -> CueTimeline.Shot { try #require(CueTimeline.shot(at: time, way: .backLink)) }
+        #expect(near(CueTimeline.length(for: .backLink), 4.95))
         #expect(try shot(0).opacity == 0)
         #expect(near(try shot(0.06).opacity, 0.5))
         #expect(near(try shot(0.06).ripple, 0))
@@ -457,14 +457,65 @@ import TFCore
         #expect(try shot(1.15).opacity == 1)
         #expect(near(try shot(1.225).opacity, 0.5))
         #expect(try !shot(1.2).still)
-        #expect(CueTimeline.shot(at: 1.3) == nil)
-        #expect(CueTimeline.shot(at: 1.6) == nil)
+        #expect(CueTimeline.shot(at: 1.3, way: .backLink) == nil)
+        #expect(CueTimeline.shot(at: 1.6, way: .backLink) == nil)
         #expect(near(try shot(1.65 + 0.575).slide, 0.5)) // the second round
         #expect(near(try shot(3.3 + 0.575).slide, 0.5)) // the third
-        #expect(CueTimeline.shot(at: 4.9) == nil) // its rest
+        #expect(CueTimeline.shot(at: 4.9, way: .backLink) == nil) // its rest
         for time in [4.95, 6, 600] {
             let still = try shot(time)
             #expect(still.still && still.slide == 1 && still.opacity == 1 && still.ripple == nil)
         }
     }
+
+    // The swipe's round opens with the arrow's beat (1.3 s): a down chevron drops 50 points, hops 16 and then 6 points and
+    // settles over the ring's landing spot by 1 s, fading in and out as the ring does; then the ring's beat (1.3 s) and a
+    // 0.35 s rest, 2.95 s in all. After 3 rounds (8.85 s), the still: the arrow at rest and the ring at its end.
+    @Test func theSwipesRoundOpensWithTheArrowsBeat() throws {
+        func near(_ value: Double?, _ expected: Double) -> Bool { value.map { abs($0 - expected) < 1e-9 } ?? false }
+        func arrow(_ time: Double) throws -> CueTimeline.Arrow { try #require(CueTimeline.arrow(at: time)) }
+        func ring(_ time: Double) throws -> CueTimeline.Shot { try #require(CueTimeline.shot(at: time, way: .swipe)) }
+        #expect(near(CueTimeline.round(for: .swipe), 2 * TapTimeline.length + 0.35))
+        #expect(near(CueTimeline.length(for: .swipe), Double(CueTimeline.rounds) * CueTimeline.round(for: .swipe)))
+        #expect(near(CueTimeline.round(for: .backLink), TapTimeline.length + 0.35))
+        // The arrow: 50 points above its rest, falling to it by 0.42 s, then hops of 16 points (0.6 s) and 6 (0.89 s).
+        #expect(try arrow(0).lift == 50 && arrow(0).opacity == 0)
+        #expect(near(try arrow(0.06).opacity, 0.5))
+        #expect(try arrow(0.12).lift == 50 && arrow(0.12).opacity == 1)
+        #expect(near(try arrow(0.27).lift, 37.5))
+        #expect(try arrow(0.42).lift == 0)
+        #expect(near(try arrow(0.51).lift, 12))
+        #expect(try arrow(0.6).lift == 16)
+        #expect(try arrow(0.78).lift == 0)
+        #expect(try arrow(0.89).lift == 6)
+        #expect(try arrow(1).lift == 0 && arrow(1.1).lift == 0)
+        #expect(near(try arrow(1.225).opacity, 0.5))
+        #expect(CueTimeline.shot(at: 0.5, way: .swipe) == nil) // no ring while the arrow drops
+        // Then the ring's beat, as in option A, and the rest with nothing drawn.
+        #expect(CueTimeline.arrow(at: 1.3) == nil)
+        #expect(near(try ring(1.36).opacity, 0.5))
+        #expect(near(try ring(1.3 + 0.575).slide, 0.5))
+        #expect(CueTimeline.shot(at: 2.7, way: .swipe) == nil && CueTimeline.arrow(at: 2.7) == nil)
+        // The next round opens with the arrow again, and the third has its swipe.
+        #expect(near(try arrow(2.95 + 0.27).lift, 37.5))
+        #expect(near(try ring(5.9 + 1.3 + 0.575).slide, 0.5))
+        #expect(CueTimeline.shot(at: 8.8, way: .swipe) == nil) // the third round's rest
+        for time in [8.85, 9, 600] {
+            let still = try ring(time), resting = try arrow(time)
+            #expect(still.still && still.slide == 1 && resting.lift == 0 && resting.opacity == 1)
+        }
+    }
+
+    // Only the swipe's manual return puts the way-back line at the edge, End session in the middle: leaving for the app
+    // (Debug automatic return), the back link and the iPad keep the line under the title.
+    @Test func theWordsMoveToTheEdgeOnlyForTheSwipeBack() {
+        let swipe = ReturnTrip(appName: nil, phase: .swipeBack, firstReturn: false)
+        let leaving = ReturnTrip(appName: "WhatsApp", phase: .leaving, firstReturn: false)
+        #expect(SessionScreen.wordsAtEdge(way: .swipe, returnTrip: swipe))
+        #expect(SessionScreen.wordsAtEdge(way: .swipe, returnTrip: nil))
+        #expect(!SessionScreen.wordsAtEdge(way: .swipe, returnTrip: leaving))
+        #expect(!SessionScreen.wordsAtEdge(way: .backLink, returnTrip: swipe))
+        #expect(!SessionScreen.wordsAtEdge(way: .appSwitcher, returnTrip: swipe))
+    }
+
 }

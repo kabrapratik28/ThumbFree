@@ -36,30 +36,34 @@ import XCTest
     }
 
     // Guards the ScrollView requirement: at the largest accessibility text size, the bubble art must never push the
-    // title, the way-back line or the End button off screen for good, on the swipe-back state (the tallest realistic
-    // content: title and a wrapped multi-line sub-line, before the End button).
+    // title, End session or the way-back line off screen for good, on the swipe-back state (the tallest realistic
+    // content: the title and a wrapped multi-line line). At the edge the line stays below End session and above the cue.
     func testTheSwipeBackScreenReachesTitleLineAndEndAtTheLargestAccessibilityTextSize() throws {
         let app = ThumbFreeUI.launch(arguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         XCUIDevice.shared.system.open(try XCTUnwrap(URL(string: "thumbfree://dictate?take=\(UUID().uuidString)")))
         let title = app.staticTexts["session.title"]
         XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Listening", timeout: 10))
-        XCTAssertTrue(title.isHittable, "the title must stay reachable at the largest accessibility text size")
-        // The ScrollView: down the page, if the bubble art pushed the line or the button off screen.
-        let line = app.staticTexts["session.subtitle"]
+        let line = app.staticTexts["session.subtitle"], end = app.buttons["session.end"]
         XCTAssertEqual(line.label, Self.wayBackLine)
-        XCTAssertTrue(Self.scroll(to: line, in: app), "the way-back line must be reachable at the largest accessibility text size")
-        XCTAssertTrue(Self.scroll(to: app.buttons["session.end"], in: app),
-                      "End session must be reachable (scrolling if needed) at the largest accessibility text size")
+        for (element, name) in [(title, "the title"), (end, "End session"), (line, "the way-back line")] {
+            XCTAssertTrue(Self.scroll(to: element, in: app), "\(name) must be reachable at the largest accessibility text size")
+        }
+        guard Self.screen == .homeIndicator else { return }
+        let cue = ThumbFreeUI.element("session.cue", in: app)
+        XCTAssertTrue(cue.waitForExistence(timeout: 2), "no cue once the mic is on")
+        XCTAssertGreaterThanOrEqual(line.frame.minY, end.frame.maxY, "the line \(line.frame) overlaps End session \(end.frame)")
+        XCTAssertLessThanOrEqual(line.frame.maxY, cue.frame.minY + 1, "the line \(line.frame) overlaps the cue \(cue.frame)")
     }
 
-    // An iPhone with a home indicator. While the mic starts (held 8 s here, longer than the cue's 3 rounds of 4.95 s)
-    // the screen says so, with no words and no cue, the line's room kept; then the swipe words and the cue on the
-    // bottom edge, one image the size of its drawing, playing from then on rather than from the screen's first moment.
-    // It rests after its rounds and plays again on a tap on the page, which leaves the session on. End session, a quiet
-    // button at least 44 points each way, still ends it.
+    // An iPhone with a home indicator. While the mic starts (held 12 s here, longer than the cue's 3 rounds of 8.85 s)
+    // the screen says so, with no words and no cue, the line's room kept; then the cue on the bottom edge, one image the
+    // size of its drawing, arrow included, playing from then on rather than from the screen's first moment: still past
+    // option A's 4.95 s, at rest after 8.85 s, and again after a tap on the page, which leaves the session on. The words
+    // sit at the edge: End session, a quiet button at least 44 points each way, right under the title; the line below
+    // it, near the bottom and above the cue, whole and in reach.
     func testTheSwipeCueWaitsForTheMicThenPlaysOnTheBottomEdge() throws {
         try XCTSkipUnless(Self.screen == .homeIndicator, "the swipe shows on an iPhone with a home indicator")
-        let (app, _) = tripFromMessages(arguments: ["-TFMicDelayMs", "8000"])
+        let (app, _) = tripFromMessages(arguments: ["-TFMicDelayMs", "12000"])
         let title = app.staticTexts["session.title"], line = app.staticTexts["session.subtitle"]
         let cue = ThumbFreeUI.element("session.cue", in: app), end = app.buttons["session.end"]
         XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Starting the microphone", timeout: 10))
@@ -68,24 +72,38 @@ import XCTest
         // Each look reads the cue and the line before the title: the mic only comes on, so either one seen before a
         // title that still says Starting was there while the mic started.
         var early: Set<String> = []
-        XCTAssertTrue(ThumbFreeUI.wait(until: 20) {
+        XCTAssertTrue(ThumbFreeUI.wait(until: 25) {
             let seen = [cue.exists ? "the cue" : nil, line.exists ? "the line" : nil].compactMap { $0 }
             if title.label.contains("Listening") { return true }
             early.formUnion(seen)
             return false
         }, "the mic did not come on: \(title.label)")
         XCTAssertEqual(early, [], "shown while the mic started")
-        XCTAssertGreaterThan(Date().timeIntervalSince(starting), 4.95, "the mic came on too soon to tell when the cue starts")
+        let ready = Date()
+        XCTAssertGreaterThan(ready.timeIntervalSince(starting), 8.85, "the mic came on too soon to tell when the cue starts")
         XCTAssertEqual(line.label, Self.wayBackLine)
         XCTAssertEqual(title.frame.minY, titleTop, accuracy: 1, "the title moved when the line showed")
         XCTAssertTrue(cue.waitForExistence(timeout: 2), "no cue once the mic is on")
         XCTAssertEqual(cue.frame.maxY, app.frame.maxY, accuracy: 30, "the cue \(cue.frame) is not on the bottom edge")
-        checkOneCue(cue, in: app, atMost: CGSize(width: app.frame.width * 0.75, height: 60))
+        checkOneCue(cue, in: app, atMost: CGSize(width: app.frame.width * 0.75, height: 140))
+        XCTAssertGreaterThanOrEqual(app.frame.maxY - cue.frame.minY, 120, "the cue image \(cue.frame) leaves out the arrow")
         XCTAssertTrue(moves(cue), "the cue does not play once the mic is on")
         XCTAssertTrue(end.exists, "the title, the line and End session are not separate elements")
         XCTAssertGreaterThanOrEqual(end.frame.width, 44)
         XCTAssertGreaterThanOrEqual(end.frame.height, 44)
-        XCTAssertTrue(ThumbFreeUI.wait(until: 15) { !self.moves(cue) }, "the cue does not rest after its rounds")
+        let underTitle = end.frame.minY - title.frame.maxY
+        XCTAssertTrue((0..<40).contains(underTitle), "End session \(end.frame) is not right under the title \(title.frame)")
+        XCTAssertGreaterThanOrEqual(line.frame.minY, end.frame.maxY, "the line \(line.frame) is not below End session")
+        XCTAssertLessThanOrEqual(app.frame.maxY - line.frame.maxY, 160, "the line \(line.frame) is not near the bottom edge")
+        XCTAssertLessThanOrEqual(line.frame.maxY, cue.frame.minY + 1, "the line \(line.frame) overlaps the cue \(cue.frame)")
+        XCTAssertTrue(app.frame.contains(line.frame), "the line \(line.frame) is cut off")
+        for (element, name) in [(title, "the title"), (end, "End session"), (line, "the line")] {
+            XCTAssertTrue(Self.scroll(to: element, in: app), "\(name) is out of reach")
+        }
+        // Past option A's deadline the cue still plays: its rounds began when the mic came on.
+        Thread.sleep(forTimeInterval: max(0, 5.5 - Date().timeIntervalSince(ready)))
+        XCTAssertTrue(moves(cue), "the cue stopped before its 3 rounds of 8.85 s")
+        XCTAssertTrue(ThumbFreeUI.wait(until: 20) { !self.moves(cue) }, "the cue does not rest after its rounds")
         ThumbFreeUI.shot("session-swipe-rest")
         title.tap()
         XCTAssertTrue(moves(cue), "a tap on the page does not play the cue again")
@@ -197,7 +215,7 @@ import XCTest
         // reach).
         for _ in 0..<15 {
             guard !row.exists else { break }
-            dragUp(app)
+            page(app, down: true)
         }
         let value = on ? "1" : "0"
         if row.value as? String != value { row.switches.firstMatch.tap() } // the row's own tap misses the switch
@@ -205,21 +223,22 @@ import XCTest
         app.tabBars.buttons["Home"].tap()
     }
 
-    /// Scrolls down the page in short drags until `element` can take a tap; whether it can.
+    /// Scrolls the page in short drags until `element` can take a tap, back up when it sits above the middle of the
+    /// screen; whether it can.
     private static func scroll(to element: XCUIElement, in app: XCUIApplication) -> Bool {
-        for _ in 0..<6 {
+        for _ in 0..<8 {
             if element.isHittable { return true }
-            dragUp(app)
+            page(app, down: !(element.exists && element.frame.midY < app.frame.midY))
         }
         return element.isHittable
     }
 
-    /// A quarter of the screen down the page: a drag that stops before it lifts, since a swipe can fling past a row on
-    /// a small iPhone.
-    private static func dragUp(_ app: XCUIApplication) {
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)).press(
-            forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)),
-            withVelocity: .slow, thenHoldForDuration: 0.1)
+    /// A quarter of the screen down the page, or back up: a drag that stops before it lifts, since a swipe can fling
+    /// past a row on a small iPhone.
+    private static func page(_ app: XCUIApplication, down: Bool) {
+        let low = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+        let high = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+        (down ? low : high).press(forDuration: 0.05, thenDragTo: down ? high : low, withVelocity: .slow, thenHoldForDuration: 0.1)
     }
 
     /// Turns Reduce Motion on or off in the Settings app, as a person does.
@@ -238,12 +257,12 @@ import XCTest
         settings.terminate()
     }
 
-    /// Whether the cue changes in 2 s of looks, one every 0.3 s, against the first. Longer than its 1.65 s round, so a
-    /// playing cue always changes (two looks a set time apart can match: a fade-out and the next fade-in) and a resting
-    /// one never does.
+    /// Whether the cue changes in 3 s of looks, one every 0.3 s, against the first. Longer than a round (2.95 s for the
+    /// swipe, 1.65 s for the ring), so a playing cue always changes (two looks a set time apart can match: a fade-out
+    /// and the next fade-in) and a resting one never does.
     private func moves(_ element: XCUIElement) -> Bool {
         let first = element.screenshot().pngRepresentation
-        let end = Date().addingTimeInterval(2)
+        let end = Date().addingTimeInterval(3)
         while Date() < end {
             Thread.sleep(forTimeInterval: 0.3)
             if element.screenshot().pngRepresentation != first { return true }

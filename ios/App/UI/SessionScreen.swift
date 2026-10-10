@@ -3,8 +3,9 @@ import TFCore
 import UIKit
 
 /// Shown when the keyboard opened the app to start a session. While the mic starts it says so and nothing more; then it
-/// shows the way back to your app (`Way`): the words under the title, and a cue drawn where the gesture happens, which
-/// plays 3 rounds, rests on its still, and plays again on a tap on the page. With Debug automatic return it reads
+/// shows the way back to your app (`Way`): words, and a cue drawn where the gesture happens, which plays 3 rounds, rests
+/// on its still, and plays again on a tap on the page. For the swipe the words sit just above the bottom edge, over the
+/// cue, End session under the title; elsewhere they sit under the title. With Debug automatic return it reads
 /// "Listening." and "Taking you back to WhatsApp…" while the app is opening the host, and falls back to the way back on
 /// any failure. It keeps listening throughout. End session is a quiet button: a big one invites a stray tap.
 struct SessionScreen: View {
@@ -41,6 +42,11 @@ struct SessionScreen: View {
             let still = reduceMotion || voiceOver
             // Only a drawn cue that may move plays rounds: none on an iPad, and the still with Reduce Motion or VoiceOver.
             let plays = cue && way != .appSwitcher && !still
+            let atEdge = Self.wordsAtEdge(way: way, returnTrip: returnTrip)
+            let sub = Self.subLine(status: status, returnTrip: returnTrip, way: way)
+            // While the mic starts on a manual return the line keeps its room, unseen and unheard, so nothing moves when it
+            // shows with the cue.
+            let waits = !cue && returnTrip?.phase != .leaving
             ScrollView {
                 VStack(spacing: 0) {
                     Spacer()
@@ -49,26 +55,23 @@ struct SessionScreen: View {
                         Text(Self.primaryLine(status: status, returnTrip: returnTrip))
                             .font(.title2.weight(.semibold))
                             .accessibilityIdentifier("session.title")
-                        if let sub = Self.subLine(status: status, returnTrip: returnTrip, way: way) {
-                            // While the mic starts on a manual return the line keeps its room, unseen and unheard, so
-                            // nothing moves when it shows with the cue.
-                            let waits = !cue && returnTrip?.phase != .leaving
-                            Text(sub)
-                                .font(.body)
-                                .foregroundStyle(Theme.inkSoft)
-                                .opacity(waits ? 0 : 1)
-                                .animation(.easeOut(duration: 0.2), value: waits)
-                                .accessibilityHidden(waits)
-                                .accessibilityIdentifier("session.subtitle")
-                        }
+                        if !atEdge, let sub { wayLine(sub, atEdge: false, waits: waits) }
                         if let line = Self.firstReturnLine(returnTrip: returnTrip) {
                             Text(line).font(.footnote).foregroundStyle(Theme.inkSoft)
                         }
+                        if atEdge { QuietActionButton(title: "End session", id: "session.end", action: onEnd) }
                     }
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 320)
                     Spacer()
-                    QuietActionButton(title: "End session", id: "session.end", action: onEnd).padding(.bottom, 26)
+                    if atEdge {
+                        // Part of the page, so at the largest text sizes the line grows upward and the page scrolls; under
+                        // it, the cue's room.
+                        if let sub { wayLine(sub, atEdge: true, waits: waits) }
+                        Color.clear.frame(height: max(0, GoBackCue.room - geo.safeAreaInsets.bottom))
+                    } else {
+                        QuietActionButton(title: "End session", id: "session.end", action: onEnd).padding(.bottom, 26)
+                    }
                 }
                 .padding(.horizontal, 24)
                 .frame(minHeight: geo.size.height)
@@ -81,7 +84,9 @@ struct SessionScreen: View {
                     // Nothing redraws once it rests, while the app is away, or before its rounds begin.
                     TimelineView(.animation(paused: still || rested || roundsFrom == nil || phase != .active)) { context in
                         let time = roundsFrom.map { context.date.timeIntervalSince($0) } ?? 0
-                        GoBackCue(way: way, shot: CueTimeline.shot(at: still || rested ? .infinity : time),
+                        let at = still || rested ? .infinity : time
+                        GoBackCue(way: way, shot: CueTimeline.shot(at: at, way: way),
+                                  arrow: way == .swipe ? CueTimeline.arrow(at: at) : nil,
                                   screen: CGSize(width: geo.size.width + insets.leading + insets.trailing,
                                                  height: geo.size.height + insets.top + insets.bottom),
                                   top: insets.top)
@@ -94,19 +99,39 @@ struct SessionScreen: View {
             .onChange(of: plays && phase == .active, initial: true) { _, live in
                 if live, roundsFrom == nil { roundsFrom = .now }
             }
+            .task(id: roundsFrom) {
+                guard let roundsFrom else { return }
+                rested = false
+                try? await Task.sleep(for: .seconds(max(0, CueTimeline.length(for: way) - Date.now.timeIntervalSince(roundsFrom))))
+                if !Task.isCancelled { rested = true } // a tap meanwhile began new rounds
+            }
         }
         .foregroundStyle(Theme.ink)
         .background(Theme.paper)
-        .task(id: roundsFrom) {
-            guard let roundsFrom else { return }
-            rested = false
-            try? await Task.sleep(for: .seconds(max(0, CueTimeline.length - Date.now.timeIntervalSince(roundsFrom))))
-            if !Task.isCancelled { rested = true } // a tap meanwhile began new rounds
-        }
+    }
+
+    /// The way-back line, under the title or at the edge: there in ink and semibold, left-aligned over the spot where the
+    /// ring lands, its last two words kept together.
+    private func wayLine(_ text: String, atEdge: Bool, waits: Bool) -> some View {
+        Text(atEdge ? text.keepingLastWordsTogether : text)
+            .font(atEdge ? .body.weight(.semibold) : .body)
+            .foregroundStyle(atEdge ? Theme.ink : Theme.inkSoft)
+            .multilineTextAlignment(atEdge ? .leading : .center)
+            .frame(maxWidth: atEdge ? .infinity : nil, alignment: .leading)
+            .padding(.horizontal, atEdge ? 4 : 0)
+            .opacity(waits ? 0 : 1)
+            .animation(.easeOut(duration: 0.2), value: waits)
+            .accessibilityLabel(text)
+            .accessibilityHidden(waits)
+            .accessibilityIdentifier("session.subtitle")
     }
 
     /// The way back for this screen: the swipe on an iPhone with a home indicator, else iOS's link at the top left, ringed;
     /// on an iPad, the App Switcher.
+    /// The way-back line sits just above the bottom edge, End session in the middle, only on the swipe's manual return:
+    /// leaving for the app, the back link and the iPad keep the line under the title.
+    static func wordsAtEdge(way: Way, returnTrip: ReturnTrip?) -> Bool { way == .swipe && returnTrip?.phase != .leaving }
+
     static func way(homeButton: Bool, voiceOver: Bool, iPad: Bool) -> Way {
         if iPad { return .appSwitcher }
         return homeButton || voiceOver ? .backLink : .swipe
@@ -179,13 +204,15 @@ struct SessionScreen: View {
     private static func isLive(_ status: HostStatus) -> Bool { status.take != .idle || status.session != .off }
 }
 
-/// The way back drawn where it happens, in screen points: the swipe along the bottom edge on the home indicator's line,
-/// or a ring around the name iOS writes at the top left. It takes no touches, and VoiceOver reads it as one picture the
+/// The way back drawn where it happens, in screen points: an arrow dropping onto the bottom edge, then the swipe along
+/// the home indicator's line, or a ring around the name iOS writes at the top left. It takes no touches, and VoiceOver reads it as one picture the
 /// size of the drawing.
 private struct GoBackCue: View {
     let way: SessionScreen.Way
-    /// The frame to draw; nil between rounds, when nothing shows.
+    /// The ring's frame to draw; nil while the arrow drops and between rounds, when it doesn't show.
     let shot: CueTimeline.Shot?
+    /// The swipe's arrow; nil while the ring swipes and between rounds.
+    let arrow: CueTimeline.Arrow?
     /// The whole screen, its safe areas included.
     let screen: CGSize
     /// The top safe area, which tells the screen's shape, and so where iOS writes its link.
@@ -195,6 +222,15 @@ private struct GoBackCue: View {
         let bounds = way == .swipe ? swipeBand : Self.backLinkRing(top: top)
         ZStack(alignment: .topLeading) {
             Color.clear
+            if let arrow {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 30, weight: .heavy))
+                    .foregroundStyle(Theme.ink)
+                    .shadow(color: Theme.sunflower.opacity(0.9), radius: 6)
+                    .position(x: x0, y: y - 46 - arrow.lift) // at rest just over the spot where the ring lands
+                    .opacity(arrow.opacity)
+                    .accessibilityHidden(true)
+            }
             if let shot {
                 ZStack(alignment: .topLeading) {
                     if way == .swipe { swipe(shot) } else { ring(shot) }
@@ -206,8 +242,9 @@ private struct GoBackCue: View {
                 .frame(width: bounds.width, height: bounds.height)
                 .position(x: bounds.midX, y: bounds.midY)
                 .accessibilityElement()
-                .accessibilityLabel(way == .swipe ? Text("Picture: a finger swiping right along the bottom edge of the screen.")
-                                                  : Text("Picture: your app’s name at the top left."))
+                .accessibilityLabel(way == .swipe
+                                    ? Text("Picture: an arrow pointing down at the bottom edge, then a finger swiping right along it.")
+                                    : Text("Picture: your app’s name at the top left."))
                 .accessibilityAddTraits(.isImage)
                 .accessibilityIdentifier("session.cue")
         }
@@ -228,8 +265,13 @@ private struct GoBackCue: View {
     private var x0: CGFloat { screen.width * 0.3 }
     private var x1: CGFloat { screen.width * 0.82 }
 
-    /// What the swipe covers: its trail, the ring with the pill above it and the chevron after it, down to the bottom.
-    private var swipeBand: CGRect { CGRect(x: x0 - 27, y: y - 41, width: x1 - x0 + 73, height: 53) }
+    /// How far up from the screen's bottom the swipe's drawing reaches: the arrow's drop, over the ring. The way-back line
+    /// sits just above it.
+    static let room: CGFloat = 128
+
+    /// What the swipe covers: the arrow's drop, its trail, the ring with the pill above it and the chevron after it, down
+    /// to the bottom.
+    private var swipeBand: CGRect { CGRect(x: x0 - 27, y: screen.height - Self.room, width: x1 - x0 + 73, height: Self.room) }
 
     /// The ring lands on the line, slides right leaving a sunflower trail, and in the still has a chevron after it.
     @ViewBuilder private func swipe(_ shot: CueTimeline.Shot) -> some View {
@@ -261,18 +303,23 @@ private struct GoBackCue: View {
     }
 }
 
-/// The cue's motion: 3 rounds of 1.65 s, then the still. Each round is one beat of a tap's length (`TapTimeline.length`,
-/// 1.3 s) that fades in over 0.12 s and out over its last 0.15 s, then 0.35 s with nothing drawn. In the swipe's beat
-/// the ring lands with its ripple, slides right from 0.3 to 0.85 s (eased, its trail behind it) and holds; the back
-/// link's ring taps as the guides' do (`TapTimeline`). The still is the beat's end, with a chevron after the swipe.
+/// The cue's motion: 3 rounds, then the still. The ring's beat is a tap's length (`TapTimeline.length`, 1.3 s), fading
+/// in over 0.12 s and out over its last 0.15 s, then 0.35 s with nothing drawn; the swipe's round opens with the arrow's
+/// beat of the same length. In the swipe's beat the ring lands with its ripple, slides right from 0.3 to 0.85 s (eased,
+/// its trail behind it) and holds; the back link's ring taps as the guides' do (`TapTimeline`). The still is the beat's
+/// end: the arrow at rest, and a chevron after the swipe.
 enum CueTimeline {
     static let rounds = 3
-    static let round = 1.65
-    static var length: Double { Double(rounds) * round }
 
-    /// One frame of the cue.
+    /// A round: the arrow's beat (the swipe's only), the ring's beat and the rest, 1.3 + 1.3 + 0.35 or 1.3 + 0.35 s.
+    static func round(for way: SessionScreen.Way) -> Double { way == .swipe ? 2.95 : 1.65 }
+
+    /// The rounds' length, after which the still shows.
+    static func length(for way: SessionScreen.Way) -> Double { way == .swipe ? 8.85 : 4.95 }
+
+    /// One frame of the ring.
     struct Shot: Equatable {
-        /// Seconds into the round's beat; the beat's end in the still.
+        /// Seconds into the ring's beat; the beat's end in the still.
         let beat: Double
         let opacity: Double
         let still: Bool
@@ -287,12 +334,49 @@ enum CueTimeline {
         var ripple: Double? { (0.06..<0.36).contains(beat) ? (beat - 0.06) / 0.3 : nil }
     }
 
-    /// The frame `time` seconds after the rounds began: nil while nothing is drawn between beats, the still from
-    /// `length` on (pass `.infinity` for the still at once: Reduce Motion, VoiceOver).
-    static func shot(at time: Double) -> Shot? {
-        guard time < length else { return Shot(beat: TapTimeline.length, opacity: 1, still: true) }
-        let beat = max(time, 0).truncatingRemainder(dividingBy: round)
+    /// One frame of the swipe's arrow.
+    struct Arrow: Equatable {
+        /// How far above its rest the arrow is, in points.
+        let lift: Double
+        let opacity: Double
+    }
+
+    /// The ring's frame `time` seconds after the rounds began: nil while the arrow drops or nothing is drawn between
+    /// beats, the still from the rounds' length on (pass `.infinity` for the still at once: Reduce Motion, VoiceOver).
+    static func shot(at time: Double, way: SessionScreen.Way) -> Shot? {
+        guard time < length(for: way) else { return Shot(beat: TapTimeline.length, opacity: 1, still: true) }
+        let lead = way == .swipe ? TapTimeline.length : 0
+        let beat = max(time, 0).truncatingRemainder(dividingBy: round(for: way)) - lead
+        guard (0..<TapTimeline.length).contains(beat) else { return nil }
+        return Shot(beat: beat, opacity: fade(beat), still: false)
+    }
+
+    /// The swipe's arrow `time` seconds after the rounds began: in each round's first beat, else nil; at rest in the
+    /// still.
+    static func arrow(at time: Double) -> Arrow? {
+        guard time < length(for: .swipe) else { return Arrow(lift: 0, opacity: 1) }
+        let beat = max(time, 0).truncatingRemainder(dividingBy: round(for: .swipe))
         guard beat < TapTimeline.length else { return nil }
-        return Shot(beat: beat, opacity: min(beat / 0.12, 1, (TapTimeline.length - beat) / 0.15), still: false)
+        return Arrow(lift: lift(beat), opacity: fade(beat))
+    }
+
+    private static func fade(_ beat: Double) -> Double { min(beat / 0.12, 1, (TapTimeline.length - beat) / 0.15) }
+
+    /// How far above its rest the arrow is `beat` seconds in: 50 points until 0.12 s, falling to rest by 0.42 s, then a
+    /// hop of 16 points that lands by 0.78 s and one of 6 that settles at 1 s.
+    private static func lift(_ beat: Double) -> Double {
+        func ease(_ a: Double, _ b: Double, _ from: Double, _ to: Double, falling: Bool) -> Double {
+            let t = min(max((beat - a) / (b - a), 0), 1)
+            return from + (to - from) * (falling ? t * t : 1 - (1 - t) * (1 - t))
+        }
+        switch beat {
+        case ..<0.12: return 50
+        case ..<0.42: return ease(0.12, 0.42, 50, 0, falling: true)
+        case ..<0.6: return ease(0.42, 0.6, 0, 16, falling: false)
+        case ..<0.78: return ease(0.6, 0.78, 16, 0, falling: true)
+        case ..<0.89: return ease(0.78, 0.89, 0, 6, falling: false)
+        case ..<1: return ease(0.89, 1, 6, 0, falling: true)
+        default: return 0
+        }
     }
 }
