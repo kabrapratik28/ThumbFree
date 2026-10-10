@@ -57,8 +57,8 @@ import XCTest
 
     // An iPhone with a home indicator. While the mic starts (held 12 s here, longer than the cue's 3 rounds of 8.85 s)
     // the screen says so, with no words and no cue, the line's room kept; then the cue on the bottom edge, one image the
-    // size of its drawing, arrow included, playing from then on rather than from the screen's first moment: still past
-    // option A's 4.95 s, at rest after 8.85 s, and again after a tap on the page, which leaves the session on. The words
+    // size of its drawing, arrow included, playing its 3 rounds from then on rather than from the screen's first moment,
+    // and again after a tap on the page, which leaves the session on. The words
     // sit at the edge: End session, a quiet button at least 44 points each way, right under the title; the line below
     // it, near the bottom and above the cue, whole and in reach.
     func testTheSwipeCueWaitsForTheMicThenPlaysOnTheBottomEdge() throws {
@@ -81,13 +81,14 @@ import XCTest
         XCTAssertEqual(early, [], "shown while the mic started")
         let ready = Date()
         XCTAssertGreaterThan(ready.timeIntervalSince(starting), 8.85, "the mic came on too soon to tell when the cue starts")
+        XCTAssertTrue(cue.waitForExistence(timeout: 2), "no cue once the mic is on")
+        // First, before slower checks can eat into the rounds: they began when the mic came on, not with the screen.
+        checkRounds(of: cue, from: ready)
         XCTAssertEqual(line.label, Self.wayBackLine)
         XCTAssertEqual(title.frame.minY, titleTop, accuracy: 1, "the title moved when the line showed")
-        XCTAssertTrue(cue.waitForExistence(timeout: 2), "no cue once the mic is on")
         XCTAssertEqual(cue.frame.maxY, app.frame.maxY, accuracy: 30, "the cue \(cue.frame) is not on the bottom edge")
         checkOneCue(cue, in: app, atMost: CGSize(width: app.frame.width * 0.75, height: 140))
         XCTAssertGreaterThanOrEqual(app.frame.maxY - cue.frame.minY, 120, "the cue image \(cue.frame) leaves out the arrow")
-        XCTAssertTrue(moves(cue), "the cue does not play once the mic is on")
         XCTAssertTrue(end.exists, "the title, the line and End session are not separate elements")
         XCTAssertGreaterThanOrEqual(end.frame.width, 44)
         XCTAssertGreaterThanOrEqual(end.frame.height, 44)
@@ -100,16 +101,34 @@ import XCTest
         for (element, name) in [(title, "the title"), (end, "End session"), (line, "the line")] {
             XCTAssertTrue(Self.scroll(to: element, in: app), "\(name) is out of reach")
         }
-        // Past option A's deadline the cue still plays: its rounds began when the mic came on.
-        Thread.sleep(forTimeInterval: max(0, 5.5 - Date().timeIntervalSince(ready)))
-        XCTAssertTrue(moves(cue), "the cue stopped before its 3 rounds of 8.85 s")
-        XCTAssertTrue(ThumbFreeUI.wait(until: 20) { !self.moves(cue) }, "the cue does not rest after its rounds")
         ThumbFreeUI.shot("session-swipe-rest")
         title.tap()
-        XCTAssertTrue(moves(cue), "a tap on the page does not play the cue again")
+        checkRounds(of: cue, from: Date())
         XCTAssertTrue(title.label.contains("Listening"), "a tap on the page changed the session: \(title.label)")
         end.tap()
         XCTAssertTrue(title.waitForNonExistence(timeout: 5), "End session did not end the session")
+    }
+
+    // A long status title (a message such as "Not enough free memory." takes the title's place) at the largest text
+    // size overflows the page, which scrolls; its words never pass through the cue's band at the bottom. At the first, a
+    // middle and the last scroll position the scrolling page ends above the cue, and at the last the line sits whole
+    // above it.
+    func testAnOverflowingPageNeverScrollsItsWordsThroughTheCue() throws {
+        try XCTSkipUnless(Self.screen == .homeIndicator, "the words sit at the edge on an iPhone with a home indicator")
+        let app = ThumbFreeUI.launch(arguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+                                                 "-TFScreenTitle", "Not enough free memory. Close some apps and try again."])
+        XCUIDevice.shared.system.open(try XCTUnwrap(URL(string: "thumbfree://dictate?take=\(UUID().uuidString)")))
+        let title = app.staticTexts["session.title"], line = app.staticTexts["session.subtitle"]
+        let page = ThumbFreeUI.element("session.page", in: app), cue = ThumbFreeUI.element("session.cue", in: app)
+        XCTAssertTrue(cue.waitForExistence(timeout: 10), "no cue once the mic is on")
+        let top = title.frame.minY
+        for (position, drags) in [("first", 0), ("middle", 1), ("last", 8)] {
+            for _ in 0..<drags { Self.page(app, down: true) }
+            XCTAssertLessThanOrEqual(page.frame.maxY, cue.frame.minY + 1,
+                                     "at the \(position) position the page \(page.frame) runs into the cue \(cue.frame)")
+        }
+        XCTAssertLessThan(title.frame.minY, top - 40, "the page did not overflow: nothing to scroll")
+        XCTAssertLessThanOrEqual(line.frame.maxY, cue.frame.minY + 1, "at the last position the line \(line.frame) overlaps the cue")
     }
 
     // With Reduce Motion (no launch argument: Settings turns it on) the cue shows its still at once, and a tap on the
@@ -268,6 +287,15 @@ import XCTest
             if element.screenshot().pngRepresentation != first { return true }
         }
         return false
+    }
+
+    /// The cue plays its 3 rounds from `start` and then rests: still moving 7.5 s in, late in the third round (the look may
+    /// start up to a second after the rounds did), and at rest from 9.6 s, soon after their 8.85 s.
+    private func checkRounds(of cue: XCUIElement, from start: Date) {
+        Thread.sleep(forTimeInterval: max(0, 7.5 - Date().timeIntervalSince(start)))
+        XCTAssertTrue(moves(cue), "the cue stopped before the end of its 3 rounds of 8.85 s")
+        Thread.sleep(forTimeInterval: max(0, 9.6 - Date().timeIntervalSince(start)))
+        XCTAssertFalse(moves(cue), "the cue still plays after its 3 rounds of 8.85 s")
     }
 
     /// The cue is one VoiceOver image the size of its drawing, at most `size`: a second one, or one over the whole

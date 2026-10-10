@@ -19,10 +19,10 @@ if sed -n '/^    release:/,/^[a-z]/p' project.yml | grep -q TF_AUTO_RETURN; then
 else
   expected='^$'
 fi
-# The Debug test launch arguments (AppEnvironment, AppSettings, ThumbFreeApp, TryItView, GuideView, FloatingGuide, KeyboardStatus), by the 8-byte pieces Swift splits
+# The Debug test launch arguments (AppEnvironment, AppSettings, ThumbFreeApp, TryItView, GuideView, FloatingGuide, KeyboardStatus, SessionScreen), by the 8-byte pieces Swift splits
 # them into (`-TFReturnDelayMs` by its second piece: "TFReturn" also starts TFReturnedApps, a real setting), the fixture's
 # id and the fixed engine's text.
-hooks='TFResetS|TFAudioF|TFMicDel|TFFakeEn|TFFakeTe|TFModelF|TFKeepSe|TFKeptSe|^DelayMs$|TFKeepAw|TFEndSes|TFGuideP|TFFieldT|TFAutoco|TFHoldDo|TFHoldSp|TFHoldEn|TFGuideB|TFSetupK|TFTrySta|TFOpenTr|test-fix|fellow americans'
+hooks='TFResetS|TFAudioF|TFMicDel|TFScreen|TFFakeEn|TFFakeTe|TFModelF|TFKeepSe|TFKeptSe|^DelayMs$|TFKeepAw|TFEndSes|TFGuideP|TFFieldT|TFAutoco|TFHoldDo|TFHoldSp|TFHoldEn|TFGuideB|TFSetupK|TFTrySta|TFOpenTr|test-fix|fellow americans'
 
 # Every 64-bit immediate built by mov/movk, as the printable text in its bytes.
 immediates() {

@@ -47,36 +47,40 @@ struct SessionScreen: View {
             // While the mic starts on a manual return the line keeps its room, unseen and unheard, so nothing moves when it
             // shows with the cue.
             let waits = !cue && returnTrip?.phase != .leaving
-            ScrollView {
-                VStack(spacing: 0) {
-                    Spacer()
-                    VStack(spacing: 14) {
-                        BubbleArt(mode: Self.mode(for: status)).frame(width: 104, height: 104)
-                        Text(Self.primaryLine(status: status, returnTrip: returnTrip))
-                            .font(.title2.weight(.semibold))
-                            .accessibilityIdentifier("session.title")
-                        if !atEdge, let sub { wayLine(sub, atEdge: false, waits: waits) }
-                        if let line = Self.firstReturnLine(returnTrip: returnTrip) {
-                            Text(line).font(.footnote).foregroundStyle(Theme.inkSoft)
+            // The cue's room at the bottom, outside the scrolling page: words never scroll through the arrow's drop.
+            let room = atEdge ? max(0, GoBackCue.room - geo.safeAreaInsets.bottom) : 0
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Spacer()
+                        VStack(spacing: 14) {
+                            BubbleArt(mode: Self.mode(for: status)).frame(width: 104, height: 104)
+                            Text(Self.testTitle ?? Self.primaryLine(status: status, returnTrip: returnTrip))
+                                .font(.title2.weight(.semibold))
+                                .accessibilityIdentifier("session.title")
+                            if !atEdge, let sub { wayLine(sub, atEdge: false, waits: waits) }
+                            if let line = Self.firstReturnLine(returnTrip: returnTrip) {
+                                Text(line).font(.footnote).foregroundStyle(Theme.inkSoft)
+                            }
+                            if atEdge { QuietActionButton(title: "End session", id: "session.end", action: onEnd) }
                         }
-                        if atEdge { QuietActionButton(title: "End session", id: "session.end", action: onEnd) }
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 320)
+                        Spacer()
+                        if atEdge {
+                            // Part of the page, so at the largest text sizes the line grows upward and the page scrolls.
+                            if let sub { wayLine(sub, atEdge: true, waits: waits) }
+                        } else {
+                            QuietActionButton(title: "End session", id: "session.end", action: onEnd).padding(.bottom, 26)
+                        }
                     }
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 320)
-                    Spacer()
-                    if atEdge {
-                        // Part of the page, so at the largest text sizes the line grows upward and the page scrolls; under
-                        // it, the cue's room.
-                        if let sub { wayLine(sub, atEdge: true, waits: waits) }
-                        Color.clear.frame(height: max(0, GoBackCue.room - geo.safeAreaInsets.bottom))
-                    } else {
-                        QuietActionButton(title: "End session", id: "session.end", action: onEnd).padding(.bottom, 26)
-                    }
+                    .padding(.horizontal, 24)
+                    .frame(minHeight: geo.size.height - room)
+                    .contentShape(.rect)
+                    .onTapGesture(perform: replay)
                 }
-                .padding(.horizontal, 24)
-                .frame(minHeight: geo.size.height)
-                .contentShape(.rect)
-                .onTapGesture { if roundsFrom != nil { roundsFrom = .now } } // a tap on the page plays the cue again
+                .accessibilityIdentifier("session.page")
+                if room > 0 { Color.clear.frame(height: room).contentShape(.rect).onTapGesture(perform: replay) }
             }
             .overlay {
                 if cue, way != .appSwitcher {
@@ -108,6 +112,19 @@ struct SessionScreen: View {
         }
         .foregroundStyle(Theme.ink)
         .background(Theme.paper)
+    }
+
+    /// A tap on the page plays the cue's rounds again, once they have begun.
+    private func replay() { if roundsFrom != nil { roundsFrom = .now } }
+
+    /// UI tests (Debug builds): `-TFScreenTitle <text>` takes the title's place, as a long status message does, so a test
+    /// can overflow the page. Never so in a Release build.
+    private static var testTitle: String? {
+        #if DEBUG
+        UserDefaults.standard.string(forKey: "TFScreenTitle")
+        #else
+        nil
+        #endif
     }
 
     /// The way-back line, under the title or at the edge: there in ink and semibold, left-aligned over the spot where the
