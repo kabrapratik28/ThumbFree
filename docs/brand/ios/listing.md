@@ -84,10 +84,10 @@ speech,text,typing,transcribe,transcription,dictate,talk,notes,write,email,memo,
 
 ## What's New
 
-Not asked for a first version (1.0.1 became the first, after 1.0 was rejected). For a later version [124]:
+Not asked for a first version (1.0.1 became the first, after 1.0 was rejected). For 1.0.2 [179]:
 
 <!-- whatsnew -->
-A simpler setup: pick your language, and a short video floats over Settings to show exactly what to tap to add the keyboard.
+Going back to your app after the first tap is clearer: an arrow points at the bottom edge, and the words show how to swipe back. On iPad, ThumbFree points you to the App Switcher.
 <!-- /whatsnew -->
 
 ## Screenshots
