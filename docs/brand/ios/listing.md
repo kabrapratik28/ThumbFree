@@ -9,7 +9,7 @@ The description lists only what the app has today.
 | Field | Value |
 |---|---|
 | Name (30 at most) | ThumbFree: AI Voice Keyboard [28] |
-| Subtitle (30 at most) | Private, offline dictation [26] |
+| Subtitle (30 at most) | Private offline speech to text [30] |
 | Primary category | Productivity |
 | Secondary category | Utilities |
 | Content rights | "Yes, it contains third-party content, and I have the rights to use it": the speech models are NVIDIA's Parakeet (CC BY 4.0) and Silero VAD (MIT), downloaded from Hugging Face, and the app includes the wordfreq word list (CC BY-SA 4.0); all are credited in Settings > About. |
@@ -77,10 +77,10 @@ GOOD TO KNOW
 ## Keywords (100 at most)
 
 <!-- keywords -->
-speech,text,typing,transcribe,transcription,dictate,talk,notes,write,email,memo,local,privacy,mic
+dictation,typing,transcribe,transcription,dictate,talk,notes,write,email,memo,type,mic,local,privacy
 <!-- /keywords -->
 
-[97] Single words, because App Store search combines them with each other and with the name and subtitle ("voice" and "typing" also find "voice typing"). The name and subtitle are searched already, so "ThumbFree", "AI", "voice", "keyboard", "private", "offline" and "dictation" are left out. No other app's name or trademark, no "free" (a price, not a description of the app) and no "unlimited" (promotional, not descriptive).
+[100] Single words, because App Store search combines them with each other and with the name and subtitle ("voice" and "typing" also find "voice typing"). The name and subtitle are searched already, so "ThumbFree", "AI", "voice", "keyboard", "private", "offline", "speech" and "text" are left out. The subtitle says "speech to text" because that phrase is searched more than "dictation", which moved here. No other app's name or trademark, no "free" (a price, not a description of the app) and no "unlimited" (promotional, not descriptive).
 
 ## What's New
 
