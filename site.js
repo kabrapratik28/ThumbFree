@@ -6,7 +6,7 @@
 const STORES = {
   android: {
     url: 'https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree',
-    live: false,
+    live: true,
   },
   ios: {
     url: 'https://apps.apple.com/app/id6817631006', // the app's number in App Store Connect
