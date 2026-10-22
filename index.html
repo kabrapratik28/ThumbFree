@@ -155,8 +155,6 @@ section{padding:3rem 0}
 [data-device=android] .badges,[data-device=ios] .badges{--h:3.75rem}
 [data-inapp] .cta:has(a.badge) .inapp{display:block;font-size:.9rem;color:var(--muted)}
 .center .badges{justify-content:center}
-/* The Android test, beside Google Play's badge until Play is live; not on iPhone, where that badge is hidden too */
-[data-device=ios] .beta-link,.cta:has(a.badge[data-store=android]) .beta-link{display:none}
 
 /* Platform switch: with JS one platform shows, without it both do */
 [data-platform=android] #how .only-ios,[data-platform=ios] #how .only-android{display:none}
@@ -302,7 +300,6 @@ footer :focus-visible{outline-color:var(--sun)}
       <div class="badges">
         <span class="badge soon" data-store="ios">Coming soon to the App Store</span>
         <a class="badge" data-store="android" href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree"><img class="gp" src="img/badge-google-play.png" width="646" height="250" alt="Get it on Google Play"></a>
-        <a class="button solid beta-link" href="beta/">Join the Android test</a>
       </div>
       <p class="also also-ios">On iPhone? <span data-store="ios">Coming soon to the App Store</span></p>
       <p class="also also-android">On Android? <a data-store="android" href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree">Get ThumbFree on Google Play</a></p>
@@ -365,7 +362,6 @@ footer :focus-visible{outline-color:var(--sun)}
       <div class="badges">
         <span class="badge soon" data-store="ios">Coming soon to the App Store</span>
         <a class="badge" data-store="android" href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree"><img class="gp" src="img/badge-google-play.png" width="646" height="250" alt="Get it on Google Play"></a>
-        <a class="button solid beta-link" href="beta/">Join the Android test</a>
       </div>
       <p class="also also-ios">On iPhone? <span data-store="ios">Coming soon to the App Store</span></p>
       <p class="also also-android">On Android? <a data-store="android" href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree">Get ThumbFree on Google Play</a></p>
@@ -515,7 +511,6 @@ footer :focus-visible{outline-color:var(--sun)}
       <div class="badges">
         <span class="badge soon" data-store="ios">Coming soon to the App Store</span>
         <a class="badge" data-store="android" href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree"><img class="gp" src="img/badge-google-play.png" width="646" height="250" alt="Get it on Google Play"></a>
-        <a class="button solid beta-link" href="beta/">Join the Android test</a>
       </div>
       <p class="also also-ios">On iPhone? <span data-store="ios">Coming soon to the App Store</span></p>
       <p class="also also-android">On Android? <a data-store="android" href="https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree">Get ThumbFree on Google Play</a></p>
@@ -542,7 +537,7 @@ footer :focus-visible{outline-color:var(--sun)}
     <div class="cols">
       <div>
         <h2>Android</h2>
-        <ul><li><a href="android-support.html">Help</a></li><li><a href="android-privacy.html">Privacy policy</a></li><li><a href="beta/">Join the test</a></li></ul>
+        <ul><li><a href="android-support.html">Help</a></li><li><a href="android-privacy.html">Privacy policy</a></li></ul>
       </div>
       <div>
         <h2>iPhone</h2>
