@@ -5,7 +5,8 @@ import TFCore
 
 /// The session host and a keyboard together, sharing one IPC folder; the test plays the Darwin notifications by calling
 /// handleCommands and refresh. A take is typed only into its own field, and for the take whose press opened
-/// the app, that is the field where the user tapped stop.
+/// the app, or one stopped in ThumbFree after iOS took the screen during it, that is the field where the user
+/// tapped stop.
 @MainActor @Suite final class DeliveryTests {
     let root: URL
     let shared: SharedStore
@@ -79,5 +80,27 @@ import TFCore
         host.handleCommands()
         #expect(try host.history.record(take)?.status == .notInserted)
         #expect(try shared.outbox().last?.state == .heldBack)
+    }
+
+    // The try's first take: iOS asks for the microphone after the press, which makes ThumbFree inactive and brings the
+    // keyboard back to the same box with a new identity. The stop comes after that, so the text goes into the box.
+    @Test func theTrysFirstTakeIsTypedAfterTheMicrophoneRequest() async throws {
+        let keyboard = keyboard()
+        host.appActive = true
+        tap(keyboard)
+        try await waitUntil { host.status.take == .recording && host.recordedMs >= 2_000 }
+        let take = try #require(host.status.takeID)
+        host.appActive = false // iOS's request is up, and the keyboard goes away
+        host.appActive = true // answered
+        proxy.documentIdentifier = UUID()
+        keyboard.appeared()
+        keyboard.refresh(proxy)
+        tap(keyboard) // the stop
+        try await waitUntil { host.status.take == .delivering }
+        keyboard.refresh(proxy)
+        #expect(proxy.text.localizedCaseInsensitiveContains("ask not what your country"))
+        #expect(keyboard.chip == nil)
+        host.handleCommands()
+        #expect(try host.history.record(take)?.status == .inserted)
     }
 }

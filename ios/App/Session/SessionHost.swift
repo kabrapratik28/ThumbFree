@@ -31,9 +31,14 @@ import TFCore
                 guard awaitingActive else { return }
                 awaitingActive = false
                 fallbackToSwipeBack()
+            } else {
+                leftActiveAt = Date()
             }
         }
     }
+    /// When the app last stopped being active: iOS's microphone request, Control Center or the background took the
+    /// screen, and the keyboard went away with it (`handleCommands` re-pins a take stopped in ThumbFree after that).
+    private var leftActiveAt = Date.distantPast
     /// The scene is `.background` (scenePhase `.background`; unlike `appActive`, a system "Open in ...?" prompt
     /// (`.inactive`) never sets this). Gates `resolveIfOpened()`, so a hit reported while merely inactive is not
     /// cleared until the scene actually leaves: a prompt the user might cancel is not a departure.
@@ -844,11 +849,13 @@ extension SessionHost {
             case nil:
                 publish() // ping
             }
-            // The command that stopped the cold take (the second press, or a hold's release) carries the field where the
-            // user stopped, and the text goes there: the app switch gave the field of its press a new identity. A quiet
-            // end has no tail, so the take can be transcribing already.
-            if let id = recording, id == coldTake, reducer.state.takeID == id, reducer.state.phase != .recording,
-               command.target != nil {
+            // The command that stopped the take (the second press, or a hold's release) carries the field where the user
+            // stopped, and the text goes there for the cold take (the app switch gave the field of its press a new
+            // identity) and for a take stopped in ThumbFree after iOS took the screen since its press (the try's first
+            // take: iOS's microphone request hides the keyboard, which comes back to the box as new). Any other take
+            // keeps the field of its press. A quiet end has no tail, so the take can be transcribing already.
+            if let id = recording, id == coldTake || appActive && (pins[id]?.sentAt ?? .distantFuture) < leftActiveAt,
+               reducer.state.takeID == id, reducer.state.phase != .recording, command.target != nil {
                 pins[id] = command
             }
         }
