@@ -1,7 +1,7 @@
 import XCTest
 
-/// The walkthrough, "How to use it in other apps", which Home plays once dictation works (`GuideView`), and Home's link
-/// to putting ThumbFree first.
+/// "How to use it in other apps", the steps Home shows once dictation works (`GuideView`), and Home's link to putting
+/// ThumbFree first.
 @MainActor final class GuideUITests: XCTestCase {
     /// Home with dictation working: the keyboard held as seen with Full Access, the fixed engine (no model to fetch), and
     /// the microphone allowed in Settings' Setup row (Home has no microphone card).
@@ -14,49 +14,18 @@ import XCTest
         return app
     }
 
-    // Paused, Next walks the seven beats in order, a text box first, and Back goes back.
-    func testTheGuideStepsThroughEveryBeat() throws {
-        let app = launchReadyHome(["-TFGuidePaused", "YES", "-TFAutoReturn", "YES"])
-        let caption = ThumbFreeUI.element("guide.caption", in: app)
-        XCTAssertTrue(ThumbFreeUI.wait(for: caption, toContain: "Step 1 of 7. Tap a text box in any app.", timeout: 5))
-        let next = app.buttons["guide.next"]
-        XCTAssertGreaterThanOrEqual(next.frame.height, 44, "Next's tap target is under 44 points")
-        XCTAssertGreaterThanOrEqual(app.buttons["guide.back"].frame.height, 44, "Back's tap target is under 44 points")
-        for (step, words) in ["Hold the globe, then choose ThumbFree.", "Tap the yellow mic.",
-                              "The first tap of each session opens ThumbFree. It returns to", "Speak.",
-                              "Tap the red stop button.", "Your words appear."].enumerated() {
-            next.tap()
-            XCTAssertTrue(ThumbFreeUI.wait(for: caption, toContain: "Step \(step + 2) of 7. \(words)", timeout: 3))
-        }
-        XCTAssertFalse(next.isEnabled)
-        app.buttons["guide.back"].tap()
-        XCTAssertTrue(ThumbFreeUI.wait(for: caption, toContain: "Step 6 of 7.", timeout: 3))
-        XCTAssertFalse(app.buttons["Browser"].exists, "the walkthrough is chat only")
-        XCTAssertLessThanOrEqual(ThumbFreeUI.element("guide.picture", in: app).frame.height, 320.5, "the walkthrough's frame is taller than 320 points")
-    }
-
-    // While the walkthrough plays by itself, Back, Next and the count are hidden and it moves on by itself; its picture
-    // takes no taps, so a tap there brings nothing. Reduce Motion, VoiceOver, Switch Control and the test hook get Back
-    // and Next (testTheGuideStepsThroughEveryBeat), and Voice Control the caption's Show Back and Next.
-    func testTheGuidePlaysWithoutControlsAndItsPictureTakesNoTaps() throws {
+    // Home says how to use ThumbFree in other apps in four steps of words, in an IN ANY APP frame: nothing drawn to hold
+    // or tap, no Back and Next, nothing cut off.
+    func testHomeSaysTheStepsInWords() throws {
         let app = launchReadyHome()
-        let caption = ThumbFreeUI.element("guide.caption", in: app)
-        let next = app.buttons["guide.next"]
-        XCTAssertTrue(caption.waitForExistence(timeout: 5))
-        XCTAssertFalse(next.exists, "Next shows while the walkthrough plays by itself")
-        let shown = caption.label
-        XCTAssertTrue(ThumbFreeUI.wait(until: 4) { caption.label != shown }, "the walkthrough does not play by itself")
-        ThumbFreeUI.element("guide.picture", in: app).tap()
-        XCTAssertFalse(next.waitForExistence(timeout: 2), "a tap on the picture brought Back and Next")
-    }
-
-    // The return beat follows the setting: with automatic return off, the swipe back.
-    func testTheReturnBeatFollowsTheSetting() throws {
-        let app = launchReadyHome(["-TFGuidePaused", "YES", "-TFAutoReturn", "NO"])
-        let caption = ThumbFreeUI.element("guide.caption", in: app)
-        XCTAssertTrue(ThumbFreeUI.wait(for: caption, toContain: "Step 1 of 7.", timeout: 5))
-        for _ in 0..<3 { app.buttons["guide.next"].tap() }
-        XCTAssertTrue(ThumbFreeUI.wait(for: caption, toContain: "Step 4 of 7. The first tap of each session opens ThumbFree. Swipe back to continue.", timeout: 3))
+        let steps = ThumbFreeUI.element("guide.steps", in: app)
+        XCTAssertTrue(steps.waitForExistence(timeout: 5))
+        XCTAssertEqual(steps.label, "Open Messages or another app, and tap where you type. Hold the globe key, then choose "
+            + "ThumbFree. Tap the yellow mic. If ThumbFree opens, go back to your app. Speak, then tap the red stop button.")
+        XCTAssertFalse(app.buttons["guide.next"].exists, "Back and Next on Home")
+        XCTAssertFalse(ThumbFreeUI.element("guide.picture", in: app).exists, "a drawing on Home")
+        XCTAssertTrue(app.frame.contains(steps.frame), "the steps \(steps.frame) are cut off")
+        ThumbFreeUI.shot("home-steps")
     }
 
     // Once nothing is missing (the microphone allowed, the keyboard come up with Full Access, the model ready) and a take

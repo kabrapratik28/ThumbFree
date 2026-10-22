@@ -5,22 +5,24 @@ import UIKit
 
 /// A first try with the real ThumbFree keyboard, inside ThumbFree: the welcome's step 3, and Home's Try it. A text box
 /// brings the iPhone keyboard up, and a line above it follows the person one thing at a time: switch to the ThumbFree
-/// keyboard (with a small framed picture of the globe and iOS's keyboard list, HOW TO SWITCH), tap its yellow mic, speak
+/// keyboard with the real globe key (named in words, never drawn: a drawn globe drew the taps), tap its yellow mic, speak
 /// and tap stop while the take records, wait while it turns into text, then it worked. The line follows the live take
 /// (`HostStatus.take`). The keyboard leaves its mark (`KeyboardMark`) each time it comes up with Full Access, and while
 /// ThumbFree is in front it can only come up in this box, so a mark other than the one there when the screen came up
 /// means it is up. A take that gave text (`SessionHost.textTakes` above its value when the screen came up) with new words
 /// in the box means it worked: the keyboard types the words into the box, then goes down once the take is over, and Done
-/// is the big button. What stops the try (`SetupBlocker.forTry`: the microphone refused, the keyboard not added, speech
-/// still downloading or failed) shows in the box's place as one page with its one fix; the download's pages show how far
+/// is the big button. When no on-screen keyboard comes up (a hardware keyboard hides every one, ThumbFree's too), the
+/// line says how to show it instead of pointing at a globe that is not there. What stops the try (`SetupBlocker.forTry`:
+/// the microphone refused, the keyboard not added, speech still downloading or failed) shows in the box's place as one
+/// page with its one fix; the download's pages show how far
 /// it is, with Change language. While the engine loads a model that is here (again, when iOS ended ThumbFree in
 /// Settings), the box and the keyboard are up with one small line, and a take waits for the engine. iOS asks for the
 /// microphone at the first take. A keyboard added but not yet seen with Full Access stops nothing: the box is
-/// where it first comes up, and without Full Access its own bar says to turn that on, with a quiet Open Settings here
-/// once it has had time to come up. Not now always leaves; leaving cancels a take that has not given its text yet.
+/// where it first comes up, and without Full Access its own bar says to turn that on, with a quiet Full Access settings
+/// here once it has had time to come up. Not now always leaves; leaving cancels a take that has not given its text yet.
 struct TryItView: View {
     /// What the person does next, or what happens now, as the line above the box says it.
-    enum Stage: String, CaseIterable { case switchKeyboard, tapMic, recording, transcribing, worked }
+    enum Stage: String, CaseIterable { case showKeyboard, switchKeyboard, tapMic, recording, transcribing, worked }
 
     let host: SessionHost
     let models: SpeechModels
@@ -38,7 +40,8 @@ struct TryItView: View {
     /// The box's text when the latest take began recording: a take worked only once the box changed from it.
     @State private var boxAtRecording: String?
     @State private var keyboard = KeyboardStatus.current()
-    /// The switch has had time to happen and the keyboard has not come up with Full Access: a quiet Open Settings shows.
+    /// The switch has had time to happen and the keyboard has not come up with Full Access: a quiet Full Access settings
+    /// shows.
     @State private var fullAccessHelp = false
     /// Change language was tapped: iOS's own sheet asks which.
     @State private var changingLanguage = false
@@ -47,12 +50,12 @@ struct TryItView: View {
     /// The keyboard has shown since the box last asked for it: the box stops asking again, so a keyboard put away stays
     /// down.
     @State private var keyboardShown = false
-    /// HOW TO SWITCH has room on the page. Without it, the frame `ViewThatFits` left out, which it keeps unseen in the
-    /// tree, is not voiced, so VoiceOver finds nothing over the box (`IllustrationFrame.voiced`).
-    @State private var helperFits = true
+    /// An on-screen keyboard is up: it takes its room from the page's bottom (`keyboardRoom`).
+    @State private var keyboardUp = false
+    /// The box has wanted the keyboard for `keyboardWait` and none came up, so the switch says how to show one.
+    @State private var keyboardHidden = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     init(host: SessionHost, models: SpeechModels, onDone: @escaping () -> Void, inWelcome: Bool = false) {
@@ -64,9 +67,6 @@ struct TryItView: View {
         _markAtStart = State(initialValue: KeyboardStatus.marksFolder.flatMap(KeyboardMark.lastSeen(in:)))
     }
 
-    /// What VoiceOver reads for the HOW TO SWITCH picture, once.
-    static let helperDescription = "The globe key held, and iOS's list of keyboards with ThumbFree chosen."
-
     var body: some View {
         let _ = scenePhase // back from Settings: read the microphone again
         let blocker = self.blocker
@@ -74,8 +74,7 @@ struct TryItView: View {
         let speechLoads = self.speechLoads
         VStack(spacing: 0) {
             if inWelcome { OnboardingHeader(step: 2, name: "Try ThumbFree") }
-            // Nothing scrolls with the keyboard up: the picture shrinks to the room left, and goes when too little is
-            // left. Only the accessibility text sizes scroll.
+            // Nothing scrolls with the keyboard up; only the accessibility text sizes scroll.
             let content = VStack(alignment: .leading, spacing: 0) {
                 if let blocker {
                     blockerPage(blocker)
@@ -89,9 +88,7 @@ struct TryItView: View {
                             .padding(.top, 6)
                             .accessibilityIdentifier("try.note")
                     }
-                    // At the accessibility sizes the page scrolls, and the words matter more than a drawing. The box stays
-                    // one view through every stage, so it keeps the keyboard.
-                    if stage == .switchKeyboard, !dynamicTypeSize.isAccessibilitySize { helper }
+                    // The box stays one view through every stage, so it keeps the keyboard.
                     box.padding(.top, 16)
                 }
             }
@@ -162,6 +159,16 @@ struct TryItView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
             keyboardShown = true
         }
+        // A hardware keyboard leaves no room, or a thin bar's: iOS then shows no on-screen keyboard, ThumbFree's included.
+        .onGeometryChange(for: Bool.self) { $0.safeAreaInsets.bottom > Self.keyboardRoom } action: { up in
+            keyboardUp = up
+            if up { keyboardHidden = false }
+        }
+        .task(id: wantsKeyboard && !keyboardUp && scenePhase == .active) {
+            guard wantsKeyboard, !keyboardUp, scenePhase == .active else { return }
+            try? await Task.sleep(for: Self.keyboardWait)
+            if !Task.isCancelled { keyboardHidden = true }
+        }
         .onChange(of: host.status.take) { _, take in if take == .recording { boxAtRecording = text } }
         // Not while the take records: VoiceOver's voice would go into it.
         .onChange(of: stage) { _, now in if now != .recording { AccessibilityNotification.Announcement(Self.spoken(now)).post() } }
@@ -169,18 +176,20 @@ struct TryItView: View {
 
     // MARK: The rules
 
-    /// The stage from what the screen has seen: the switch until the ThumbFree keyboard is up in the box; then it worked
+    /// The stage from what the screen has seen: the switch until the ThumbFree keyboard is up in the box, or how to show
+    /// a keyboard while none comes up; then it worked
     /// once a take gave text since the screen came up and the box changed, to words, from what it held when the latest
     /// take began recording here (`boxAtRecording`: a take held back, one whose recording began elsewhere, or words typed
     /// by hand never count); else the live take's own stage, recording once the mic is on, then turning into text, or the
-    /// mic still to tap. A take records before the mic is on while iOS asks for the microphone at the first take: the
-    /// line stays on the mic behind iOS's prompt.
-    static func stage(keyboardSeen: Bool, take: TakePhase, micOn: Bool, takesAtStart: Int, takesNow: Int, box: String,
-                      boxAtRecording: String?) -> Stage {
-        guard keyboardSeen else { return .switchKeyboard }
+    /// mic still to tap, or how to show the keyboard again when it went (a hardware keyboard came) before a take. A take
+    /// records before the mic is on while iOS asks for the microphone at the first take: the line stays on the mic behind
+    /// iOS's prompt.
+    static func stage(keyboardSeen: Bool, keyboardHidden: Bool = false, take: TakePhase, micOn: Bool, takesAtStart: Int,
+                      takesNow: Int, box: String, boxAtRecording: String?) -> Stage {
+        guard keyboardSeen else { return keyboardHidden ? .showKeyboard : .switchKeyboard }
         if takesNow > takesAtStart, let before = boxAtRecording, box != before, !box.allSatisfy(\.isWhitespace) { return .worked }
         switch take {
-        case .idle: return .tapMic
+        case .idle: return keyboardHidden ? .showKeyboard : .tapMic
         case .recording: return micOn ? .recording : .tapMic
         case .stopping, .transcribing, .delivering: return .transcribing
         }
@@ -202,32 +211,48 @@ struct TryItView: View {
         return take
     }
 
-    /// How long the switch may take before the quiet Open Settings for Full Access shows.
+    /// How long the switch may take before the quiet Full Access settings shows.
     static let fullAccessWait = Duration.seconds(8)
+
+    /// How long the box may want the keyboard before the line says how to show one: more than iOS takes to bring it up.
+    static let keyboardWait = Duration.seconds(2)
+
+    /// The room at the page's bottom above which an on-screen keyboard is up: about 300 points for the iPhone's, 34 for
+    /// the home indicator alone, and less than 100 with the thin bar some hardware keyboards leave.
+    static let keyboardRoom: CGFloat = 150
 
     /// The line above the box.
     static func line(_ stage: Stage) -> String {
         switch stage {
-        case .switchKeyboard: String(localized: "Hold 🌐 at the bottom left, then choose ThumbFree.")
+        case .showKeyboard: String(localized: "Show your on-screen keyboard.")
+        case .switchKeyboard: String(localized: "Hold the globe key at the bottom left of your keyboard, then choose ThumbFree.")
         case .tapMic: String(localized: "Tap the yellow mic.")
         case .recording: String(localized: "Speak, then tap the red stop button.")
         case .transcribing: String(localized: "Turning speech into text…")
-        case .worked: String(localized: "Your words appeared. You’re ready.")
+        case .worked: String(localized: "Your words appeared.")
         }
     }
 
-    /// The small lines under the line: with the ThumbFree keyboard up, that iOS will ask for the microphone at this first
-    /// take; then speech loading again (iOS ended ThumbFree in Settings), which a take waits for.
+    /// The small lines under the line: how to show a keyboard that is not up; with the ThumbFree keyboard up, that iOS
+    /// will ask for the microphone at this first take; once it worked, where to use it next; then speech loading again
+    /// (iOS ended ThumbFree in Settings), which a take waits for.
     static func notes(_ stage: Stage, speechLoads: Bool, mic: AVAudioApplication.recordPermission) -> [String] {
         var notes: [String] = []
+        if stage == .showKeyboard {
+            notes.append(String(localized: "Tap the box. If you’re using a hardware keyboard, disconnect it and tap again."))
+        }
         if stage == .tapMic, mic == .undetermined { notes.append(String(localized: "iOS will ask for microphone access.")) }
+        if stage == .worked {
+            notes.append(String(localized: "Next, use it in other apps: hold the globe key, then choose ThumbFree."))
+        }
         if speechLoads { notes.append(String(localized: "Getting speech ready…")) }
         return notes
     }
 
     /// The line as VoiceOver reads it: its own gesture for the globe.
     static func spoken(_ stage: Stage) -> String {
-        stage == .switchKeyboard ? String(localized: "Double-tap and hold the globe key at the bottom left, then choose ThumbFree.") : line(stage)
+        stage == .switchKeyboard
+            ? String(localized: "On your keyboard, double-tap and hold the globe key at the bottom left, then choose ThumbFree.") : line(stage)
     }
 
     /// The model the try uses: the one in use.
@@ -245,15 +270,16 @@ struct TryItView: View {
     }
 
     private var stage: Stage {
-        Self.heldStage ?? Self.stage(keyboardSeen: keyboardSeen, take: host.status.take, micOn: host.status.micOn,
-                                     takesAtStart: takesAtStart, takesNow: host.textTakes, box: text,
-                                     boxAtRecording: boxAtRecording)
+        Self.heldStage ?? Self.stage(keyboardSeen: keyboardSeen, keyboardHidden: keyboardHidden, take: host.status.take,
+                                     micOn: host.status.micOn, takesAtStart: takesAtStart, takesNow: host.textTakes,
+                                     box: text, boxAtRecording: boxAtRecording)
     }
 
     /// The box has the keyboard while the try goes on: not while something stops it, and not once a take worked and is
-    /// over, so the keyboard has typed its words before it goes down.
+    /// over, so the keyboard has typed its words before it goes down. A held `showKeyboard` (Debug) keeps it down, as a
+    /// hardware keyboard would.
     private var wantsKeyboard: Bool {
-        blocker == nil && !(stage == .worked && host.status.take == .idle)
+        blocker == nil && !(stage == .worked && host.status.take == .idle) && Self.heldStage != .showKeyboard
     }
 
     // MARK: Parts
@@ -280,42 +306,10 @@ struct TryItView: View {
         .accessibilityFocused($lineFocused)
     }
 
-    /// HOW TO SWITCH: the globe held and iOS's list, two beats on a loop, held on ThumbFree chosen under Reduce Motion,
-    /// VoiceOver and `-TFGuidePaused`. It shrinks to the room left, up to its own size (its frame 96 to 152 points), and
-    /// goes, leaving no gap, when less than 96 points is left: on a small iPhone with the keyboard up, the box comes first.
-    /// Left out, it leaves VoiceOver too (`helperFits`).
-    private var helper: some View {
-        let still = reduceMotion || voiceOver || GuideView.pausedForTests
-        let frame = IllustrationFrame(label: "HOW TO SWITCH", description: Self.helperDescription, id: "try.picture",
-                                      voiced: helperFits) {
-            Shrinks {
-                Group {
-                    if still {
-                        GlobeHelperDiagram()
-                    } else {
-                        KeyframeAnimator(initialValue: 0.0, repeating: true) { GlobeHelperDiagram(time: $0) } keyframes: { _ in
-                            LinearKeyframe(GlobeHelperDiagram.length, duration: GlobeHelperDiagram.length)
-                            LinearKeyframe(GlobeHelperDiagram.length, duration: 0.6) // the end holds a moment
-                        }
-                    }
-                }
-                .dynamicTypeSize(.large)
-            }
-            .frame(minHeight: 30, idealHeight: 30) // with the label, fits from 96 points, then grows to its own size
-        }
-        return ViewThatFits(in: .vertical) {
-            frame
-                .padding(.top, 16)
-            Color.clear.frame(height: 0)
-        }
-        .layoutPriority(-1) // the rest of the page takes its height first
-        .onGeometryChange(for: Bool.self) { $0.size.height > 0 } action: { helperFits = $0 }
-    }
-
     /// The box the keyboard types into, the only real text box in the onboarding: a tap anywhere in it starts typing.
     /// The example is its placeholder; its edge thickens in the brand color while it has the keyboard.
     private var box: some View {
-        TextField("Try: I’ll be there in ten minutes.", text: $text, axis: .vertical)
+        TextField("Say: I’ll be there in ten minutes.", text: $text, axis: .vertical)
             .lineLimit(2...4)
             .keyboardType(Self.fieldType)
             .autocorrectionDisabled(Self.autocorrectionOff)
@@ -368,7 +362,7 @@ struct TryItView: View {
         } else {
             HStack(spacing: 8) {
                 if fullAccessHelp, stage == .switchKeyboard { // no new mark in 8 s: an old one proves nothing about now
-                    QuietActionButton(title: "Open Settings", id: "try.fullAccess", action: SetupRows.openSettings)
+                    QuietActionButton(title: "Full Access settings", id: "try.fullAccess", action: SetupRows.openSettings)
                         .accessibilityHint("To turn on Allow Full Access.")
                 }
                 QuietActionButton(title: "Not now", id: "try.notNow", action: onDone)
@@ -388,8 +382,8 @@ struct TryItView: View {
 
     // MARK: Test hooks
 
-    /// Screenshots and UI tests (Debug builds): `-TFTryStage switchKeyboard|tapMic|recording|transcribing|worked` holds
-    /// the screen at that stage. Never so in a Release build.
+    /// Screenshots and UI tests (Debug builds): `-TFTryStage showKeyboard|switchKeyboard|tapMic|recording|transcribing|worked`
+    /// holds the screen at that stage. Never so in a Release build.
     static var heldStage: Stage? {
         #if DEBUG
         UserDefaults.standard.string(forKey: "TFTryStage").flatMap(Stage.init(rawValue:))

@@ -5,11 +5,11 @@ import TFCore
 /// The first tab after the welcome. While something stops dictation, one card with the one fix (`SetupBlocker`, a refused
 /// microphone first, then the keyboard, then speech, then the try for what only it finishes), and nothing else. Once dictation works now (`SetupRows.ready`):
 /// "Ready · works offline", Try it until a take has given text (the try, `TryItView`, in a sheet), and how to use
-/// ThumbFree in other apps, the walkthrough in its EXAMPLE frame; once a take worked, a link to putting ThumbFree first in
-/// the keyboard list. A quick load of a model loaded before shows only a quiet "Getting ready" in the ready chip's place
-/// rather than the card, which would only flash. While a session is on, a line says so, with End session. Nothing
-/// scrolls at the standard text sizes: the walkthrough's drawing shrinks to the room left, and only the accessibility
-/// sizes scroll.
+/// ThumbFree in other apps, four steps in words in an IN ANY APP frame (`GuideView`); once a take worked, a link to
+/// putting ThumbFree first in the keyboard list. A quick load of a model loaded before shows only a quiet "Getting ready"
+/// in the ready chip's place rather than the card, which would only flash. While a session is on, a line says so, with
+/// End session. Words never shrink, so the page scrolls when they don't fit: at the accessibility sizes, or the largest
+/// standard ones on the smallest iPhones.
 struct HomeView: View {
     let host: SessionHost
     let models: SpeechModels
@@ -17,7 +17,6 @@ struct HomeView: View {
     /// Try it was tapped: the try screen's sheet is up.
     @State private var trying = TryItView.opensAtLaunch
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
@@ -25,18 +24,13 @@ struct HomeView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    ScrollView { content }
-                } else {
-                    content
-                }
-            }
-            .background(Theme.paper)
-            .foregroundStyle(Theme.ink)
-            .navigationTitle("ThumbFree")
-            .navigationBarTitleDisplayMode(.inline)
-            .followsKeyboard($keyboard)
+            ScrollView { content }
+                .scrollBounceBehavior(.basedOnSize) // still while everything fits
+                .background(Theme.paper)
+                .foregroundStyle(Theme.ink)
+                .navigationTitle("ThumbFree")
+                .navigationBarTitleDisplayMode(.inline)
+                .followsKeyboard($keyboard)
         }
         .sheet(isPresented: $trying) {
             TryItView(host: host, models: models) { trying = false }
@@ -59,7 +53,7 @@ struct HomeView: View {
         case .blocker(let blocker):
             SetupBlockerCard(blocker: blocker, model: model, engine: host.status.engine, run: run)
         case .gettingReady:
-            // A matter of seconds: the walkthrough waits until speech works.
+            // A matter of seconds: the steps wait until speech works.
             StatusChip(text: "Getting ready", symbol: "hourglass", tone: .busy, id: "home.gettingReady")
         case .ready:
             StatusChip(text: "Ready · works offline", symbol: "checkmark.circle.fill", id: "home.ready")

@@ -1,7 +1,7 @@
 import SwiftUI
 import TFCore
 
-// Drawings of what happens outside ThumbFree (a chat, the keyboard, Settings, iOS's keyboard list), drawn in SwiftUI with
+// Drawings of what happens outside ThumbFree (a chat, the keyboard, Settings), drawn in SwiftUI with
 // no pictures of other companies' apps. Each sits in a soft labelled frame (`IllustrationFrame`) with thin light lines, so
 // it reads as a picture and never as a box to type in or a switch to flip. Drawings never take taps, keep the large text
 // size and scale as one piece, and VoiceOver reads each frame once, as one image. Corners are continuous; a screen panel
@@ -9,8 +9,8 @@ import TFCore
 // it is less rounded the further in it sits: the chat's card (18), its bubble and reply box (14), a key (5).
 
 /// A drawing's frame: the warm canvas, a 1-point line drawn inside its edge, continuous corners, a faint shadow (deeper
-/// in Dark Mode, where a faint one would not show) and a small label (EXAMPLE, IN SETTINGS, HOW TO SWITCH) on the same
-/// 16-point inset as the drawing. Nothing in it takes a tap; VoiceOver reads `description` once.
+/// in Dark Mode, where a faint one would not show) and a small label (EXAMPLE, IN SETTINGS, IN ANY APP) on the same
+/// 16-point inset as the drawing, or as a list of steps. Nothing in it takes a tap; VoiceOver reads `description` once.
 struct IllustrationFrame<Content: View>: View {
     static var radius: CGFloat { 24 }
     static var inset: CGFloat { 16 }
@@ -248,17 +248,6 @@ struct ChatDiagram<Content: View>: View {
     }
 }
 
-/// A drawn chat's top: the made-up contact, Sam.
-struct ContactDiagram: View {
-    var body: some View {
-        HStack(spacing: 8) {
-            Text("S").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.onSunflower)
-                .frame(width: 20, height: 20).background(Theme.sunflower, in: .circle)
-            Text("Sam").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
-        }
-    }
-}
-
 /// Sam's message in the drawn chat.
 struct IncomingDiagram: View {
     var body: some View {
@@ -326,11 +315,8 @@ struct MicDiagram: View {
 /// widens the keys, never reflows them.
 struct KeyboardDiagram: View {
     enum Kind: Equatable { case apple, thumbFree }
-    /// The beat's cue: on the mic, or on the globe with its gesture.
-    enum Cue: Equatable {
-        case mic
-        case globe(String)
-    }
+    /// The beat's cue: on the mic.
+    enum Cue: Equatable { case mic }
 
     static let height: CGFloat = 192
     static let barHeight: CGFloat = 38
@@ -362,10 +348,6 @@ struct KeyboardDiagram: View {
             switch cue {
             case .mic?:
                 TapCue(outline: Circle(), ripple: TapTimeline.ripple(at: time)).frame(width: 40, height: 40).position(micPoint)
-            case .globe(let gesture)?:
-                TapCue(outline: Circle(), gesture: gesture, ripple: TapTimeline.ripple(at: time), pillEdge: .trailing)
-                    .frame(width: 36, height: 36)
-                    .position(Self.globe)
             case nil:
                 EmptyView()
             }
@@ -431,89 +413,5 @@ struct KeyboardDiagram: View {
             if kind == .apple { Image(systemName: "mic").font(.system(size: 16)).position(x: width - 26, y: 21) }
         }
         .foregroundStyle(Theme.ink)
-    }
-}
-
-/// The list iOS shows above the globe while you hold it: English (US), Emoji and ThumbFree. The lit row moves to
-/// ThumbFree (`lit`, 0 to 2, between while it slides), which fills with sunflower once picked.
-struct KeyboardPickerDiagram: View {
-    static let names = ["English (US)", "Emoji", "ThumbFree"]
-    /// The list's corner radius; its lit row's, on the 4-point inset, is 4 less: parallel corners.
-    static let radius: CGFloat = 12
-
-    var lit = 2.0
-    var picked = true
-    var rowHeight: CGFloat = 30
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Self.names.indices, id: \.self) { index in
-                let chosen = picked && index == 2
-                Text(Self.names[index])
-                    .font(.system(size: 13, weight: chosen ? .semibold : .regular))
-                    .foregroundStyle(chosen ? Theme.onSunflower : Theme.ink)
-                    .padding(.horizontal, 10)
-                    .frame(maxWidth: .infinity, minHeight: rowHeight, maxHeight: rowHeight, alignment: .leading)
-            }
-        }
-        .background(alignment: .top) {
-            RoundedRectangle(cornerRadius: Self.radius - 4, style: .continuous)
-                .fill(picked ? Theme.sunflower : Theme.muted)
-                .frame(height: rowHeight)
-                .offset(y: rowHeight * lit)
-        }
-        .padding(4)
-        .frame(width: 150)
-        .background(Theme.surface, in: shape)
-        .overlay(shape.strokeBorder(Theme.line, lineWidth: 0.75))
-        .shadow(color: Theme.shadow.opacity(0.08), radius: 6, y: 2)
-    }
-}
-
-/// The try's helper, HOW TO SWITCH: the bottom of the keyboard, its last row of keys and the globe under it, held, with
-/// iOS's list up over the keys beside it, the lit row moving to ThumbFree. Two beats of 1.3 s: hold the globe and the list
-/// comes up; then ThumbFree is picked. `time` runs over both, 0 to 2.6 s; a still picture shows the end. 322 x 86 points,
-/// the frame's drawing area on an iPhone 17 Pro at its tallest, so it shows there at its own size, the keyboard's lower
-/// corners parallel to the frame's.
-struct GlobeHelperDiagram: View {
-    static let length = 2 * TapTimeline.length
-    static let size = CGSize(width: 322, height: 86)
-    static let globe = CGPoint(x: 26, y: 64)
-
-    var time = GlobeHelperDiagram.length
-
-    var body: some View {
-        let first = min(time, TapTimeline.length), second = max(time - TapTimeline.length, 0)
-        let listUp = min(max((first - TapTimeline.rippleEnd) / 0.25, 0), 1)
-        ZStack(alignment: .topLeading) {
-            HStack(spacing: 4) {
-                key(Text("123").font(.system(size: 13, weight: .medium)), width: 40)
-                key(Image(systemName: "face.smiling").font(.system(size: 12, weight: .medium)), width: 34)
-                key(Color.clear, width: 170) // the space bar
-                key(Image(systemName: "return.left").font(.system(size: 12, weight: .medium)), width: 58)
-            }
-            .padding(.top, 8)
-            .frame(width: Self.size.width, height: Self.size.height, alignment: .top)
-            .background(Theme.keyboardGlass, in: UnevenRoundedRectangle(
-                topLeadingRadius: 14, bottomLeadingRadius: IllustrationFrame<EmptyView>.innerRadius,
-                bottomTrailingRadius: IllustrationFrame<EmptyView>.innerRadius, topTrailingRadius: 14, style: .continuous))
-            Image(systemName: "globe").font(.system(size: 17)).foregroundStyle(Theme.ink).position(Self.globe)
-            TapCue(outline: Circle(), gesture: "Hold", ripple: TapTimeline.ripple(at: first), pillEdge: .trailing)
-                .frame(width: 34, height: 34)
-                .position(Self.globe)
-            KeyboardPickerDiagram(lit: 2 * TapTimeline.change(at: second), picked: second >= TapTimeline.changeEnd, rowHeight: 24)
-                .scaleEffect(0.9 + 0.1 * listUp, anchor: .bottomLeading)
-                .opacity(listUp)
-                .offset(x: 104, y: 3)
-        }
-        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
-    }
-
-    private func key(_ label: some View, width: CGFloat) -> some View {
-        label.foregroundStyle(Theme.ink)
-            .frame(width: width, height: 30)
-            .background(Theme.keyFace, in: .rect(cornerRadius: 5, style: .continuous))
-            .shadow(color: Theme.shadow.opacity(0.12), radius: 0, y: 1)
     }
 }

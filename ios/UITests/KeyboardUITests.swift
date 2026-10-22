@@ -256,6 +256,6 @@ import XCTest
     private func opensThumbFree(_ app: XCUIApplication, tapping mic: XCUIElement) {
         mic.tap()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
-        XCTAssertTrue(ThumbFreeUI.wait(for: app.staticTexts["session.title"], toContain: "Listening", timeout: 10))
+        XCTAssertTrue(ThumbFreeUI.wait(for: app.staticTexts["session.title"], toContain: "Recording your voice", timeout: 10))
     }
 }

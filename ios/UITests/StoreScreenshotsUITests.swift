@@ -1,13 +1,13 @@
 import XCTest
 
-/// The App Store screenshots' screens, not a test: skipped unless `TF_SCREENSHOTS` names a folder. `tools/store-screenshots.sh`
-/// runs it on the "iPhone 17 Pro Max (store)" Simulator (6.9 inch, 1320 x 2868) with the store build's screens and a 9:41
-/// status bar, then puts a caption above each screen. Voice to text in use, saved as 1-talk to 8-history: dictation in
-/// Messages, its words in the message box, a long note in Reminders (the Simulator has no Notes), Home ready with Try it
-/// and the walkthrough, the message box in Spanish, the keyboard's emoji and suggestions, the Dictionary, and History. Nothing
-/// personal: JFK plays as the microphone (the script's `TF_SCREENSHOTS_AUDIO`, JFK over and over, so a take minutes into a
-/// session still hears speech) and the fixed engine types made-up sample text. Maya is the made-up contact tools/store-sim.sh
-/// adds; nothing is sent.
+/// The App Store screenshots' screens, not a test: skipped unless `TF_SCREENSHOTS` names a folder.
+/// `tools/store-screenshots.sh` runs it on the "iPhone 17 Pro Max (store)" Simulator (6.9 inch, 1320 x 2868) with the
+/// store build's screens and a 9:41 status bar, then puts a caption above each screen. Voice to text in use, saved as
+/// 1-talk to 8-history: dictation in Messages, its words in the message box, a long note in Reminders (the Simulator
+/// has no Notes), Home ready with Try it and the steps for other apps, the message box in Spanish, the keyboard's emoji
+/// and suggestions, the Dictionary, and History. Nothing personal: JFK plays as the microphone (the script's
+/// `TF_SCREENSHOTS_AUDIO`, JFK over and over, so a take minutes into a session still hears speech) and the fixed engine
+/// types made-up sample text. Maya is the made-up contact tools/store-sim.sh adds; nothing is sent.
 @MainActor final class StoreScreenshotsUITests: XCTestCase {
     /// No apostrophes or quotes: a launch argument's value is read as a property list string.
     static let message = "Running ten minutes late, save me a seat. Want me to grab you a coffee?"
@@ -97,11 +97,11 @@ import XCTest
         try save("3-note")
         reminders.buttons["Done"].firstMatch.tap() // Reminders reopens a Details sheet left open
         // The app in use, not a welcome screen: Home ready, as a person sees it after setup: the "Ready · works offline"
-        // chip, Try it (offered until a take gives text, so a reset) and the walkthrough as it plays, held on its third
-        // beat, the yellow mic. Opened fresh from the Home Screen, so no session is on. The reset also drops the keyboard's
-        // mark from the steps above, so -TFSetupKeyboard holds the keyboard ready, as it is; the mic grant stays.
+        // chip, Try it (offered until a take gives text, so a reset) and the steps for other apps. Opened fresh from the
+        // Home Screen, so no session is on. The reset also drops the keyboard's mark from the steps above, so
+        // -TFSetupKeyboard holds the keyboard ready, as it is; the mic grant stays.
         XCUIDevice.shared.press(.home)
-        let home = launch(Self.message, reset: true, arguments: ["-TFSetupKeyboard", "ready", "-TFGuideBeat", "3"])
+        let home = launch(Self.message, reset: true, arguments: ["-TFSetupKeyboard", "ready"])
         XCTAssertTrue(ThumbFreeUI.element("home.ready", in: home).waitForExistence(timeout: 10), "no ready chip:\n\(home.debugDescription)")
         XCTAssertTrue(ThumbFreeUI.element("home.tryIt", in: home).exists, "no Try it")
         try save("4-private")

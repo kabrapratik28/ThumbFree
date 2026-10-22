@@ -1,15 +1,21 @@
 import Testing
 @testable import ThumbFree
 
-/// The keyboard step's list is the taps in Settings; a tap in a picture takes its beat; "Put ThumbFree first" has its own
-/// beats, then its tip.
+/// The keyboard step's list is the taps in Settings, with why Full Access; a tap in a picture takes its beat; "Put
+/// ThumbFree first" has its own beats, then its tip.
 @MainActor @Suite struct SetupGuideTests {
-    // With Reduce Motion or VoiceOver, the keyboard step lists the rows to tap in Settings, in order, and VoiceOver hears
-    // the picture once. iOS's question is named in neutral words, never drawn and never "tap Allow" (guideline 5.1.1(iv)).
+    // The keyboard step lists the taps in Settings in the floating guide's own sentences, still, and VoiceOver hears the
+    // list once. Under it, why Full Access and what iOS's warning means for ThumbFree. iOS's question is named in neutral
+    // words, never drawn and never "tap Allow" (guideline 5.1.1(iv)).
     @Test func theKeyboardStepsListIsTheTapsInSettings() {
-        #expect(SetupGuideView.names == ["Keyboards", "ThumbFree", "Allow Full Access", "Confirm", "Return to ThumbFree"])
+        #expect(FloatingGuide.captions[FloatingGuide.allowBeat] == "iOS asks you to confirm.")
         #expect(SetupGuideView.description
             == "In Settings, open Keyboards, turn on ThumbFree, turn on Allow Full Access, confirm, then return to ThumbFree.")
+        #expect(SetupGuideView.fullAccess == "Full Access lets the keyboard get your words from the ThumbFree app. "
+            + "iOS warns that a keyboard could send what you type. ThumbFree never does.")
+        for words in FloatingGuide.captions + [SetupGuideView.fullAccess, SetupGuideView.description] {
+            #expect(!words.localizedCaseInsensitiveContains("tap Allow"), "\(words)")
+        }
     }
 
     // A tap in a picture takes 1.3 s: the cue holds 0.25 s, its ripple grows over 0.35 s, the control changes over

@@ -3,13 +3,15 @@ import TFCore
 import UIKit
 
 /// Shown when the keyboard opened the app to start a session. While the mic starts it says so and nothing more; then it
-/// shows the way back to your app (`Way`): words, and a cue drawn where the gesture happens, which plays 3 rounds, rests
-/// on its still, and plays again on a tap on the page. For the swipe the words sit just above the bottom edge, over the
-/// cue, End session under the title; elsewhere they sit under the title. With Debug automatic return it reads
-/// "Listening." and "Taking you back to WhatsApp…" while the app is opening the host, and falls back to the way back on
-/// any failure. It keeps listening throughout. End session is a quiet button: a big one invites a stray tap.
+/// says what to do next (`nextLine`) and shows the way back to your app (`Way`): words, and a cue drawn where the
+/// gesture happens, which plays 3 rounds, rests on its still, and plays again on a tap on the page. For the swipe the way
+/// back sits just above the bottom edge, over the cue, End session under the title; elsewhere it sits under the title.
+/// No picture of the mic key: here it would look like a stop button that does nothing, and the stop is the keyboard's.
+/// With Debug automatic return it reads "Recording your voice." and "Taking you back to WhatsApp…" while the app is
+/// opening the host, and falls back to the way back on any failure. It keeps listening throughout. End session is a
+/// quiet button: a big one invites a stray tap.
 struct SessionScreen: View {
-    static let listening = "Listening."
+    static let listening = "Recording your voice."
 
     /// How the screen shows the way back to your app, in its words and its drawing alike.
     enum Way: Equatable {
@@ -54,10 +56,18 @@ struct SessionScreen: View {
                     VStack(spacing: 0) {
                         Spacer()
                         VStack(spacing: 14) {
-                            BubbleArt(mode: Self.mode(for: status)).frame(width: 104, height: 104)
                             Text(Self.testTitle ?? Self.primaryLine(status: status, returnTrip: returnTrip))
                                 .font(.title2.weight(.semibold))
                                 .accessibilityIdentifier("session.title")
+                            if let next = Self.nextLine(status: status, returnTrip: returnTrip) {
+                                // Like the way back, it keeps its room unseen while the mic starts, so nothing moves.
+                                Text(next)
+                                    .font(.body)
+                                    .foregroundStyle(Theme.inkSoft)
+                                    .opacity(status.micOn ? 1 : 0)
+                                    .accessibilityHidden(!status.micOn)
+                                    .accessibilityIdentifier("session.next")
+                            }
                             if !atEdge, let sub { wayLine(sub, atEdge: false, waits: waits) }
                             if let line = Self.firstReturnLine(returnTrip: returnTrip) {
                                 Text(line).font(.footnote).foregroundStyle(Theme.inkSoft)
@@ -165,11 +175,17 @@ struct SessionScreen: View {
         return isLive(status)
     }
 
-    /// The big line. Leaving keeps it short ("Listening.") only once the mic art itself would show listening (the trip
-    /// goes `.leaving` in `openLink`, before the mic delivers any audio): until then, the words and the bubble art
-    /// must not disagree, so this falls through to the status line ("Starting the microphone").
+    /// The big line. Leaving keeps it short ("Recording your voice.") only once the mic is on (the trip goes `.leaving`
+    /// in `openLink`, before the mic delivers any audio): until then it is the status line ("Turning on the microphone…").
     static func primaryLine(status: HostStatus, returnTrip: ReturnTrip?) -> String {
-        returnTrip?.phase == .leaving && mode(for: status) == .stop ? listening : statusLine(status)
+        returnTrip?.phase == .leaving && status.take == .recording && status.micOn ? listening : statusLine(status)
+    }
+
+    /// What to do once back in your app, while a take records: speak there, then stop it with the keyboard's stop button.
+    /// Not while leaving for the app by itself (Debug automatic return), nor once the take is over.
+    static func nextLine(status: HostStatus, returnTrip: ReturnTrip?) -> String? {
+        guard status.take == .recording, returnTrip?.phase != .leaving else { return nil }
+        return String(localized: "Go back to your app and speak. Then tap the red stop button on your keyboard.")
     }
 
     /// The line under it. Leaving: "Taking you back to WhatsApp…" (the app's name from the table). Swipe-back: the way
@@ -200,19 +216,9 @@ struct SessionScreen: View {
     private static func statusLine(_ status: HostStatus) -> String {
         if let message = status.message { return message }
         switch status.take {
-        case .recording: return status.micOn ? listening : "Starting the microphone"
+        case .recording: return status.micOn ? listening : "Turning on the microphone…"
         case .stopping, .transcribing, .delivering: return "Transcribing"
         case .idle: return "Ready, mic on."
-        }
-    }
-
-    /// The mic art for the app's status: the keyboard's red stop key only while listening, the turning arc while the
-    /// take is transcribed.
-    static func mode(for status: HostStatus) -> BubbleArt.Mode {
-        switch status.take {
-        case .recording: status.micOn ? .stop : .idle
-        case .stopping, .transcribing, .delivering: .busy
-        case .idle: .idle
         }
     }
 

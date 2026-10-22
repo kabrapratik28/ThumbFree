@@ -217,7 +217,8 @@ import TFCore
         let pip = floats ? AVPictureInPictureController(playerLayer: layer) : nil
         Self.log.notice("Guide: play, again \(again, privacy: .public), floats \(floats, privacy: .public), controller \(pip != nil, privacy: .public)")
         guard let pip else { return }
-        pip.canStartPictureInPictureAutomaticallyFromInline = true
+        // Never by itself as the app leaves: the video plays unseen, and iOS keeps that start for what people watch.
+        // Only Open Settings floats it.
         pip.requiresLinearPlayback = true // no skip buttons on a 5 s loop
         pip.delegate = self
         possible = pip.observe(\.isPictureInPicturePossible, options: [.new]) { @Sendable [weak self] _, change in

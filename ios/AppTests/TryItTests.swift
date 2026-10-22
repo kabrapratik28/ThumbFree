@@ -4,20 +4,25 @@ import Testing
 import TFCore
 @testable import ThumbFree
 
-/// The first try's rules: the line follows the person from the switch to the ThumbFree keyboard, to its mic, through the
-/// live take, to words in the box; the keyboard's mark counts only when it is not the one there when the screen came up;
+/// The first try's rules: the line follows the person from the switch to the ThumbFree keyboard (or, while no on-screen
+/// keyboard comes up, how to show one), to its mic, through the live take, to words in the box; the keyboard's mark counts only when it is not the one there when the screen came up;
 /// only a refused microphone, a keyboard not in iOS's list or speech not working yet stop the try; leaving cancels a take
 /// still on its way; and Home shows one blocker at a time, in order.
 @MainActor @Suite struct TryItTests {
     /// The stage with the mic on and the box empty before the take began recording, unless said otherwise.
-    func stage(seen: Bool = true, take: TakePhase = .idle, micOn: Bool = true, atStart: Int = 0, now: Int = 0,
-               box: String = "", before: String? = "") -> TryItView.Stage {
-        TryItView.stage(keyboardSeen: seen, take: take, micOn: micOn, takesAtStart: atStart, takesNow: now, box: box,
-                        boxAtRecording: before)
+    func stage(seen: Bool = true, hidden: Bool = false, take: TakePhase = .idle, micOn: Bool = true, atStart: Int = 0,
+               now: Int = 0, box: String = "", before: String? = "") -> TryItView.Stage {
+        TryItView.stage(keyboardSeen: seen, keyboardHidden: hidden, take: take, micOn: micOn, takesAtStart: atStart,
+                        takesNow: now, box: box, boxAtRecording: before)
     }
 
     @Test func theStageFollowsTheKeyboardThenTheTake() {
         #expect(stage(seen: false) == .switchKeyboard)
+        #expect(stage(seen: false, hidden: true) == .showKeyboard) // no on-screen keyboard came up: no globe to hold
+        // Once ThumbFree came up, the switch is done, but a keyboard that went before a take (a hardware keyboard came) is
+        // shown again first: no mic to tap without it.
+        #expect(stage(hidden: true) == .showKeyboard)
+        #expect(stage(hidden: true, take: .recording) == .recording)
         #expect(stage() == .tapMic)
         #expect(stage(take: .recording) == .recording)
         for take in [TakePhase.stopping, .transcribing, .delivering] { #expect(stage(take: take) == .transcribing, "\(take)") }
@@ -57,7 +62,12 @@ import TFCore
         #expect(TryItView.notes(.tapMic, speechLoads: false, mic: .undetermined) == ["iOS will ask for microphone access."])
         #expect(TryItView.notes(.tapMic, speechLoads: false, mic: .granted).isEmpty)
         #expect(TryItView.notes(.switchKeyboard, speechLoads: false, mic: .undetermined).isEmpty)
+        #expect(TryItView.notes(.showKeyboard, speechLoads: false, mic: .granted)
+            == ["Tap the box. If you’re using a hardware keyboard, disconnect it and tap again."])
         #expect(TryItView.notes(.recording, speechLoads: false, mic: .undetermined).isEmpty)
+        // Once it worked, where to use it next: the try's box is the only place it has been.
+        #expect(TryItView.notes(.worked, speechLoads: false, mic: .granted)
+            == ["Next, use it in other apps: hold the globe key, then choose ThumbFree."])
         #expect(TryItView.notes(.switchKeyboard, speechLoads: true, mic: .granted) == ["Getting speech ready…"])
         #expect(TryItView.notes(.tapMic, speechLoads: true, mic: .undetermined) == ["iOS will ask for microphone access.",
                                                                                    "Getting speech ready…"])
@@ -66,15 +76,19 @@ import TFCore
     // The line says one thing at a time, following the take; VoiceOver hears its own gesture for the globe.
     @Test func theLineSaysOneThingAtATime() {
         #expect(TryItView.Stage.allCases.map(TryItView.line) == [
-            "Hold 🌐 at the bottom left, then choose ThumbFree.",
+            "Show your on-screen keyboard.",
+            "Hold the globe key at the bottom left of your keyboard, then choose ThumbFree.",
             "Tap the yellow mic.",
             "Speak, then tap the red stop button.",
             "Turning speech into text…",
-            "Your words appeared. You’re ready.",
+            "Your words appeared.",
         ])
-        #expect(TryItView.spoken(.switchKeyboard) == "Double-tap and hold the globe key at the bottom left, then choose ThumbFree.")
+        #expect(TryItView.spoken(.switchKeyboard)
+            == "On your keyboard, double-tap and hold the globe key at the bottom left, then choose ThumbFree.")
+        #expect(TryItView.spoken(.showKeyboard) == "Show your on-screen keyboard.")
         #expect(TryItView.spoken(.tapMic) == "Tap the yellow mic.")
-        #expect(TryItView.Stage.allCases.map(\.rawValue) == ["switchKeyboard", "tapMic", "recording", "transcribing", "worked"]) // -TFTryStage's words
+        #expect(TryItView.Stage.allCases.map(\.rawValue)
+            == ["showKeyboard", "switchKeyboard", "tapMic", "recording", "transcribing", "worked"]) // -TFTryStage's words
     }
 
     // Only a mark the keyboard left after the screen came up says it is up in the box: one of the file's dates against

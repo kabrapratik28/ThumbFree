@@ -244,8 +244,7 @@ import XCTest
         XCTAssertTrue(ThumbFreeUI.wait(for: title(app), toContain: "The keyboard is still off", timeout: 5))
         XCTAssertTrue(help.exists)
         XCTAssertEqual(primary(app).label, "Open Settings again")
-        XCTAssertTrue(ThumbFreeUI.element("welcome.guide", in: app).exists || ThumbFreeUI.element("welcome.guideList", in: app).exists,
-                      "the guide went")
+        XCTAssertTrue(ThumbFreeUI.element("welcome.guide", in: app).exists, "the guide went")
         settings.terminate()
     }
 

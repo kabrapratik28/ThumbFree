@@ -1,18 +1,17 @@
 import SwiftUI
 
-/// The keyboard step's picture of Settings in its IN SETTINGS frame: the floating guide's video on a loop, the same
-/// one that floats over Settings once you go there (`FloatingGuide`), or one still frame while paused for screenshots.
-/// With Reduce Motion or VoiceOver, or when the page leaves too little room for the video to read (large text on a small
-/// iPhone), a short numbered list of the rows, with nothing moving; with less room still, nothing, and the step's words
-/// say what to do. VoiceOver reads it once. While the app is away it keeps the look it had as the app left, so the video
-/// floating over Settings stays.
+/// The keyboard step's taps in Settings: the floating guide's five sentences as a still numbered list in an IN SETTINGS
+/// frame (`StepList`), so nobody has to read a step before it changes, and under it why Full Access, and what iOS's
+/// warning about it means. Nothing in it looks like a row or a switch to tap. The guide's video still floats over
+/// Settings (`FloatingGuide`): it plays unseen behind the list, since Picture in Picture floats a player that is on the
+/// page. With less room (large text on a small iPhone) why Full Access goes first, then the list with its video, and the
+/// step's words say what to do; what goes leaves VoiceOver too. While the app is away it keeps the look it had as the app
+/// left, so the video floating over Settings stays.
 struct SetupGuideView: View {
-    /// The rows of the short list, in order.
-    static let names = ["Keyboards", "ThumbFree", "Allow Full Access", "Confirm", "Return to ThumbFree"]
-    /// What VoiceOver reads for the picture, once.
+    /// What VoiceOver reads for the list, once.
     static let description = "In Settings, open Keyboards, turn on ThumbFree, turn on Allow Full Access, confirm, then return to ThumbFree."
-    /// The least height the video shows at; its frame is then 250 points, and at most 340 (the video's own 274).
-    static let videoMinHeight: CGFloat = 184
+    /// Why Full Access, and what iOS's warning when you turn it on means for ThumbFree.
+    static let fullAccess = String(localized: "Full Access lets the keyboard get your words from the ThumbFree app. iOS warns that a keyboard could send what you type. ThumbFree never does.")
 
     let guide: FloatingGuide
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -20,33 +19,68 @@ struct SetupGuideView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// The look while the app was last in front, which holds while it is away (`FloatingGuide.shown`).
     @State private var heldLook: FloatingGuide.Look?
+    /// The list, and why Full Access, have room. A `ViewThatFits` keeps what it left out in the accessibility tree,
+    /// unseen, so each is taken out of VoiceOver while it has none.
+    @State private var listFits = true
+    @State private var noteFits = true
 
     var body: some View {
         let live = FloatingGuide.look(reduceMotion: reduceMotion, voiceOver: voiceOver, paused: GuideView.pausedForTests)
         let look = FloatingGuide.shown(live: live, held: heldLook, active: scenePhase == .active)
-        ViewThatFits(in: .vertical) {
-            if look != .cards {
-                IllustrationFrame(label: "IN SETTINGS", description: Self.description,
-                                  id: look == .still ? "welcome.guideStill" : "welcome.guide") {
-                    FloatingGuideView(guide: guide).frame(minHeight: Self.videoMinHeight, idealHeight: Self.videoMinHeight)
+        VStack(alignment: .leading, spacing: 0) {
+            ViewThatFits(in: .vertical) {
+                IllustrationFrame(label: "IN SETTINGS", description: Self.description, id: "welcome.guide", voiced: listFits) {
+                    StepList(steps: FloatingGuide.captions)
                 }
+                // ponytail: the video plays covered by the list's opaque frame so Picture in Picture can float it; if an
+                // iOS ever refuses a covered player, Open Settings opens Settings without the window (`Launch`).
+                .background {
+                    if look == .video {
+                        FloatingGuideView(guide: guide)
+                            .padding(IllustrationFrame<EmptyView>.inset)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+                Color.clear.frame(height: 0)
             }
-            IllustrationFrame(label: "IN SETTINGS", description: Self.description, id: "welcome.guideList") { SetupGuideList() }
-            Color.clear.frame(height: 0)
+            .onGeometryChange(for: Bool.self) { $0.size.height > 0 } action: { listFits = $0 }
+            .layoutPriority(1) // the list has the room first
+            if listFits {
+                ViewThatFits(in: .vertical) {
+                    Text(Self.fullAccess)
+                        .font(.footnote)
+                        .foregroundStyle(Theme.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityHidden(!noteFits)
+                        .accessibilityIdentifier("welcome.fullAccess")
+                        .padding(.top, 12)
+                    Color.clear.frame(height: 0)
+                }
+                .onGeometryChange(for: Bool.self) { $0.size.height > 0 } action: { noteFits = $0 }
+            }
         }
         .onChange(of: scenePhase == .active ? live : nil, initial: true) { _, now in if let now { heldLook = now } }
     }
 }
 
-/// The keyboard step's rows as a short numbered list, for Reduce Motion and VoiceOver: what to tap, in order.
-private struct SetupGuideList: View {
+/// Steps in order, numbered, each a short sentence: the keyboard step's taps in Settings (`SetupGuideView`) and Home's
+/// steps in another app (`GuideView`). Words only, so nothing in it looks like something to tap.
+struct StepList: View {
+    let steps: [String]
+    /// The numbers' column, as wide as a number at the text size.
+    @ScaledMetric(relativeTo: .subheadline) private var numberWidth: CGFloat = 18
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(SetupGuideView.names.indices, id: \.self) { index in
-                HStack(spacing: 12) {
+            ForEach(steps.indices, id: \.self) { index in
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text("\(index + 1)").font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(Theme.inkSoft)
-                        .frame(width: 18, alignment: .trailing)
-                    Text(SetupGuideView.names[index]).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                        .frame(width: numberWidth, alignment: .trailing)
+                    Text(steps[index])
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -55,7 +89,7 @@ private struct SetupGuideList: View {
 }
 
 /// "Put ThumbFree first": iOS has no default-keyboard setting for other keyboards, so this shows the closest thing,
-/// moving ThumbFree to the top of the keyboard list, then a tip. The Home tab links to it under the walkthrough.
+/// moving ThumbFree to the top of the keyboard list, then a tip. The Home tab links to it under its steps.
 struct PutFirstView: View {
     enum Scene: CaseIterable { case keyboards, edit, drag, done }
 

@@ -13,9 +13,9 @@ import UIKit
 /// tap but Change language while the download runs. Speech ready, a green check for 400 ms, then step 2 comes by itself.
 /// What stops the download or the load shows there in its few words with its one fix (`SetupBlocker`). There is no
 /// microphone page: iOS asks at the first take in the try.
-/// Step 2 adds the keyboard: the taps in Settings as one large picture in five beats, a looping video that floats over
-/// Settings once you go there (`FloatingGuide`; with Reduce Motion or VoiceOver a short list), under Open Settings, the
-/// big button. Back from a trip away (Settings, by any route) with the keyboard in iOS's list, the try comes at once; with
+/// Step 2 adds the keyboard: why a keyboard, the taps in Settings as a still numbered list, and why Full Access
+/// (`SetupGuideView`), whose video floats over Settings once you go there (`FloatingGuide`; not with Reduce Motion or
+/// VoiceOver), over Open Settings, the big button. Back from a trip away (Settings, by any route) with the keyboard in iOS's list, the try comes at once; with
 /// it still off, the step says where else to look. iOS may list the keyboard before any trip (after a reinstall), so the
 /// list alone never moves the step on, but a keyboard already seen with Full Access needs no step 2. Step 3 is the real
 /// try (`TryItView`), its box selected and the real keyboard up as it opens, with no Back.
@@ -247,7 +247,7 @@ struct WelcomeView: View {
             } else {
                 OnboardingTitleBlock(
                     title: String(localized: "Add the ThumbFree keyboard"),
-                    support: String(localized: "Full Access lets ThumbFree send your words to its keyboard. Your voice stays on this iPhone."))
+                    support: String(localized: "To type in other apps, ThumbFree uses its own keyboard. Add it in Settings:"))
             }
             SetupGuideView(guide: guide).padding(.top, 16)
         }

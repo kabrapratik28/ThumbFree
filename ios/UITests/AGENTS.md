@@ -26,7 +26,7 @@ adds the keyboard to the Simulator first (`tools/sim-enable-keyboard.sh`).
 - UI tests run serially: the Full Access setup does not carry over to parallel clones.
 - The try screen shows "Microphone is off" in place of its box while the microphone is refused, which another test may
   leave: `ThumbFreeUI.launchTry` then resets the permission and launches again (`TryItUITests.launch` resets it first).
-- Home offers Try it and the walkthrough only once ready, the microphone allowed among the rest, which `-TFResetState`
+- Home offers Try it and its steps only once ready, the microphone allowed among the rest, which `-TFResetState`
   leaves as it was. Home has no microphone card ("Try ThumbFree" until the try asks): a test allows it in Settings'
   Setup row (`ThumbFreeUI.allowMicrophone`), and one that only needs Home waits with `ThumbFreeUI.onHome`. iOS's prompt
   at the try's first take needs a launch without `-TFAudioFile`; answer it Don't Allow, so the Mac's microphone is never used.

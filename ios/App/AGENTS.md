@@ -26,9 +26,11 @@ Settings tabs in SwiftUI. `Intents/` and `Widgets/` add Start ThumbFree, a Short
   button. The welcome's step 1 waits for speech, downloaded and loaded, before step 2; iOS asks for the microphone at
   the first take in the try, whose box comes while the engine loads.
 - Every control has a VoiceOver label, text uses Dynamic Type, and every page scrolls at the largest sizes; the
-  welcome, the try and Home never scroll below them. Every drawing sits in an `IllustrationFrame`: labelled, no taps,
-  one VoiceOver image (the session screen's cue, drawn on the screen's own edge, is the same with no frame); a `TapCue`
-  shows where to tap, in the floating guide's video too, and Reduce Motion stills it.
+  welcome and the try never scroll below them, Home only when its words don't fit. Every drawing sits in an
+  `IllustrationFrame`: labelled, no taps, one VoiceOver image (the session screen's cue, drawn on the screen's own edge,
+  is the same with no frame); a `TapCue` shows where to tap, in the floating guide's video too, and Reduce Motion stills
+  it. No drawing of a control sits where it could be taken for the real one, since App Review held the try's drawn
+  globe: the try names the globe key, page 2 and Home give their steps in words, the session screen draws no stop key.
   The look comes from `UI/Theme.swift`. What users read follows the Android app's words, in the second person: say what
   happens and what is kept, and never blame the user. A title never leaves one word alone on its last line
   (`keepingLastWordsTogether`). No live word preview.
@@ -50,6 +52,6 @@ use the network (`StubServer`); the real download test runs only with `TF_NETWOR
   the page's text size, which a change in Settings would swap, hold their last values in front (`FloatingGuide.shown`),
   and the guide's video is set only in front.
 - A `ViewThatFits` that leaves out a frame it was showing keeps it, unseen, in the accessibility tree, VoiceOver
-  element included: turn the frame's `voiced` off while it has no room, as the try's HOW TO SWITCH does (`helperFits`).
+  element included: turn the frame's `voiced` off while it has no room.
 - `Intents/StartSessionIntent.swift` starts no Live Activity, and iOS may stop an intent's recording without one: the
   store listing leaves Start ThumbFree out until a phone check shows the mic stays on.

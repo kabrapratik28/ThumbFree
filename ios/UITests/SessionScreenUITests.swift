@@ -1,6 +1,7 @@
 import XCTest
 
-/// The screen the keyboard's first mic tap opens: "Starting the microphone" while the mic starts, then the way back to
+/// The screen the keyboard's first mic tap opens: "Turning on the microphone…" while the mic starts, then what to do
+/// next and the way back to
 /// your app, the swipe along the bottom edge on an iPhone with a home indicator, iOS's top-left link ringed on one with
 /// a Home button, and only the link's words on an iPad. Trips from Messages come back by hand, as in the store build
 /// (`turnOffAutoReturn`). A test for one kind of screen skips on the others.
@@ -27,7 +28,7 @@ import XCTest
         let app = ThumbFreeUI.launch()
         XCUIDevice.shared.system.open(try XCTUnwrap(URL(string: "thumbfree://dictate?take=\(UUID().uuidString)")))
         let listening = app.staticTexts["session.title"]
-        XCTAssertTrue(ThumbFreeUI.wait(for: listening, toContain: "Listening", timeout: 10))
+        XCTAssertTrue(ThumbFreeUI.wait(for: listening, toContain: "Recording your voice", timeout: 10))
         // A plain link (no trusted host) shows the way back, not an automatic return.
         XCTAssertEqual(app.staticTexts["session.subtitle"].label, Self.wayBackLine)
         app.buttons["session.end"].tap()
@@ -35,22 +36,24 @@ import XCTest
         XCTAssertTrue(ThumbFreeUI.onHome(app, timeout: 5), "not back on Home")
     }
 
-    // Guards the ScrollView requirement: at the largest accessibility text size, the bubble art must never push the
-    // title, End session or the way-back line off screen for good, on the swipe-back state (the tallest realistic
-    // content: the title and a wrapped multi-line line). At the edge the line stays below End session and above the cue.
+    // Guards the ScrollView requirement: at the largest accessibility text size, the words must never push the title,
+    // End session or the way-back line off screen for good, on the swipe-back state (the tallest realistic content: the
+    // title, what to do next and a wrapped multi-line line). At the edge the line stays below End session, and at the
+    // page's end, where it is the last words, whole above the cue.
     func testTheSwipeBackScreenReachesTitleLineAndEndAtTheLargestAccessibilityTextSize() throws {
         let app = ThumbFreeUI.launch(arguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         XCUIDevice.shared.system.open(try XCTUnwrap(URL(string: "thumbfree://dictate?take=\(UUID().uuidString)")))
         let title = app.staticTexts["session.title"]
-        XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Listening", timeout: 10))
-        let line = app.staticTexts["session.subtitle"], end = app.buttons["session.end"]
+        XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Recording your voice", timeout: 10))
+        let line = app.staticTexts["session.subtitle"], end = app.buttons["session.end"], next = app.staticTexts["session.next"]
         XCTAssertEqual(line.label, Self.wayBackLine)
-        for (element, name) in [(title, "the title"), (end, "End session"), (line, "the way-back line")] {
+        for (element, name) in [(title, "the title"), (next, "what to do next"), (end, "End session"), (line, "the way-back line")] {
             XCTAssertTrue(Self.scroll(to: element, in: app), "\(name) must be reachable at the largest accessibility text size")
         }
         guard Self.screen == .homeIndicator else { return }
         let cue = ThumbFreeUI.element("session.cue", in: app)
         XCTAssertTrue(cue.waitForExistence(timeout: 2), "no cue once the mic is on")
+        for _ in 0..<8 { Self.page(app, down: true) } // the page's end: the scroll view clips a line half scrolled in
         XCTAssertGreaterThanOrEqual(line.frame.minY, end.frame.maxY, "the line \(line.frame) overlaps End session \(end.frame)")
         XCTAssertLessThanOrEqual(line.frame.maxY, cue.frame.minY + 1, "the line \(line.frame) overlaps the cue \(cue.frame)")
     }
@@ -66,15 +69,17 @@ import XCTest
         let (app, _) = tripFromMessages(arguments: ["-TFMicDelayMs", "12000"])
         let title = app.staticTexts["session.title"], line = app.staticTexts["session.subtitle"]
         let cue = ThumbFreeUI.element("session.cue", in: app), end = app.buttons["session.end"]
-        XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Starting the microphone", timeout: 10))
+        let next = app.staticTexts["session.next"]
+        XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Turning on the microphone", timeout: 10))
         let starting = Date(), titleTop = title.frame.minY
         ThumbFreeUI.shot("session-starting")
-        // Each look reads the cue and the line before the title: the mic only comes on, so either one seen before a
-        // title that still says Starting was there while the mic started.
+        // Each look reads the cue and the lines before the title: the mic only comes on, so any of them seen before a
+        // title that still says Turning on was there while the mic started.
         var early: Set<String> = []
         XCTAssertTrue(ThumbFreeUI.wait(until: 25) {
-            let seen = [cue.exists ? "the cue" : nil, line.exists ? "the line" : nil].compactMap { $0 }
-            if title.label.contains("Listening") { return true }
+            let seen = [cue.exists ? "the cue" : nil, line.exists ? "the line" : nil,
+                        next.exists ? "what to do next" : nil].compactMap { $0 }
+            if title.label.contains("Recording your voice") { return true }
             early.formUnion(seen)
             return false
         }, "the mic did not come on: \(title.label)")
@@ -92,19 +97,22 @@ import XCTest
         XCTAssertTrue(end.exists, "the title, the line and End session are not separate elements")
         XCTAssertGreaterThanOrEqual(end.frame.width, 44)
         XCTAssertGreaterThanOrEqual(end.frame.height, 44)
-        let underTitle = end.frame.minY - title.frame.maxY
-        XCTAssertTrue((0..<40).contains(underTitle), "End session \(end.frame) is not right under the title \(title.frame)")
+        // No drawn stop key: under the title, what to do next, then End session.
+        XCTAssertEqual(next.label, "Go back to your app and speak. Then tap the red stop button on your keyboard.")
+        XCTAssertTrue((0..<40).contains(next.frame.minY - title.frame.maxY), "the next line \(next.frame) is not under the title")
+        let underNext = end.frame.minY - next.frame.maxY
+        XCTAssertTrue((0..<40).contains(underNext), "End session \(end.frame) is not right under the next line \(next.frame)")
         XCTAssertGreaterThanOrEqual(line.frame.minY, end.frame.maxY, "the line \(line.frame) is not below End session")
         XCTAssertLessThanOrEqual(app.frame.maxY - line.frame.maxY, 160, "the line \(line.frame) is not near the bottom edge")
         XCTAssertLessThanOrEqual(line.frame.maxY, cue.frame.minY + 1, "the line \(line.frame) overlaps the cue \(cue.frame)")
         XCTAssertTrue(app.frame.contains(line.frame), "the line \(line.frame) is cut off")
-        for (element, name) in [(title, "the title"), (end, "End session"), (line, "the line")] {
+        for (element, name) in [(title, "the title"), (next, "what to do next"), (end, "End session"), (line, "the line")] {
             XCTAssertTrue(Self.scroll(to: element, in: app), "\(name) is out of reach")
         }
         ThumbFreeUI.shot("session-swipe-rest")
         title.tap()
         checkRounds(of: cue, from: Date())
-        XCTAssertTrue(title.label.contains("Listening"), "a tap on the page changed the session: \(title.label)")
+        XCTAssertTrue(title.label.contains("Recording your voice"), "a tap on the page changed the session: \(title.label)")
         end.tap()
         XCTAssertTrue(title.waitForNonExistence(timeout: 5), "End session did not end the session")
     }
@@ -140,7 +148,7 @@ import XCTest
         let app = ThumbFreeUI.launch()
         XCUIDevice.shared.system.open(try XCTUnwrap(URL(string: "thumbfree://dictate?take=\(UUID().uuidString)")))
         let title = app.staticTexts["session.title"]
-        XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Listening", timeout: 10))
+        XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Recording your voice", timeout: 10))
         let cue = ThumbFreeUI.element("session.cue", in: app)
         XCTAssertTrue(cue.waitForExistence(timeout: 2), "no cue once the mic is on")
         XCTAssertFalse(moves(cue), "the cue plays with Reduce Motion on")
@@ -156,7 +164,7 @@ import XCTest
         try XCTSkipUnless(Self.screen == .homeButton, "the ring shows on an iPhone with a Home button")
         let (app, messages) = tripFromMessages()
         let title = app.staticTexts["session.title"], line = app.staticTexts["session.subtitle"]
-        XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Listening", timeout: 10))
+        XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Recording your voice", timeout: 10))
         XCTAssertEqual(line.label, Self.wayBackLine)
         XCTAssertTrue(line.isHittable && app.buttons["session.end"].isHittable, "the line or End session is out of reach")
         let cue = ThumbFreeUI.element("session.cue", in: app)
@@ -187,7 +195,7 @@ import XCTest
         messages.buttons["keyboard.mic"].tap()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15), "ThumbFree did not open")
         let title = app.staticTexts["session.title"]
-        XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Listening", timeout: 15))
+        XCTAssertTrue(ThumbFreeUI.wait(for: title, toContain: "Recording your voice", timeout: 15))
         XCTAssertEqual(app.staticTexts["session.subtitle"].label, Self.wayBackLine)
         XCTAssertFalse(ThumbFreeUI.element("session.cue", in: app).waitForExistence(timeout: 2), "a cue on an iPad")
         ThumbFreeUI.shot("session-ipad")

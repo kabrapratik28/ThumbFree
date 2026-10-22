@@ -1,7 +1,7 @@
 import XCTest
 
 /// The first try (`TryItView`): reached with speech not there yet (an old saved step), it waits for speech, then shows its
-/// box; each stage says its one thing; a picture left out on a small iPhone leaves VoiceOver too; Home offers Try it once
+/// box; each stage says its one thing, with no drawn globe to mistake for the real one; Home offers Try it once
 /// dictation works and until a take has given text, and "Try ThumbFree" while only the try is left; and a real keyboard
 /// take in its box reaches "Your words appeared".
 @MainActor final class TryItUITests: XCTestCase {
@@ -68,37 +68,34 @@ import XCTest
         XCTAssertTrue(keyboardUp(app), "no keyboard in Home's Try it")
     }
 
-    // On a small iPhone (an SE) the welcome's step 3, its bar of steps and the keyboard leave no room for HOW TO SWITCH:
-    // the picture goes, and VoiceOver finds nothing of it over the box. Skipped on a taller iPhone, where it has room.
-    func testALeftOutPictureLeavesVoiceOverToo() throws {
-        let app = launch(welcome: true, ["-TFWelcomeStep", "2", "-TFSetupKeyboard", "ready", "-TFTryStage", "switchKeyboard",
-                                         "-TFGuidePaused", "YES"])
-        XCTAssertTrue(field(app).waitForExistence(timeout: 5))
-        try XCTSkipIf(app.windows.firstMatch.frame.height > 700, "a taller iPhone has room for the picture")
-        XCTAssertTrue(keyboardUp(app), "no keyboard")
-        XCTAssertTrue(ThumbFreeUI.wait(until: 5) { !ThumbFreeUI.element("try.picture", in: app).exists },
-                      "the left-out picture is still in VoiceOver's tree")
-    }
-
-    // Each stage, held for the test, shows its line (VoiceOver's words for the globe): the switch with its picture, the
-    // mic, the take recording and turning into text, and the end, with the keyboard down and Done in place of Not now.
+    // Each stage, held for the test, shows its line (VoiceOver's words for the globe): how to show a keyboard that is not
+    // up (held with none, as a hardware keyboard leaves it), the switch, the mic, the take recording and turning into
+    // text, and the end, with the keyboard down and Done in place of Not now. No stage draws a globe: a reviewer held the
+    // drawn one, which does nothing, instead of the keyboard's.
     func testEachStageShowsItsLine() throws {
-        let lines = ["switchKeyboard": "Double-tap and hold the globe key at the bottom left, then choose ThumbFree.",
+        let lines = ["showKeyboard": "Show your on-screen keyboard.",
+                     "switchKeyboard": "On your keyboard, double-tap and hold the globe key at the bottom left, then choose ThumbFree.",
                      "tapMic": "Tap the yellow mic.",
                      "recording": "Speak, then tap the red stop button.",
                      "transcribing": "Turning speech into text…",
-                     "worked": "Your words appeared. You’re ready."]
-        for stage in ["switchKeyboard", "tapMic", "recording", "transcribing", "worked"] {
+                     "worked": "Your words appeared."]
+        for stage in ["showKeyboard", "switchKeyboard", "tapMic", "recording", "transcribing", "worked"] {
             let app = launch(["-TFOpenTry", "YES", "-TFTryStage", stage, "-TFGuidePaused", "YES"])
             XCTAssertTrue(ThumbFreeUI.wait(for: line(app), toContain: lines[stage] ?? "", timeout: 5), stage)
             XCTAssertTrue(field(app).exists, stage)
-            XCTAssertEqual(ThumbFreeUI.element("try.picture", in: app).exists, stage == "switchKeyboard", stage)
+            XCTAssertFalse(ThumbFreeUI.element("try.picture", in: app).exists, stage)
             XCTAssertEqual(app.buttons["try.done"].exists, stage == "worked", stage)
             XCTAssertEqual(app.buttons["try.notNow"].exists, stage != "worked", stage)
-            if stage == "switchKeyboard" {
-                XCTAssertLessThanOrEqual(ThumbFreeUI.element("try.picture", in: app).frame.height, 152.5, "the helper is taller than 152 points")
+            if stage == "showKeyboard" {
+                XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("try.note", in: app), toContain: "hardware keyboard", timeout: 5))
             }
-            if stage == "worked" {
+            if stage == "worked" { // where to use it next
+                XCTAssertTrue(ThumbFreeUI.wait(for: ThumbFreeUI.element("try.note", in: app), toContain: "in other apps", timeout: 5))
+            }
+            if stage == "switchKeyboard" { // the way out for a ThumbFree keyboard that came up without Full Access
+                XCTAssertTrue(ThumbFreeUI.wait(for: app.buttons["try.fullAccess"], toContain: "Full Access settings", timeout: 12))
+            }
+            if stage == "worked" || stage == "showKeyboard" {
                 XCTAssertFalse(app.keyboards.firstMatch.exists || app.buttons["keyboard.mic"].exists, "the keyboard is up")
             } else {
                 XCTAssertGreaterThanOrEqual(app.buttons["try.notNow"].frame.height, 44, "Not now's tap target is under 44 points")
@@ -190,7 +187,7 @@ import XCTest
         sleep(realModel ? 12 : 3) // JFK is 11 s
         mic.tap()
         XCTAssertTrue(ThumbFreeUI.wait(for: field(app), toContain: "ask not what your country can do for you", timeout: 120))
-        XCTAssertTrue(ThumbFreeUI.wait(for: line(app), toContain: "Your words appeared. You’re ready.", timeout: 5))
+        XCTAssertTrue(ThumbFreeUI.wait(for: line(app), toContain: "Your words appeared.", timeout: 5))
         XCTAssertTrue(mic.waitForNonExistence(timeout: 5), "the keyboard stayed up")
         XCTAssertTrue((field(app).value as? String ?? "").contains("ask not what your country can do for you"), "the words left the box")
         ThumbFreeUI.shot("try-worked")

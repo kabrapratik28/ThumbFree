@@ -328,8 +328,8 @@ import TFCore
     @Test func theSessionScreenFollowsTheStatus() {
         let swipe = ReturnTrip(appName: nil, phase: .swipeBack, firstReturn: false)
         func primary(_ status: HostStatus) -> String { SessionScreen.primaryLine(status: status, returnTrip: swipe) }
-        #expect(primary(HostStatus(micOn: true, take: .recording)) == "Listening.")
-        #expect(primary(HostStatus(take: .recording)) == "Starting the microphone")
+        #expect(primary(HostStatus(micOn: true, take: .recording)) == "Recording your voice.")
+        #expect(primary(HostStatus(take: .recording)) == "Turning on the microphone\u{2026}")
         #expect(primary(HostStatus(take: .transcribing)) == "Transcribing")
         #expect(primary(HostStatus(session: .ready, micOn: true)) == "Ready, mic on.")
         #expect(primary(HostStatus(message: "No speech heard.")) == "No speech heard.")
@@ -337,12 +337,12 @@ import TFCore
         #expect(SessionScreen.subLine(status: HostStatus(), returnTrip: swipe, way: .swipe) == "Swipe right along the bottom edge to go back.")
         let named = ReturnTrip(appName: "WhatsApp", phase: .swipeBack, firstReturn: false)
         #expect(SessionScreen.subLine(status: HostStatus(), returnTrip: named, way: .swipe) == "Swipe right along the bottom edge to go back to WhatsApp.")
-        // While leaving, the big line is short and the sub-line names the app; no cue yet. But the words and
-        // the bubble art must not disagree: the trip goes `.leaving` before the mic delivers any audio, so "Listening."
-        // shows only once the mic art itself would show listening; until then it is still the status line.
+        // While leaving, the big line is short and the sub-line names the app; no cue yet. The trip goes `.leaving`
+        // before the mic delivers any audio, so "Recording your voice." shows only once the mic is on; until then it is
+        // still the status line.
         let leaving = ReturnTrip(appName: "WhatsApp", phase: .leaving, firstReturn: false)
-        #expect(SessionScreen.primaryLine(status: HostStatus(micOn: true, take: .recording), returnTrip: leaving) == "Listening.")
-        #expect(SessionScreen.primaryLine(status: HostStatus(take: .recording), returnTrip: leaving) == "Starting the microphone")
+        #expect(SessionScreen.primaryLine(status: HostStatus(micOn: true, take: .recording), returnTrip: leaving) == "Recording your voice.")
+        #expect(SessionScreen.primaryLine(status: HostStatus(take: .recording), returnTrip: leaving) == "Turning on the microphone\u{2026}")
         #expect(SessionScreen.subLine(status: HostStatus(micOn: true, take: .recording), returnTrip: leaving, way: .swipe) == "Taking you back to WhatsApp\u{2026}")
         #expect(SessionScreen.showsCue(leaving, status: HostStatus()) == false)
         #expect(SessionScreen.showsCue(swipe, status: HostStatus()) == true)
@@ -363,14 +363,23 @@ import TFCore
         #expect(SessionScreen.showsCue(nil, status: stillLive) == true)
         #expect(SessionScreen.subLine(status: HostStatus(), returnTrip: nil, way: .swipe) == nil)
         #expect(SessionScreen.showsCue(nil, status: HostStatus()) == false)
-        // Its mic art says the same as its words: the keyboard's red stop key only while listening, the turning arc while
-        // transcribing.
-        #expect(SessionScreen.mode(for: HostStatus(micOn: true, take: .recording)) == .stop)
-        #expect(SessionScreen.mode(for: HostStatus(take: .recording)) == .idle)
-        #expect(SessionScreen.mode(for: HostStatus(take: .stopping)) == .busy)
-        #expect(SessionScreen.mode(for: HostStatus(take: .transcribing)) == .busy)
-        #expect(SessionScreen.mode(for: HostStatus(session: .ready, micOn: true)) == .idle)
-        #expect(SessionScreen.mode(for: HostStatus(message: "No speech heard.")) == .idle)
+    }
+
+    // While a take records, the line under the title says what to do once back in the app: the stop is the keyboard's
+    // (the screen draws no stop key). The screen shows it unseen while the mic starts (`micOn`), so it keeps its room.
+    // Not while leaving for the app by itself, and not once the take is over.
+    @Test func theNextLineSaysToSpeakInYourAppAndStopWithTheKeyboard() {
+        let next = "Go back to your app and speak. Then tap the red stop button on your keyboard."
+        let swipe = ReturnTrip(appName: nil, phase: .swipeBack, firstReturn: false)
+        for trip in [swipe, nil] {
+            #expect(SessionScreen.nextLine(status: HostStatus(micOn: true, take: .recording), returnTrip: trip) == next)
+            #expect(SessionScreen.nextLine(status: HostStatus(take: .recording), returnTrip: trip) == next)
+        }
+        let leaving = ReturnTrip(appName: "WhatsApp", phase: .leaving, firstReturn: false)
+        #expect(SessionScreen.nextLine(status: HostStatus(micOn: true, take: .recording), returnTrip: leaving) == nil)
+        for take in [TakePhase.idle, .stopping, .transcribing, .delivering] {
+            #expect(SessionScreen.nextLine(status: HostStatus(session: .ready, micOn: true, take: take), returnTrip: swipe) == nil)
+        }
     }
 
     // The way back fits the screen: the swipe along the bottom edge on an iPhone with a home indicator; iOS's link at the

@@ -5,40 +5,29 @@ import TFCore
 import UIKit
 @testable import ThumbFree
 
-/// The walkthrough's beats, in the order the keyboard's flow goes: a text box is tapped, the globe switches to ThumbFree,
-/// and its yellow mic starts; the first tap of each session opens ThumbFree, which takes you back by itself to the apps
-/// every build returns to while automatic return is on; with it off, you swipe back. Also the welcome's rules: its steps,
-/// the keyboard step's pages, the language choice's order and the speech model's line.
+/// Home's steps in another app, in words, in the order the keyboard's flow goes: a text box, the globe, the yellow mic and
+/// the trip ThumbFree may make, then speech and the stop. Also the guide player's rules ("Put ThumbFree first") and the
+/// welcome's: its steps, the keyboard step's pages, the language choice's order and the speech model's line.
 @MainActor @Suite struct GuideViewTests {
-    @Test func withAutomaticReturnThumbFreeTakesYouBack() {
-        let beats = GuideView.beats(autoReturn: true)
-        #expect(beats.map(\.caption) == [
-            "Tap a text box in any app.",
-            "Hold the globe, then choose ThumbFree.",
-            "Tap the yellow mic.",
-            "The first tap of each session opens ThumbFree. It returns to Messages, Notes and Signal.",
-            "Speak.",
-            "Tap the red stop button.",
-            "Your words appear.",
+    // Words only, so nothing on Home can be held or tapped by mistake; step 3 says ThumbFree may open, which the try never
+    // shows (its session keeps the mic on, so the trip comes later). VoiceOver hears the four steps once.
+    @Test func homeSaysTheStepsInWords() {
+        #expect(GuideView.steps == [
+            "Open Messages or another app, and tap where you type.",
+            "Hold the globe key, then choose ThumbFree.",
+            "Tap the yellow mic. If ThumbFree opens, go back to your app.",
+            "Speak, then tap the red stop button.",
         ])
-        #expect(beats.map(\.scene) == [.tapBox, .switchKeyboard, .tapMic, .goingBack, .talking, .tapStop, .typed])
-        #expect(beats.map(\.length) == [1, 2, 1, 1, 1, 1, 1]) // the globe's hold and pick take two beats' time
     }
 
-    @Test func withoutItYouSwipeBack() {
-        let beats = GuideView.beats(autoReturn: false)
-        #expect(beats[3].caption == "The first tap of each session opens ThumbFree. Swipe back to continue.")
-        #expect(beats.map(\.scene) == [.tapBox, .switchKeyboard, .tapMic, .swipeBack, .talking, .tapStop, .typed])
-    }
-
-    // No caption is ever cut: each fits its lines at every standard text size on the narrowest page (Home's on an
-    // SE-size iPhone, 335 points; the welcome's would be 327), at worst at the 0.8 scale floor.
+    // No caption is ever cut: each fits its lines at every standard text size on the narrowest page (327 points on an
+    // SE-size iPhone), at worst at the 0.8 scale floor.
     @Test func everyCaptionFitsItsLinesAtTheStandardSizes() {
         let sizes: [(DynamicTypeSize, UIContentSizeCategory)] = [
             (.xSmall, .extraSmall), (.small, .small), (.medium, .medium), (.large, .large), (.xLarge, .extraLarge),
             (.xxLarge, .extraExtraLarge), (.xxxLarge, .extraExtraExtraLarge),
         ]
-        let captions = (GuideView.beats(autoReturn: true) + GuideView.beats(autoReturn: false)).map(\.caption)
+        let captions = PutFirstView.beats.map(\.caption)
         for (size, category) in sizes {
             let font = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: UITraitCollection(preferredContentSizeCategory: category))
             let smallest = font.withSize(font.pointSize * 0.8)
@@ -46,31 +35,23 @@ import UIKit
                 (text as NSString).boundingRect(with: CGSize(width: 327, height: CGFloat.greatestFiniteMagnitude),
                                                 options: .usesLineFragmentOrigin, attributes: [.font: smallest], context: nil).height
             }
-            let lines = CGFloat(GuidePlayer<GuideView.Scene, WalkthroughScene>.captionLines(size))
+            let lines = CGFloat(GuidePlayer<PutFirstView.Scene, EmptyView>.captionLines(size))
             for caption in captions { #expect(height(caption) < height("A") * (lines + 0.5), "\(size): \(caption)") }
         }
-        #expect(GuidePlayer<GuideView.Scene, WalkthroughScene>.captionLines(.large) == 2) // the default size keeps two
+        #expect(GuidePlayer<PutFirstView.Scene, EmptyView>.captionLines(.large) == 2) // the default size keeps two
     }
 
-    // The walkthrough hides Back and Next while it plays by itself, so it never plays for those who step through with an
+    // A guide hides Back and Next while it plays by itself, so it never plays for those who step through with an
     // assistive feature: Reduce Motion, VoiceOver, and Switch Control too. Anyone else can stop it with its accessibility
     // action; the picture itself takes no taps.
-    @Test func theWalkthroughNeverPlaysForSwitchControl() {
-        typealias Player = GuidePlayer<GuideView.Scene, WalkthroughScene>
+    @Test func aGuideNeverPlaysForSwitchControl() {
+        typealias Player = GuidePlayer<PutFirstView.Scene, EmptyView>
         #expect(Player.plays(reduceMotion: false, voiceOver: false, switchControl: false, paused: false, stepping: false))
         #expect(!Player.plays(reduceMotion: false, voiceOver: false, switchControl: true, paused: false, stepping: false))
         #expect(!Player.plays(reduceMotion: false, voiceOver: true, switchControl: false, paused: false, stepping: false))
         #expect(!Player.plays(reduceMotion: true, voiceOver: false, switchControl: false, paused: false, stepping: false))
         #expect(!Player.plays(reduceMotion: false, voiceOver: false, switchControl: false, paused: false, stepping: true))
         #expect(Player.showControls == "Show Back and Next")
-    }
-
-    // The chat stands for Messages, which every build may open (a test iPhone confirmed it), so a store build's
-    // walkthrough shows the return it makes.
-    @Test func theChatIsAnAppEveryBuildReturnsTo() throws {
-        let target = try #require(ReturnTargets.target(forBundleID: GuideView.bundleID))
-        #expect(target.displayName == GuideView.app)
-        #expect(ReturnTargets.mayOpen(target, debugBuild: false))
     }
 
     // The tap cue's yellow ring has a thin dark edge just outside it, with a gap, so it stands out on the light canvas.
