@@ -123,14 +123,16 @@ assert.equal(await visible(page, '#consent'), false, 'a placeholder ID shows no 
 assert.equal(meta.length, 0);
 await ctx.close();
 
-// 7. Stores not live: "Coming soon", no store links at all, in the HTML (what visitors without JavaScript get) and
-// on the page. Live: UTM tags reach Google Play, fbclid doesn't.
-const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.ok(!/<a[^>]*data-store/.test(html.replace(/<!--[\s\S]*?-->/g, '')), 'the HTML has no store link');
+// 7. As shipped, Google Play is live and the App Store is not: "Coming soon" and no App Store link at all, in the HTML
+// (what visitors without JavaScript get) and on the page. Live: UTM tags reach Google Play, fbclid doesn't.
+const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+assert.ok(!/<a[^>]*data-store="ios"/.test(html), 'the HTML has no App Store link');
+assert.equal(html.match(/<a[^>]*data-store="android"/g)?.length, 6, 'the HTML links Google Play: 3 badges, 3 lines');
 ctx = await browser.createBrowserContext();
 ({ page } = await open({}, ctx));
-assert.equal(await page.$$eval('a[data-store]', (a) => a.length), 0, 'no store links while not live');
-assert.match(await page.$eval('.hero .badges', (e) => e.textContent), /Coming soon to the App Store\s*Coming soon to Google Play/);
+assert.equal(await page.$$eval('a[data-store="ios"]', (a) => a.length), 0, 'no App Store links while not live');
+assert.equal(await page.$$eval('a[data-store="android"]', (a) => a.length), 6, 'site.js keeps the 6 Google Play links');
+assert.match(await page.$eval('.hero .badges', (e) => e.textContent), /Coming soon to the App Store/);
 ({ page } = await open({ live: true, query: '?utm_source=facebook&utm_campaign=launch%20week&fbclid=abc123&x=1' }, ctx));
 const play = await page.$eval('.hero a.badge[data-store="android"]', (a) => a.href);
 assert.equal(play, 'https://play.google.com/store/apps/details?id=io.github.kabrapratik28.thumbfree&referrer=utm_source%3Dfacebook%26utm_campaign%3Dlaunch%2Bweek');
