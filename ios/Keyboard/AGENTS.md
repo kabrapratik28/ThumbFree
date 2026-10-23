@@ -14,10 +14,10 @@ model (`Keyplane`), `KeyboardClient`, suggestions, emoji, commands and delivery.
   notifications carry no data and may be lost or doubled: they only prompt a reread.
 - Delivery: the keyboard types a take by itself once, only into the field that pinned it (its `documentIdentifier` and
   a SHA-256 of the text around the cursor), and only if the pin came after the keyboard last appeared; the take that
-  opened the app, or one stopped in ThumbFree after iOS took the screen (its microphone request), goes where the user
-  taps stop. `insertionBegan` is on disk before `insertText`; a read-back answers `insertionConfirmed` or
-  `insertionUnverified`. Anything else waits behind Insert here and Copy (`.localOnly`). Nothing is retried: an
-  unknown outcome is "May already be in the field".
+  opened the app, or one stopped in ThumbFree after iOS took the screen (its microphone request) from a field that
+  reads the same, goes where the user taps stop. `insertionBegan` is on disk before `insertText`; a read-back answers
+  `insertionConfirmed` or `insertionUnverified`. Anything else waits behind Insert here and Copy (`.localOnly`).
+  Nothing is retried: an unknown outcome is "May already be in the field".
 - Read `documentIdentifier` only through `FieldTraits.documentID(of:)`: some apps return nil, and Swift's bridge traps.
 - Keys work as on Apple's iOS 26 keyboard: the layout follows the field (`KeyboardKind`; number fields get the digit
   pad), long-press alternatives in Apple's order (`KeyAlternates`), the space-bar trackpad, delete by words

@@ -82,19 +82,19 @@ import TFCore
         #expect(try shared.outbox().last?.state == .heldBack)
     }
 
-    // The try's first take: iOS asks for the microphone after the press, which makes ThumbFree inactive and brings the
-    // keyboard back to the same box with a new identity. The stop comes after that, so the text goes into the box.
+    // The try's first take: the press starts the mic, iOS asks for it, which makes ThumbFree inactive, and the keyboard
+    // comes back to the same box with a new identity. The stop comes from that box, so the text goes into it.
     @Test func theTrysFirstTakeIsTypedAfterTheMicrophoneRequest() async throws {
         let keyboard = keyboard()
         host.appActive = true
         tap(keyboard)
-        try await waitUntil { host.status.take == .recording && host.recordedMs >= 2_000 }
         let take = try #require(host.status.takeID)
         host.appActive = false // iOS's request is up, and the keyboard goes away
         host.appActive = true // answered
         proxy.documentIdentifier = UUID()
         keyboard.appeared()
         keyboard.refresh(proxy)
+        try await waitUntil { host.status.take == .recording && host.recordedMs >= 2_000 }
         tap(keyboard) // the stop
         try await waitUntil { host.status.take == .delivering }
         keyboard.refresh(proxy)
@@ -102,5 +102,28 @@ import TFCore
         #expect(keyboard.chip == nil)
         host.handleCommands()
         #expect(try host.history.record(take)?.status == .inserted)
+    }
+
+    // An interruption alone sends a take nowhere new: stopped after it in a field that reads differently (another box,
+    // with text in it), the take is held back.
+    @Test func aTakeStoppedInAnotherFieldAfterAnInterruptionIsHeldBack() async throws {
+        let keyboard = keyboard()
+        host.appActive = true
+        tap(keyboard)
+        try await waitUntil { host.status.take == .recording && host.recordedMs >= 2_000 }
+        let take = try #require(host.status.takeID)
+        host.appActive = false // Control Center
+        host.appActive = true
+        proxy.documentIdentifier = UUID()
+        proxy.text = "Dear Sam, "
+        keyboard.appeared()
+        keyboard.refresh(proxy)
+        tap(keyboard) // the stop
+        try await waitUntil { host.status.take == .delivering }
+        keyboard.refresh(proxy)
+        #expect(proxy.text == "Dear Sam, ")
+        #expect(keyboard.chip?.canInsert == true)
+        host.handleCommands()
+        #expect(try host.history.record(take)?.status == .notInserted)
     }
 }
