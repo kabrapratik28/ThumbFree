@@ -1,0 +1,2 @@
+# git apply needs the patches byte for byte; Git for Windows would check them out with CRLF line endings.
+third_party/patches/*.patch -text
