@@ -24,7 +24,7 @@ class TranscribePatchesTest {
         assertThat(patch(tree).first).isEqualTo(0)
         val applied = run(tree, "git", "diff")
         assertThat(applied).isNotEmpty()
-        run(tree, "sh", "-c", "cat ${series.joinToString(" ")} | git apply --reverse --check")
+        run(tree, "git", "apply", "--reverse", "--check", wholeSeries(tree).path)
         assertThat(patch(tree).first).isEqualTo(0)
         assertThat(run(tree, "git", "diff")).isEqualTo(applied)
 
@@ -45,8 +45,9 @@ class TranscribePatchesTest {
             val (status, output) = patch(tree, shorter)
             assertThat(status).isNotEqualTo(0)
             // The fix is a line of its own with the checkout's absolute path, so it pastes into a shell in any folder
-            // (Gradle runs in android/).
-            assertThat(output.lines().map { it.trim() }).contains("git -C ${tree.canonicalPath} checkout -- .")
+            // (Gradle runs in android/). CMake writes paths with forward slashes, on Windows too.
+            assertThat(output.lines().map { it.trim() })
+                .contains("git -C ${tree.canonicalFile.invariantSeparatorsPath} checkout -- .")
 
             shorter.listFiles()!!.forEach { it.delete() }
             val (emptyStatus, emptyOutput) = patch(tree, shorter)
@@ -67,13 +68,13 @@ class TranscribePatchesTest {
     fun stopsOnAnEngineCommitOtherThanThePinnedOne() = withClone { tree ->
         File(tree, "README.md").appendText("\nnot the pinned engine\n")
         run(tree, "git", "-c", "user.name=test", "-c", "user.email=test@localhost", "commit", "--quiet", "-am", "other")
-        run(tree, "sh", "-c", "cat ${series.joinToString(" ")} | git apply --check")
+        run(tree, "git", "apply", "--check", wholeSeries(tree).path)
 
         val (status, output) = patch(tree)
         assertThat(status).isNotEqualTo(0)
         assertThat(output).contains("not the pinned commit $pinned")
         assertThat(output.lines().map { it.trim() })
-            .contains("git -C ${tree.parentFile.canonicalPath} submodule update -- transcribe.cpp")
+            .contains("git -C ${tree.parentFile.canonicalFile.invariantSeparatorsPath} submodule update -- transcribe.cpp")
         assertThat(run(tree, "git", "diff")).isEmpty()
     }
 
@@ -91,6 +92,10 @@ class TranscribePatchesTest {
             root.deleteRecursively()
         }
     }
+
+    /** The series as one file beside [tree], since git apply checks each file of its input against the untouched tree. */
+    private fun wholeSeries(tree: File) =
+        File(tree.parentFile, "series.diff").apply { writeBytes(series.map { it.readBytes() }.reduce(ByteArray::plus)) }
 
     /** Runs transcribe-patches.cmake from [tree] on [checkout] with the patches in [dir]; returns its status and output. */
     private fun patch(tree: File, dir: File = patches, checkout: File = tree): Pair<Int, String> {
