@@ -63,6 +63,21 @@ class TranscribePatchesTest {
         assertThat(output.lines().map { it.trim() }).contains("git submodule update --init")
     }
 
+    @Test
+    fun stopsWhenTheSeriesFileCannotBeRewritten() = withClone { tree ->
+        assertThat(patch(tree).first).isEqualTo(0)
+        val shorter = Files.createTempDirectory("patches").toFile()
+        val seriesFile = File(tree, "transcribe-patches.diff")
+        try {
+            series.dropLast(1).forEach { it.copyTo(File(shorter, it.name)) }
+            assertThat(seriesFile.setReadOnly()).isTrue()
+            assertThat(patch(tree, shorter).first).isNotEqualTo(0)
+        } finally {
+            seriesFile.setWritable(true)
+            shorter.deleteRecursively()
+        }
+    }
+
     // Nor with another engine commit, even one the series applies to, whose files then match it plus the series.
     @Test
     fun stopsOnAnEngineCommitOtherThanThePinnedOne() = withClone { tree ->

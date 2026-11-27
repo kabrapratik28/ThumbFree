@@ -59,6 +59,7 @@ file(LOCK ${git_dir}/thumbfree-patches.lock TIMEOUT 600)
 set(series ${CMAKE_CURRENT_BINARY_DIR}/transcribe-patches.diff)
 # Not file(APPEND): on Windows it writes CRLF line endings, which git apply rejects as a corrupt patch.
 function(write_series)
+    file(WRITE ${series} "")
     execute_process(COMMAND ${CMAKE_COMMAND} -E cat ${ARGN} OUTPUT_FILE ${series} COMMAND_ERROR_IS_FATAL ANY)
 endfunction()
 set(applied 0)
