@@ -2,6 +2,7 @@ package io.github.kabrapratik28.thumbfree.engine
 
 import com.google.common.truth.Truth.assertThat
 import io.github.kabrapratik28.thumbfree.core.models.sha256Hex
+import io.github.kabrapratik28.thumbfree.testutil.denyReadForTest
 import java.io.File
 import org.junit.Rule
 import org.junit.Test
@@ -50,9 +51,12 @@ class VadModelTest {
         assertThat(VadModel.open(app, { 7L }, tmp.root, logs::add)).isEqualTo(7L) // copied, then loaded
         val copy = File(tmp.root, VadModel.ASSET.substringAfter('/'))
 
-        copy.setReadable(false) // the hash read of the copy throws
-        assertThat(VadModel.open(app, { 7L }, tmp.root, logs::add)).isEqualTo(0L)
-        copy.setReadable(true)
+        val restoreRead = copy.denyReadForTest()
+        try {
+            assertThat(VadModel.open(app, { 7L }, tmp.root, logs::add)).isEqualTo(0L)
+        } finally {
+            restoreRead()
+        }
         assertThat(VadModel.open(app, { throw IllegalStateException("native") }, tmp.root, logs::add)).isEqualTo(0L)
         assertThat(VadModel.open(app, { 0L }, tmp.root, logs::add)).isEqualTo(0L)
 

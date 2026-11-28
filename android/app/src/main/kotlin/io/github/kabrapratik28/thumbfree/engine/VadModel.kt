@@ -5,6 +5,8 @@ import io.github.kabrapratik28.thumbfree.core.models.sha256Hex
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * Silero's ggml model for the speech check, shipped as an APK asset: ggml-silero-v6.2.0.bin from
@@ -57,7 +59,18 @@ object VadModel {
                     out.fd.sync()
                 }
             }
-            return file.takeIf { sha256Hex(tmp) == SHA256 && tmp.renameTo(it) }
+            if (sha256Hex(tmp) != SHA256) return null
+            if (System.getProperty("os.name").orEmpty().startsWith("Windows", ignoreCase = true)) {
+                Files.move(
+                    tmp.toPath(),
+                    file.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+            } else if (!tmp.renameTo(file)) {
+                return null
+            }
+            return file
         } catch (e: IOException) {
             return null
         } finally {

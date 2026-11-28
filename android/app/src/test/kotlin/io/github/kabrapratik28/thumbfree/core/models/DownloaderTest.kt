@@ -2,6 +2,7 @@ package io.github.kabrapratik28.thumbfree.core.models
 
 import com.google.common.collect.Range
 import com.google.common.truth.Truth.assertThat
+import io.github.kabrapratik28.thumbfree.testutil.denyReadForTest
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.ServerSocket
@@ -372,10 +373,9 @@ class DownloaderTest {
     @Test
     fun unreadablePartRetriesAsNetworkInsteadOfCrashing() {
         // A concurrent delete racing the exists()/length() check would throw the same
-        // FileNotFoundException sha256Hex does here; unreadable is a portable stand-in.
+        // FileNotFoundException sha256Hex does here.
         part().writeBytes(BODY)
-        part().setReadable(false)
-
+        part().denyReadForTest()
         val result = downloader().download(model, url = server.url())
 
         assertThat(result).isInstanceOf(DownloadResult.Failed::class.java)
@@ -390,7 +390,7 @@ class DownloaderTest {
     @Test
     fun cancelDuringExhaustedM4ReadRetryReturnsCancelledNotNetwork() {
         part().writeBytes(BODY)
-        part().setReadable(false)
+        part().denyReadForTest()
         // The exact-size fast path calls isCancelled() only once per attempt (loop top, no
         // network request involved): four attempts is 4 calls, and the 5th is the new check
         // at the exhausted-retries return this covers.
@@ -611,7 +611,7 @@ class DownloaderTest {
         server.enqueue(CannedResponse(status = 200, headers = mapOf("ETag" to "\"v1\""), body = BODY))
 
         val result = downloader().download(model, url = server.url(), onProgress = {
-            if (it.bytes == it.total) part().setReadable(false)
+            if (it.bytes == it.total) part().denyReadForTest()
         })
 
         assertThat(result).isInstanceOf(DownloadResult.Failed::class.java)
@@ -639,7 +639,7 @@ class DownloaderTest {
             url = server.url(),
             onProgress = {
                 if (it.bytes == it.total) {
-                    part().setReadable(false)
+                    part().denyReadForTest()
                     pending = 1
                 }
             },
@@ -701,10 +701,9 @@ class DownloaderTest {
     @Test
     fun unreadableEtagIsTreatedAsOrphanInsteadOfCrashing() {
         // A concurrent delete racing the exists() check would throw the same
-        // FileNotFoundException readText() does here; unreadable is a portable stand-in.
+        // FileNotFoundException readText() does here.
         seedPart(BODY.copyOfRange(0, 300_000))
-        etag().setReadable(false)
-
+        etag().denyReadForTest()
         val result = downloader().download(model, url = server.url())
 
         assertThat(server.requests).hasSize(1)
